@@ -1,0 +1,7 @@
+Note: since you’ll handle data cleanup, existing bookings with ground-0 won’t block ground_0 until you normalize IDs in Firestore.
+
+Next steps (pick one or both):
+
+Backfill turf grounds + existing bookings to a single canonical groundId per ground.
+Manual test: create a confirmed user booking for 21:00–23:00, then try a manager manual booking on the same ground/time; it should show unavailable and the duration should read 2h.
+If you want, I can add a small utility to enforce/validate ground IDs at load time to surface any remaining mismatches.

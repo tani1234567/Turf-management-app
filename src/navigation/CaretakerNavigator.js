@@ -1,0 +1,101 @@
+import React from "react";
+import { createStackNavigator } from "@react-navigation/stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
+import { selectIsCaretakerAssigned } from "../store/slices/authSlice";
+
+// Import screens
+import CaretakerDashboardScreen from "../screens/caretaker/CaretakerDashboardScreen";
+import CaretakerCalendarScreen from "../screens/caretaker/CaretakerCalendarScreen";
+import CaretakerProfileScreen from "../screens/caretaker/CaretakerProfileScreen";
+import WaitingForAssignmentScreen from "../screens/caretaker/WaitingForAssignmentScreen";
+import PaymentCollectionScreen from "../screens/caretaker/PaymentCollectionScreen";
+
+const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// Tab Navigator Component
+function CaretakerTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: "#FF9800",
+        tabBarInactiveTintColor: "#999",
+        tabBarStyle: {
+          backgroundColor: "#fff",
+          borderTopWidth: 1,
+          borderTopColor: "#eee",
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "500",
+        },
+      }}
+    >
+      <Tab.Screen
+        name="Today"
+        component={CaretakerDashboardScreen}
+        options={{
+          tabBarLabel: "Dashboard",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="view-dashboard" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="CaretakerCalendar"
+        component={CaretakerCalendarScreen}
+        options={{
+          tabBarLabel: "Calendar",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="calendar-month" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="CaretakerProfile"
+        component={CaretakerProfileScreen}
+        options={{
+          tabBarLabel: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="account" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+// Main Caretaker Navigator with Stack
+export default function CaretakerNavigator() {
+  const isAssigned = useSelector(selectIsCaretakerAssigned);
+
+  // If caretaker is not assigned to any turf, show waiting screen
+  if (!isAssigned) {
+    return <WaitingForAssignmentScreen />;
+  }
+
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="CaretakerTabs" component={CaretakerTabs} />
+      <Stack.Screen
+        name="PaymentCollection"
+        component={PaymentCollectionScreen}
+        options={{
+          headerShown: true,
+          headerTitle: "Collect Payment",
+          headerBackTitle: "Back",
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
