@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -15,14 +15,22 @@ import {
   Divider,
   ActivityIndicator,
   ProgressBar,
+  Snackbar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 
 import { selectUser } from "../../store/slices/authSlice";
-import { queryDocuments, getDocument } from "../../services/firebase/firestore";
+import { queryDocuments, getDocument, subscribeToCollection } from "../../services/firebase/firestore";
 import { getSlotHourlyRate, calculateBookingPrice } from "../../utils/priceUtils";
+import {
+  computeAllSlotStatuses,
+  getActiveLegendItems,
+  SLOT_MESSAGES,
+} from "../../utils/slotColorUtils";
+import TimeSlotGrid from "../../components/booking/TimeSlotGrid";
+import SlotColorLegend from "../../components/booking/SlotColorLegend";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#4CAF50";
@@ -84,7 +92,7 @@ const generateDates = () => {
       weekday: date.toLocaleString("default", { weekday: "short" }),
       isToday: i === 0,
       isWeekend: date.getDay() === 0 || date.getDay() === 6,
-      dateString: date.toISOString().split("T")[0],
+      dateString: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
     });
   }
   return dates;
@@ -116,6 +124,7 @@ export default function BookingScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]); // Existing bookings for availability
   const [blockedSlots, setBlockedSlots] = useState([]); // Blocked slots for availability
+  const [academySessions, setAcademySessions] = useState([]); // Academy sessions for availability
 
   // Selection state
   const [selectedDate, setSelectedDate] = useState(null);
@@ -123,6 +132,17 @@ export default function BookingScreen({ navigation, route }) {
   const [startTime, setStartTime] = useState(null);
   const [endTime, setEndTime] = useState(null);
   const [selectedGround, setSelectedGround] = useState(null);
+
+  // Snackbar state for disabled slot toasts
+  const [snackbar, setSnackbar] = useState({ visible: false, message: "" });
+
+  // Loading state for slot statuses (while subscriptions initialize)
+  const [slotStatusLoading, setSlotStatusLoading] = useState(false);
+
+  // Subscription refs for cleanup
+  const bookingsUnsubRef = useRef(null);
+  const academyUnsubRef = useRef(null);
+  const blockedUnsubRef = useRef(null);
 
   // Generated data
   const dates = useMemo(() => generateDates(), []);
@@ -160,54 +180,112 @@ export default function BookingScreen({ navigation, route }) {
     }
   }, [turfId, initialTurf]);
 
-  // Fetch bookings for selected date
-  const fetchBookings = useCallback(async () => {
-    if (!turfId || !selectedDate) return;
-
-    try {
-      const bookingsData = await queryDocuments("bookings", [
-        { field: "turfId", operator: "==", value: turfId },
-        { field: "date", operator: "==", value: selectedDate.dateString },
-      ]);
-      const activeBookings = (bookingsData || []).filter((b) =>
-        ["pending", "confirmed", "in_progress"].includes(b.status)
-      );
-      setBookings(activeBookings);
-    } catch (error) {
-      console.error("Error fetching bookings:", error);
-    }
-  }, [turfId, selectedDate]);
-
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  // Real-time subscription: bookings for selected date (expanded statuses)
   useEffect(() => {
-    if (selectedDate) {
-      fetchBookings();
+    if (bookingsUnsubRef.current) {
+      bookingsUnsubRef.current();
+      bookingsUnsubRef.current = null;
     }
-  }, [selectedDate, fetchBookings]);
 
-  // Fetch blocked slots for the turf
-  const fetchBlockedSlots = useCallback(async () => {
-    if (!turfId) return;
+    if (!turfId || !selectedDate) {
+      setBookings([]);
+      return;
+    }
 
-    try {
-      const blockedData = await queryDocuments("blocked_slots", [
+    setSlotStatusLoading(true);
+
+    const unsub = subscribeToCollection(
+      "bookings",
+      (bookingsData) => {
+        const activeBookings = (bookingsData || []).filter((b) =>
+          ["pending", "confirmed", "in_progress", "pending_payment", "payment_submitted", "awaiting_payment"].includes(b.status)
+        );
+        setBookings(activeBookings);
+        setSlotStatusLoading(false);
+      },
+      [
         { field: "turfId", operator: "==", value: turfId },
-      ]);
-      setBlockedSlots(blockedData || []);
-    } catch (error) {
-      console.error("Error fetching blocked slots:", error);
-      setBlockedSlots([]);
-    }
-  }, [turfId]);
+        { field: "date", operator: "==", value: selectedDate.dateString },
+      ]
+    );
 
+    bookingsUnsubRef.current = unsub;
+    return () => {
+      if (bookingsUnsubRef.current) {
+        bookingsUnsubRef.current();
+        bookingsUnsubRef.current = null;
+      }
+    };
+  }, [turfId, selectedDate]);
+
+  // Real-time subscription: academy sessions for selected date
   useEffect(() => {
-    if (turfId) {
-      fetchBlockedSlots();
+    if (academyUnsubRef.current) {
+      academyUnsubRef.current();
+      academyUnsubRef.current = null;
     }
-  }, [turfId, fetchBlockedSlots]);
+
+    if (!turfId || !selectedDate) {
+      setAcademySessions([]);
+      return;
+    }
+
+    const unsub = subscribeToCollection(
+      "academy_sessions",
+      (sessions) => {
+        setAcademySessions(
+          (sessions || []).filter(
+            (s) => s.status === "scheduled" && s.availableForBooking !== true
+          )
+        );
+      },
+      [
+        { field: "turfId", operator: "==", value: turfId },
+        { field: "date", operator: "==", value: selectedDate.dateString },
+      ]
+    );
+
+    academyUnsubRef.current = unsub;
+    return () => {
+      if (academyUnsubRef.current) {
+        academyUnsubRef.current();
+        academyUnsubRef.current = null;
+      }
+    };
+  }, [turfId, selectedDate]);
+
+  // Real-time subscription: blocked slots for the turf
+  useEffect(() => {
+    if (blockedUnsubRef.current) {
+      blockedUnsubRef.current();
+      blockedUnsubRef.current = null;
+    }
+
+    if (!turfId) {
+      setBlockedSlots([]);
+      return;
+    }
+
+    const unsub = subscribeToCollection(
+      "blocked_slots",
+      (blockedData) => {
+        setBlockedSlots(blockedData || []);
+      },
+      [{ field: "turfId", operator: "==", value: turfId }]
+    );
+
+    blockedUnsubRef.current = unsub;
+    return () => {
+      if (blockedUnsubRef.current) {
+        blockedUnsubRef.current();
+        blockedUnsubRef.current = null;
+      }
+    };
+  }, [turfId]);
 
   // Get available sports from turf
   const availableSports = useMemo(() => {
@@ -225,6 +303,25 @@ export default function BookingScreen({ navigation, route }) {
       (g.sports || []).some(s => s.toLowerCase() === selectedSport.toLowerCase())
     );
   }, [grounds, selectedSport]);
+
+  // Compute slot statuses for the time grid (aggregate across all grounds for selected sport)
+  const slotStatusMap = useMemo(
+    () =>
+      computeAllSlotStatuses(TIME_SLOTS, filteredGrounds, {
+        selectedDate,
+        bookings,
+        academySessions,
+        blockedSlots,
+        advancePaymentRequired: turf?.advancePayment?.isRequired || false,
+      }),
+    [selectedDate, filteredGrounds, bookings, academySessions, blockedSlots, turf]
+  );
+
+  // Legend items for the current slot status map
+  const legendItems = useMemo(
+    () => getActiveLegendItems(slotStatusMap),
+    [slotStatusMap]
+  );
 
   // Check if a time slot is booked for a ground
   const isSlotBooked = useCallback((groundId, timeSlot) => {
@@ -306,6 +403,37 @@ export default function BookingScreen({ navigation, route }) {
     });
   }, [blockedSlots, startTime, endTime, selectedDate]);
 
+  // Check if a ground is blocked by an academy session for the selected time range
+  const isGroundAcademyBlocked = useCallback((groundId) => {
+    if (!startTime || !endTime || !selectedDate) return false;
+    const normalizedGid = normalizeGroundId(groundId);
+    return academySessions.some((session) => {
+      if (normalizeGroundId(session.groundId) !== normalizedGid) return false;
+      return session.startTime < endTime.time && session.endTime > startTime.time;
+    });
+  }, [academySessions, startTime, endTime, selectedDate]);
+
+  // Get academy info for a blocked ground (for display)
+  const getAcademyBlockingInfo = useCallback((groundId) => {
+    if (!startTime || !endTime) return null;
+    const normalizedGid = normalizeGroundId(groundId);
+    const blocking = academySessions.find((session) => {
+      if (normalizeGroundId(session.groundId) !== normalizedGid) return false;
+      return session.startTime < endTime.time && session.endTime > startTime.time;
+    });
+    return blocking
+      ? { academyName: blocking.academyName, startTime: blocking.startTime, endTime: blocking.endTime }
+      : null;
+  }, [academySessions, startTime, endTime]);
+
+  // Check if an individual time slot is blocked by an academy session (for time grid display)
+  const isSlotAcademyBlocked = useCallback((timeSlot) => {
+    if (!selectedDate) return false;
+    return academySessions.some((session) => {
+      return timeSlot.time >= session.startTime && timeSlot.time < session.endTime;
+    });
+  }, [academySessions, selectedDate]);
+
   // Check if time slot is in past
   const isSlotPast = useCallback((timeSlot) => {
     if (!selectedDate?.isToday) return false;
@@ -333,12 +461,15 @@ export default function BookingScreen({ navigation, route }) {
     return result.total;
   }, [startTime, endTime, selectedDate, selectedSport]);
 
-  // Check ground availability for selected time range (checks both bookings and blocks)
+  // Check ground availability for selected time range (checks bookings, blocks, and academy sessions)
   const isGroundAvailable = useCallback((ground) => {
     if (!startTime || !endTime) return true;
 
-    // First check if blocked
+    // Check if blocked by maintenance/private event
     if (isGroundBlocked(ground.id)) return false;
+
+    // Check if blocked by academy session
+    if (isGroundAcademyBlocked(ground.id)) return false;
 
     // Then check for booking conflicts
     const startIndex = TIME_SLOTS.findIndex(s => s.time === startTime.time);
@@ -350,12 +481,10 @@ export default function BookingScreen({ navigation, route }) {
       }
     }
     return true;
-  }, [startTime, endTime, isSlotBooked, isGroundBlocked]);
+  }, [startTime, endTime, isSlotBooked, isGroundBlocked, isGroundAcademyBlocked]);
 
-  // Handle time slot selection
+  // Handle time slot selection — all slots are tappable regardless of status
   const handleTimeSlotPress = (slot) => {
-    if (isSlotPast(slot)) return;
-
     if (!startTime || (startTime && endTime)) {
       // Start new selection
       setStartTime(slot);
@@ -370,16 +499,16 @@ export default function BookingScreen({ navigation, route }) {
         setStartTime(slot);
         setEndTime(null);
       } else {
-        // Ensure minimum 1 hour (2 slots)
-        if (slotIndex - startIndex >= 2) {
-          setEndTime(slot);
-        } else {
-          // Auto-select minimum 1 hour
-          const minEndIndex = startIndex + 2;
-          if (minEndIndex < TIME_SLOTS.length) {
-            setEndTime(TIME_SLOTS[minEndIndex]);
+        // Determine the actual end index (minimum 1 hour = 2 slots)
+        let targetEndIndex = slotIndex;
+        if (slotIndex - startIndex < 2) {
+          targetEndIndex = startIndex + 2;
+          if (targetEndIndex >= TIME_SLOTS.length) {
+            targetEndIndex = TIME_SLOTS.length - 1;
           }
         }
+
+        setEndTime(TIME_SLOTS[targetEndIndex]);
       }
     }
   };
@@ -407,7 +536,34 @@ export default function BookingScreen({ navigation, route }) {
     }
   };
 
+  // Validate selected time range — checks slots from start to end-1 (the actual booked slots)
+  const validateTimeRange = () => {
+    if (!startTime || !endTime) return null;
+
+    const startIndex = TIME_SLOTS.findIndex(s => s.time === startTime.time);
+    const endIndex = TIME_SLOTS.findIndex(s => s.time === endTime.time);
+
+    // Check each slot in the booked range (end slot is the boundary, not included)
+    for (let i = startIndex; i < endIndex; i++) {
+      const info = slotStatusMap[TIME_SLOTS[i].time];
+      if (info && !info.selectable) {
+        const msg = SLOT_MESSAGES[info.status] || "One or more slots in your selected range are not available";
+        return `${TIME_SLOTS[i].label}: ${msg}`;
+      }
+    }
+    return null;
+  };
+
   const handleNext = () => {
+    if (currentStep === 2) {
+      // Validate the selected time range before proceeding to ground selection
+      const issue = validateTimeRange();
+      if (issue) {
+        setSnackbar({ visible: true, message: issue });
+        return;
+      }
+    }
+
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     } else {
@@ -660,42 +816,18 @@ export default function BookingScreen({ navigation, route }) {
         </Surface>
       )}
 
-      {/* Time slots grid */}
-      <ScrollView style={styles.timeSlotsContainer} showsVerticalScrollIndicator={false}>
-        <View style={styles.timeSlotsGrid}>
-          {TIME_SLOTS.map((slot) => {
-            const isPast = isSlotPast(slot);
-            const isInRange = isSlotInRange(slot);
-            const isStart = startTime?.time === slot.time;
-            const isEnd = endTime?.time === slot.time;
+      {/* Color-coded time slots grid */}
+      <TimeSlotGrid
+        timeSlots={TIME_SLOTS}
+        slotStatusMap={slotStatusMap}
+        startTime={startTime}
+        endTime={endTime}
+        onSlotPress={handleTimeSlotPress}
+        loading={slotStatusLoading}
+      />
 
-            return (
-              <TouchableOpacity
-                key={slot.time}
-                style={[
-                  styles.timeSlot,
-                  isPast && styles.timeSlotPast,
-                  isInRange && styles.timeSlotSelected,
-                  isStart && styles.timeSlotStart,
-                  isEnd && styles.timeSlotEnd,
-                ]}
-                onPress={() => handleTimeSlotPress(slot)}
-                disabled={isPast}
-              >
-                <Text
-                  style={[
-                    styles.timeSlotText,
-                    isPast && styles.timeSlotTextPast,
-                    isInRange && styles.timeSlotTextSelected,
-                  ]}
-                >
-                  {slot.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+      {/* Legend strip */}
+      <SlotColorLegend items={legendItems} />
     </View>
   );
 
@@ -739,6 +871,8 @@ export default function BookingScreen({ navigation, route }) {
             const isAvailable = isGroundAvailable(ground);
             const isBlocked = isGroundBlocked(ground.id);
             const blockingReasons = getBlockingReasons(ground.id);
+            const academyInfo = getAcademyBlockingInfo(ground.id);
+            const isAcademyBlocked = !!academyInfo;
             const isSelected = selectedGround?.id === ground.id;
             const price = calculateTotalPrice(ground);
 
@@ -749,6 +883,7 @@ export default function BookingScreen({ navigation, route }) {
                   styles.groundCard,
                   !isAvailable && styles.groundCardUnavailable,
                   isBlocked && styles.groundCardBlocked,
+                  isAcademyBlocked && styles.groundCardAcademyBlocked,
                   isSelected && styles.groundCardSelected,
                 ]}
                 onPress={() => isAvailable && setSelectedGround(ground)}
@@ -784,6 +919,16 @@ export default function BookingScreen({ navigation, route }) {
                     </Text>
                   </View>
                 </View>
+
+                {/* Academy blocked banner */}
+                {isAcademyBlocked && (
+                  <View style={styles.academyBlockedBanner}>
+                    <MaterialCommunityIcons name="school" size={16} color="#E65100" />
+                    <Text style={styles.academyBlockedText}>
+                      Reserved for {academyInfo.academyName}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Price breakdown */}
                 <View style={styles.priceBreakdown}>
@@ -821,21 +966,27 @@ export default function BookingScreen({ navigation, route }) {
                   <View
                     style={[
                       styles.availabilityBadge,
-                      isAvailable ? styles.badgeAvailable : isBlocked ? styles.badgeBlocked : styles.badgeUnavailable,
+                      isAvailable
+                        ? styles.badgeAvailable
+                        : isAcademyBlocked
+                        ? styles.badgeAcademy
+                        : isBlocked
+                        ? styles.badgeBlocked
+                        : styles.badgeUnavailable,
                     ]}
                   >
                     <MaterialCommunityIcons
-                      name={isAvailable ? "check-circle" : isBlocked ? "lock" : "close-circle"}
+                      name={isAvailable ? "check-circle" : isAcademyBlocked ? "school" : isBlocked ? "lock" : "close-circle"}
                       size={14}
-                      color={isAvailable ? USER_COLOR : isBlocked ? "#FF9800" : "#F44336"}
+                      color={isAvailable ? USER_COLOR : isAcademyBlocked ? "#E65100" : isBlocked ? "#FF9800" : "#F44336"}
                     />
                     <Text
                       style={[
                         styles.availabilityText,
-                        isAvailable ? styles.textAvailable : isBlocked ? styles.textBlocked : styles.textUnavailable,
+                        isAvailable ? styles.textAvailable : isAcademyBlocked ? styles.textAcademyBlocked : isBlocked ? styles.textBlocked : styles.textUnavailable,
                       ]}
                     >
-                      {isAvailable ? "Available" : isBlocked ? "Blocked" : "Booked"}
+                      {isAvailable ? "Available" : isAcademyBlocked ? "Academy" : isBlocked ? "Blocked" : "Booked"}
                     </Text>
                   </View>
                   {isSelected && (
@@ -910,6 +1061,16 @@ export default function BookingScreen({ navigation, route }) {
           </Button>
         </View>
       </Surface>
+
+      {/* Toast for disabled slot feedback */}
+      <Snackbar
+        visible={snackbar.visible}
+        onDismiss={() => setSnackbar({ visible: false, message: "" })}
+        duration={2500}
+        style={styles.snackbar}
+      >
+        {snackbar.message}
+      </Snackbar>
     </SafeAreaView>
   );
 }
@@ -929,6 +1090,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: "#666",
   },
+
 
   // Header
   header: {
@@ -1186,12 +1348,21 @@ const styles = StyleSheet.create({
   timeSlotEnd: {
     backgroundColor: USER_COLOR + "80",
   },
+  timeSlotAcademy: {
+    backgroundColor: "#FFF3E0",
+    borderWidth: 1,
+    borderColor: "#FFB74D",
+  },
   timeSlotText: {
     fontSize: 12,
     color: "#333",
   },
   timeSlotTextPast: {
     color: "#999",
+  },
+  timeSlotTextAcademy: {
+    color: "#E65100",
+    fontWeight: "500",
   },
   timeSlotTextSelected: {
     color: "#fff",
@@ -1240,6 +1411,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF8E1",
     borderColor: "#FFE082",
     opacity: 0.8,
+  },
+  groundCardAcademyBlocked: {
+    borderColor: "#FF9800",
+    backgroundColor: "#FFF3E0",
+    opacity: 0.85,
+  },
+  academyBlockedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFE0B2",
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  academyBlockedText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#E65100",
   },
   groundCardSelected: {
     borderColor: USER_COLOR,
@@ -1303,6 +1494,9 @@ const styles = StyleSheet.create({
   badgeBlocked: {
     backgroundColor: "#FFF3E0",
   },
+  badgeAcademy: {
+    backgroundColor: "#FFE0B2",
+  },
   availabilityText: {
     marginLeft: 4,
     fontSize: 12,
@@ -1316,6 +1510,9 @@ const styles = StyleSheet.create({
   },
   textBlocked: {
     color: "#FF9800",
+  },
+  textAcademyBlocked: {
+    color: "#E65100",
   },
   blockInfo: {
     marginTop: 8,
@@ -1361,5 +1558,8 @@ const styles = StyleSheet.create({
   nextButton: {
     borderRadius: 8,
     minWidth: 140,
+  },
+  snackbar: {
+    marginBottom: 80,
   },
 });

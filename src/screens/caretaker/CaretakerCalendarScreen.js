@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { selectAssignedTurfId } from "../../store/slices/authSlice";
-import { getBookingsForDateByCaretaker } from "../../services/firebase/firestore";
+import { getBookingsForDateByCaretaker, getAcademySessionsForDate } from "../../services/firebase/firestore";
 import ExtensionModal from "../../components/caretaker/ExtensionModal";
 
 const CARETAKER_COLOR = "#FF9800";
@@ -48,7 +48,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
   };
 
   const formatDateString = (date) => {
-    return date.toISOString().split("T")[0];
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   };
 
   const isToday = (date) => {
@@ -87,16 +87,35 @@ export default function CaretakerCalendarScreen({ navigation }) {
 
     setLoading(true);
     try {
+      const dateStr = formatDateString(date);
       const result = await getBookingsForDateByCaretaker(
         assignedTurfId,
-        formatDateString(date)
+        dateStr
       );
 
+      let allBookings = [];
       if (result.success) {
-        setBookings(result.bookings || []);
+        allBookings = result.bookings || [];
       } else {
         console.error("Error fetching bookings:", result.message);
       }
+
+      // Also fetch academy sessions and merge them
+      const academyResult = await getAcademySessionsForDate(assignedTurfId, dateStr);
+      if (academyResult.success && academyResult.sessions?.length > 0) {
+        const academySessions = academyResult.sessions.map((s) => ({
+          ...s,
+          bookingType: "academy",
+          userName: s.academyName || "Academy Session",
+          groundName: s.groundName,
+          status: "academy",
+        }));
+        allBookings = [...allBookings, ...academySessions];
+      }
+
+      // Sort by startTime
+      allBookings.sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+      setBookings(allBookings);
     } catch (error) {
       console.error("Error fetching bookings:", error);
     } finally {
@@ -306,7 +325,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
                 color="#666"
               />
               <Text variant="bodySmall" style={styles.detailText}>
-                ₹{booking.totalAmount || 0}
+                ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
               </Text>
             </View>
           </View>
@@ -445,7 +464,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
                 color="#666"
               />
               <Text variant="bodySmall" style={styles.detailText}>
-                ₹{booking.totalAmount || 0}
+                ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
               </Text>
             </View>
           </View>

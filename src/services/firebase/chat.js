@@ -878,6 +878,113 @@ export const updateBookingCardStatus = async (chatId, messageId, status, updateD
 };
 
 /**
+ * Upload a chat image to Firebase Storage and return the download URL
+ * @param {string} chatId - Chat ID
+ * @param {string} imageUri - Local image URI
+ * @returns {Promise<string>} - Download URL
+ */
+export const uploadChatImage = async (chatId, imageUri) => {
+  const fileName = `chat_${Date.now()}.jpg`;
+  const storagePath = `chats/${chatId}/images/${fileName}`;
+
+  if (hasNativeFirestore) {
+    let nativeStorage = null;
+    try {
+      nativeStorage = require("@react-native-firebase/storage").default;
+    } catch (e) {
+      // fall through to web SDK
+    }
+
+    if (nativeStorage) {
+      const reference = nativeStorage().ref(storagePath);
+      await reference.putFile(imageUri);
+      const downloadURL = await reference.getDownloadURL();
+      return downloadURL;
+    }
+  }
+
+  // Web SDK fallback
+  const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+  const { storage } = await import("./config");
+  const response = await fetch(imageUri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, storagePath);
+  await uploadBytes(storageRef, blob);
+  const downloadURL = await getDownloadURL(storageRef);
+  return downloadURL;
+};
+
+/**
+ * Send an image message to a chat
+ * @param {string} chatId - Chat ID
+ * @param {object} messageInfo - { imageUrl, senderId, senderType, senderName }
+ * @returns {Promise<string>} - Message ID
+ */
+export const sendImageMessage = async (chatId, messageInfo) => {
+  try {
+    const messageData = {
+      type: "image",
+      imageUrl: messageInfo.imageUrl,
+      text: "",
+      senderId: messageInfo.senderId,
+      senderType: messageInfo.senderType,
+      senderName: messageInfo.senderName,
+      timestamp: serverTimestamp(),
+      read: false,
+    };
+
+    if (hasNativeFirestore) {
+      const messageRef = await nativeFirestore()
+        .collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .add(messageData);
+
+      const unreadField = messageInfo.senderType === "user" ? "unreadCount.company" : `unreadCount.${messageInfo.senderId}`;
+      await nativeFirestore()
+        .collection("chats")
+        .doc(chatId)
+        .update({
+          lastMessage: {
+            text: "📷 Photo",
+            senderId: messageInfo.senderId,
+            senderType: messageInfo.senderType,
+            timestamp: serverTimestamp(),
+            type: "image",
+          },
+          [unreadField]: incrementValue(1),
+          updatedAt: serverTimestamp(),
+        });
+
+      return messageRef.id;
+    }
+
+    // Web SDK
+    const messagesRef = collection(db, "chats", chatId, "messages");
+    const messageRef = await addDoc(messagesRef, messageData);
+
+    const chatRef = doc(db, "chats", chatId);
+    const unreadField = messageInfo.senderType === "user" ? "unreadCount.company" : `unreadCount.${messageInfo.senderId}`;
+    await updateDoc(chatRef, {
+      lastMessage: {
+        text: "📷 Photo",
+        senderId: messageInfo.senderId,
+        senderType: messageInfo.senderType,
+        timestamp: serverTimestamp(),
+        type: "image",
+      },
+      [unreadField]: increment(1),
+      updatedAt: serverTimestamp(),
+    });
+
+    return messageRef.id;
+  } catch (error) {
+    console.error("Error sending image message:", error);
+    throw error;
+  }
+};
+
+/**
  * Send a location message to a chat
  * @param {string} chatId - Chat ID
  * @param {object} locationData - Location details

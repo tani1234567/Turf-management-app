@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelectedTurf } from "../../hooks/useSelectedTurf";
 import { queryDocuments } from "../../services/firebase/firestore";
+import { isRemoteImageUri } from "../../services/firebase/turfImages";
 
 const MANAGER_BLUE = "#2196F3";
 
@@ -25,7 +26,8 @@ const getTodayString = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-export default function TurfSelectionScreen({ navigation }) {
+export default function TurfSelectionScreen({ navigation, route }) {
+  const { nextScreen } = route.params || {};
   const {
     allTurfs,
     selectedTurfId,
@@ -40,9 +42,14 @@ export default function TurfSelectionScreen({ navigation }) {
   // Auto-skip if only one turf
   useEffect(() => {
     if (!isLoading && !hasMultipleTurfs && selectedTurfId) {
-      navigation.goBack();
+      if (nextScreen) {
+        // Navigate directly to the specified screen with the single turf
+        navigation.replace(nextScreen, { turfId: selectedTurfId });
+      } else {
+        navigation.goBack();
+      }
     }
-  }, [isLoading, hasMultipleTurfs, selectedTurfId, navigation]);
+  }, [isLoading, hasMultipleTurfs, selectedTurfId, navigation, nextScreen]);
 
   // Load today's stats for each turf
   useEffect(() => {
@@ -65,7 +72,7 @@ export default function TurfSelectionScreen({ navigation }) {
           );
           const pending = todayBookings.filter((b) => b.status === "pending");
           const revenue = confirmed.reduce(
-            (sum, b) => sum + (b.totalAmount || b.amount || 0),
+            (sum, b) => sum + (b.totalAmount || b.payment?.slotAmount || b.amount || 0),
             0
           );
 
@@ -90,12 +97,20 @@ export default function TurfSelectionScreen({ navigation }) {
 
   const handleSelect = async (turfId) => {
     await changeTurf(turfId);
-    navigation.goBack();
+    if (nextScreen) {
+      // Navigate to the specified screen with selected turf
+      navigation.replace(nextScreen, { turfId });
+    } else {
+      navigation.goBack();
+    }
   };
 
   const renderTurfCard = ({ item: turf }) => {
     const isSelected = turf.id === selectedTurfId;
     const stats = turfStats[turf.id] || {};
+    const turfImageUri = [turf.imageUrl, turf.images?.[0]].find((uri) =>
+      isRemoteImageUri(uri)
+    );
 
     return (
       <TouchableOpacity
@@ -111,9 +126,9 @@ export default function TurfSelectionScreen({ navigation }) {
         >
           {/* Turf Image */}
           <View style={styles.imageContainer}>
-            {turf.imageUrl || turf.images?.[0] ? (
+            {turfImageUri ? (
               <Image
-                source={{ uri: turf.imageUrl || turf.images[0] }}
+                source={{ uri: turfImageUri }}
                 style={styles.turfImage}
                 resizeMode="cover"
               />

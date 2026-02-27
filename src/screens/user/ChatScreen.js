@@ -7,6 +7,8 @@ import {
   StatusBar,
   Platform,
   Alert,
+  Linking,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Text, Avatar, IconButton, ActivityIndicator, Snackbar } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -29,6 +31,8 @@ import {
   updateNegotiationStatus,
   sendNegotiationCard,
   sendBookingCard,
+  uploadChatImage,
+  sendImageMessage,
 } from "../../services/firebase/chat";
 import {
   createBookingFromNegotiation,
@@ -153,6 +157,25 @@ export default function ChatScreen() {
     [sendTextMessage, user?.name]
   );
 
+  // Handle sending an image
+  const handleSendImage = useCallback(
+    async (imageUri) => {
+      try {
+        const imageUrl = await uploadChatImage(chatId, imageUri);
+        await sendImageMessage(chatId, {
+          imageUrl,
+          senderId: user?.userId,
+          senderType: "user",
+          senderName: user?.name || "User",
+        });
+      } catch (error) {
+        console.error("Error sending image:", error);
+        setSnackbar({ visible: true, message: "Failed to send image" });
+      }
+    },
+    [chatId, user]
+  );
+
   // Open negotiation request modal (for price negotiation)
   const handleRequestBooking = useCallback(() => {
     if (!companyData?.turfs?.length) {
@@ -167,13 +190,44 @@ export default function ChatScreen() {
     async (negotiationData) => {
       setIsSubmitting(true);
       try {
-        await sendNegotiationCard(chatId, {
+        const messageId = await sendNegotiationCard(chatId, {
           ...negotiationData,
           companyId,
           senderId: user?.userId,
           senderType: "user",
           senderName: user?.name || "User",
+          senderPhone: user?.phone || "",
         });
+
+        // Create a pending booking so it appears in Upcoming Bookings
+        try {
+          await createPendingBooking({
+            userId: user?.userId,
+            userName: user?.name || "User",
+            userPhone: user?.phone || "",
+            companyId,
+            turfId: negotiationData.turfId,
+            turfName: negotiationData.turfName,
+            groundId: negotiationData.groundId,
+            groundName: negotiationData.groundName,
+            sport: negotiationData.sport,
+            date: negotiationData.date,
+            startTime: negotiationData.startTime,
+            endTime: negotiationData.endTime,
+            totalAmount: negotiationData.requestedPrice || negotiationData.originalPrice || 0,
+            negotiation: {
+              isNegotiated: negotiationData.isNegotiation || false,
+              requestedPrice: negotiationData.requestedPrice || 0,
+              originalPrice: negotiationData.originalPrice || 0,
+              chatId,
+              negotiationCardId: messageId,
+            },
+          });
+        } catch (bookingError) {
+          // Non-critical: booking request was still sent via chat
+          console.warn("Could not create pending booking:", bookingError);
+        }
+
         setShowNegotiationModal(false);
         setSnackbar({ visible: true, message: "Booking request sent!" });
       } catch (error) {
@@ -330,7 +384,7 @@ export default function ChatScreen() {
         return <LocationCard message={item} isOwn={isOwn} />;
       }
 
-      // Default: text message
+      // Image message or text message
       return <ChatBubble message={item} isOwn={isOwn} accentColor={USER_COLOR} />;
     },
     [user?.userId, handleAcceptCounter, handleRejectCounter]
@@ -380,7 +434,15 @@ export default function ChatScreen() {
             size={22}
             iconColor={COLORS.text}
             onPress={() => {
-              // TODO: Implement call functionality
+              const phone =
+                chatData?.participants?.company?.phone ||
+                companyData?.phone ||
+                companyData?.contactPhone;
+              if (phone) {
+                Linking.openURL(`tel:${phone}`);
+              } else {
+                Alert.alert("Contact", "Phone number not available for this business.");
+              }
             }}
           />
           <IconButton
@@ -388,53 +450,66 @@ export default function ChatScreen() {
             size={22}
             iconColor={COLORS.text}
             onPress={() => {
-              // TODO: Navigate to chat info
+              const turfs = companyData?.turfs;
+              if (turfs && turfs.length > 0) {
+                navigation.navigate("TurfDetails", { turfId: turfs[0].id });
+              } else {
+                Alert.alert("Info", "Turf details not available.");
+              }
             }}
           />
         </View>
       </View>
 
-      {/* Messages List */}
-      {isLoading && messages.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={USER_COLOR} />
-          <Text variant="bodyMedium" style={styles.loadingText}>
-            Loading messages...
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={processedMessages}
-          renderItem={renderMessage}
-          keyExtractor={keyExtractor}
-          inverted
-          contentContainerStyle={styles.messagesList}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons
-                name="chat-outline"
-                size={48}
-                color="#ccc"
-              />
-              <Text variant="bodyMedium" style={styles.emptyText}>
-                Start a conversation
-              </Text>
-            </View>
-          }
-        />
-      )}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
+        {/* Messages List */}
+        {isLoading && messages.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={USER_COLOR} />
+            <Text variant="bodyMedium" style={styles.loadingText}>
+              Loading messages...
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={processedMessages}
+            renderItem={renderMessage}
+            keyExtractor={keyExtractor}
+            inverted
+            contentContainerStyle={styles.messagesList}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons
+                  name="chat-outline"
+                  size={48}
+                  color="#ccc"
+                />
+                <Text variant="bodyMedium" style={styles.emptyText}>
+                  Start a conversation
+                </Text>
+              </View>
+            }
+          />
+        )}
 
-      {/* Chat Input */}
-      <ChatInput
-        onSend={handleSendMessage}
-        onRequestBooking={handleRequestBooking}
-        showRequestBooking={true}
-        accentColor={USER_COLOR}
-        placeholder="Type a message..."
-      />
+        {/* Chat Input */}
+        <ChatInput
+          onSend={handleSendMessage}
+          onSendImage={handleSendImage}
+          onRequestBooking={handleRequestBooking}
+          showRequestBooking={true}
+          accentColor={USER_COLOR}
+          placeholder="Message"
+        />
+      </KeyboardAvoidingView>
 
       {/* Negotiation Request Modal */}
       <NegotiationRequestModal
@@ -476,6 +551,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  keyboardAvoid: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",

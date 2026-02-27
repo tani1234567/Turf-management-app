@@ -29,6 +29,7 @@ import { selectUser } from "../../store/slices/authSlice";
 import {
   subscribeToCollection,
   updateDocument,
+  queryDocuments,
 } from "../../services/firebase/firestore";
 import { formatPrice, formatDuration } from "../../utils/priceUtils";
 
@@ -39,10 +40,40 @@ const USER_COLOR = "#4CAF50";
 // ──────────────────────────────────────────────
 const STATUS_CONFIG = {
   pending: {
-    label: "Pending",
+    label: "Pending Approval",
     color: "#FF9800",
     bg: "#FFF3E0",
     icon: "clock-outline",
+  },
+  pending_payment: {
+    label: "Payment Required",
+    color: "#9C27B0",
+    bg: "#F3E5F5",
+    icon: "cash",
+  },
+  payment_submitted: {
+    label: "Verifying Payment",
+    color: "#673AB7",
+    bg: "#EDE7F6",
+    icon: "clock-check-outline",
+  },
+  awaiting_payment: {
+    label: "Pay Now",
+    color: "#FF5722",
+    bg: "#FBE9E7",
+    icon: "alert-circle-outline",
+  },
+  payment_rejected: {
+    label: "Payment Failed",
+    color: "#F44336",
+    bg: "#FFEBEE",
+    icon: "close-circle-outline",
+  },
+  expired: {
+    label: "Expired",
+    color: "#9E9E9E",
+    bg: "#F5F5F5",
+    icon: "clock-remove-outline",
   },
   confirmed: {
     label: "Confirmed",
@@ -50,17 +81,29 @@ const STATUS_CONFIG = {
     bg: "#E8F5E9",
     icon: "check-circle-outline",
   },
+  in_progress: {
+    label: "In Progress",
+    color: "#00BCD4",
+    bg: "#E0F7FA",
+    icon: "play-circle-outline",
+  },
   completed: {
     label: "Completed",
     color: "#2196F3",
     bg: "#E3F2FD",
     icon: "check-all",
   },
-  cancelled: {
-    label: "Cancelled",
+  rejected: {
+    label: "Rejected",
     color: "#F44336",
     bg: "#FFEBEE",
     icon: "close-circle-outline",
+  },
+  cancelled: {
+    label: "Cancelled",
+    color: "#9E9E9E",
+    bg: "#F5F5F5",
+    icon: "cancel",
   },
 };
 
@@ -84,8 +127,17 @@ const formatDateLabel = (dateStr) => {
   return `${weekday}, ${day} ${month}`;
 };
 
+const UPCOMING_STATUSES = [
+  "pending",
+  "confirmed",
+  "pending_payment",
+  "payment_submitted",
+  "awaiting_payment",
+  "payment_rejected",
+];
+
 const isUpcoming = (booking) => {
-  if (booking.status !== "pending" && booking.status !== "confirmed") return false;
+  if (!UPCOMING_STATUSES.includes(booking.status)) return false;
   const now = new Date();
   const bookingDate = new Date(booking.date);
   bookingDate.setHours(23, 59, 59, 999);
@@ -117,10 +169,24 @@ const StatusBadge = ({ status }) => {
 // ──────────────────────────────────────────────
 // BookingCard
 // ──────────────────────────────────────────────
-const BookingCard = ({ booking, onPress, onCancel, onReview, onContact }) => {
+const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPayment }) => {
   const upcoming = isUpcoming(booking);
   const isCompleted = booking.status === "completed";
   const isCancelled = booking.status === "cancelled";
+  const needsPayment =
+    booking.status === "awaiting_payment" ||
+    booking.status === "pending_payment" ||
+    booking.status === "payment_rejected";
+
+  // Get payment deadline info for awaiting_payment
+  const getPaymentDeadlineText = () => {
+    const deadline = booking.payment?.advance?.paymentDeadline;
+    if (!deadline) return null;
+    const deadlineDate = typeof deadline === "string" ? new Date(deadline) : deadline?.toDate?.() || new Date(deadline);
+    const remaining = Math.max(0, Math.floor((deadlineDate - new Date()) / 60000));
+    if (remaining <= 0) return "Deadline passed";
+    return `Pay within ${remaining} min`;
+  };
 
   return (
     <TouchableOpacity
@@ -161,13 +227,64 @@ const BookingCard = ({ booking, onPress, onCancel, onReview, onContact }) => {
           <View style={styles.cardInfoRow}>
             <MaterialCommunityIcons name="currency-inr" size={16} color="#666" />
             <Text variant="bodySmall" style={styles.cardInfoText}>
-              {formatPrice(booking.totalPrice || booking.totalAmount || 0)}
+              {formatPrice(booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || 0)}
             </Text>
           </View>
         </View>
 
-        {/* Actions */}
-        {(upcoming || isCompleted) && (
+        {/* Payment action buttons for payment statuses */}
+        {needsPayment && (
+          <>
+            <Divider style={styles.cardDivider} />
+            <View style={styles.paymentActionSection}>
+              {booking.status === "awaiting_payment" && (
+                <Text variant="bodySmall" style={styles.deadlineText}>
+                  {getPaymentDeadlineText()}
+                </Text>
+              )}
+              {booking.status === "payment_rejected" && (
+                <Text variant="bodySmall" style={styles.paymentErrorText}>
+                  Payment verification failed.{" "}
+                  {(booking.paymentAttempts?.length || 0) < 3
+                    ? `${3 - (booking.paymentAttempts?.length || 0)} attempts remaining.`
+                    : "Max attempts reached."}
+                </Text>
+              )}
+              {(booking.paymentAttempts?.length || 0) < 3 && (
+                <Button
+                  mode="contained"
+                  compact
+                  buttonColor={booking.status === "payment_rejected" ? "#FF5722" : USER_COLOR}
+                  style={styles.paymentActionBtn}
+                  onPress={() => onPayment(booking)}
+                  icon="cash"
+                >
+                  {booking.status === "payment_rejected"
+                    ? "Retry Payment"
+                    : booking.status === "pending_payment"
+                    ? "Continue Payment"
+                    : `Pay ₹${booking.payment?.advanceAmount || 0}`}
+                </Button>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Payment submitted info */}
+        {booking.status === "payment_submitted" && (
+          <>
+            <Divider style={styles.cardDivider} />
+            <View style={styles.paymentInfoBanner}>
+              <MaterialCommunityIcons name="clock-check-outline" size={16} color="#673AB7" />
+              <Text variant="bodySmall" style={styles.paymentInfoText}>
+                Payment proof submitted. Awaiting verification.
+              </Text>
+            </View>
+          </>
+        )}
+
+        {/* Standard actions */}
+        {(upcoming || isCompleted) && !needsPayment && booking.status !== "payment_submitted" && (
           <>
             <Divider style={styles.cardDivider} />
             <View style={styles.cardActions}>
@@ -336,24 +453,40 @@ const BookingDetailsModal = ({ visible, booking, onDismiss, onCancel, onReview }
               <View style={styles.paymentRow}>
                 <Text variant="bodyMedium" style={styles.paymentLabel}>Total Amount</Text>
                 <Text variant="titleMedium" style={styles.paymentValue}>
-                  {formatPrice(booking.totalPrice || booking.totalAmount || 0)}
+                  {formatPrice(booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || 0)}
                 </Text>
               </View>
+              {booking.payment?.advanceAmount > 0 && (
+                <View style={styles.paymentRow}>
+                  <Text variant="bodySmall" style={styles.paymentLabel}>Advance Paid</Text>
+                  <Text variant="bodyMedium" style={{ color: "#4CAF50", fontWeight: "500" }}>
+                    {formatPrice(booking.payment.advanceAmount)}
+                  </Text>
+                </View>
+              )}
+              {booking.payment?.remainingAmount != null && booking.payment?.advanceAmount > 0 && (
+                <View style={styles.paymentRow}>
+                  <Text variant="bodySmall" style={styles.paymentLabel}>Remaining</Text>
+                  <Text variant="bodyMedium" style={{ color: "#FF9800", fontWeight: "500" }}>
+                    {formatPrice(booking.payment.remainingAmount)}
+                  </Text>
+                </View>
+              )}
               <View style={styles.paymentRow}>
                 <Text variant="bodySmall" style={styles.paymentLabel}>Payment Status</Text>
                 <Chip
                   compact
                   style={{
                     backgroundColor:
-                      booking.paymentStatus === "paid" ? "#E8F5E9" : "#FFF3E0",
+                      booking.payment?.isFullyPaid ? "#E8F5E9" : "#FFF3E0",
                   }}
                   textStyle={{
                     fontSize: 11,
                     color:
-                      booking.paymentStatus === "paid" ? "#4CAF50" : "#FF9800",
+                      booking.payment?.isFullyPaid ? "#4CAF50" : "#FF9800",
                   }}
                 >
-                  {(booking.paymentStatus || "pending").toUpperCase()}
+                  {booking.payment?.isFullyPaid ? "PAID" : (booking.payment?.advance?.status === "verified" ? "ADVANCE PAID" : "PENDING")}
                 </Chip>
               </View>
             </View>
@@ -502,7 +635,7 @@ const CancelBookingModal = ({ visible, booking, onDismiss, onConfirmCancel }) =>
     refundLabel = "No refund (less than 2 hours)";
   }
 
-  const refundAmount = Math.round((booking.totalPrice || booking.totalAmount || 0) * refundPercent / 100);
+  const refundAmount = Math.round((booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || 0) * refundPercent / 100);
 
   const handleCancel = async () => {
     setLoading(true);
@@ -664,7 +797,9 @@ export default function BookingsScreen({ navigation }) {
         filtered.sort((a, b) => b.date.localeCompare(a.date));
         break;
       case "cancelled":
-        filtered = bookings.filter((b) => b.status === "cancelled");
+        filtered = bookings.filter(
+          (b) => b.status === "cancelled" || b.status === "rejected" || b.status === "expired"
+        );
         filtered.sort((a, b) => b.date.localeCompare(a.date));
         break;
       default:
@@ -710,30 +845,96 @@ export default function BookingsScreen({ navigation }) {
   );
 
   const handleReview = (booking) => {
-    // Navigate to review screen or show review modal
-    Alert.alert(
-      "Write Review",
-      `Rate your experience at ${booking.turfName}`,
-      [
-        { text: "Later", style: "cancel" },
-        {
-          text: "Write Review",
-          onPress: () => {
-            // TODO: Navigate to review screen when built
-            Alert.alert("Coming Soon", "Review feature is being built.");
-          },
-        },
-      ]
-    );
+    navigation.navigate("WriteReview", {
+      bookingId: booking.id,
+      turfId: booking.turfId,
+      turfName: booking.turfName || "Turf",
+      companyId: booking.companyId || null,
+    });
   };
 
-  const handleContact = (booking) => {
-    // Open phone dialer for the turf
-    const phone = booking.turfPhone;
-    if (phone) {
-      Linking.openURL(`tel:${phone}`);
-    } else {
+  const handlePayment = (booking) => {
+    // Navigate to UPI payment screen for payment-related actions
+    if (booking.status === "awaiting_payment" || booking.status === "payment_rejected") {
+      navigation.navigate("UpiPayment", {
+        bookingId: booking.id,
+        amount: booking.payment?.advanceAmount || 0,
+        upiId: booking.payment?.advance?.upiDetails?.paidToUpiId || "",
+        upiHolderName: "",
+        qrCodeUrl: "",
+        turfName: booking.turfName || "Turf",
+        lockExpiry: booking.payment?.advance?.paymentDeadline
+          ? new Date(booking.payment.advance.paymentDeadline).getTime()
+          : new Date().getTime() + 10 * 60 * 1000,
+      });
+    } else if (booking.status === "pending_payment") {
+      const lockExpiry = booking.slotLock?.lockExpiry
+        ? new Date(booking.slotLock.lockExpiry).getTime()
+        : new Date().getTime() + 10 * 60 * 1000;
+      navigation.navigate("UpiPayment", {
+        bookingId: booking.id,
+        amount: booking.payment?.advanceAmount || 0,
+        upiId: "",
+        upiHolderName: "",
+        qrCodeUrl: "",
+        turfName: booking.turfName || "Turf",
+        lockExpiry,
+      });
+    }
+  };
+
+  const handleContact = async (booking) => {
+    const companyId = booking.companyId;
+    const turfId = booking.turfId;
+
+    if (!companyId || !turfId) {
       Alert.alert("Contact", "Contact information not available for this turf.");
+      return;
+    }
+
+    try {
+      const [managers, caretakers] = await Promise.all([
+        queryDocuments("users", [
+          { field: "companyId", operator: "==", value: companyId },
+          { field: "role", operator: "==", value: "manager" },
+        ]),
+        queryDocuments("users", [
+          { field: "companyId", operator: "==", value: companyId },
+          { field: "role", operator: "==", value: "caretaker" },
+        ]),
+      ]);
+
+      const turfManagers = managers.filter((m) =>
+        (m.assignedTurfIds || m.assignedTurfs || []).includes(turfId)
+      );
+      const turfCaretakers = caretakers.filter((c) =>
+        c.assignedTurfId === turfId ||
+        (c.assignedTurfIds || c.assignedTurfs || []).includes(turfId)
+      );
+
+      const contacts = [];
+      turfManagers.forEach((m) => {
+        if (m.phone) contacts.push({ name: m.name || "Manager", phone: m.phone, role: "Manager" });
+      });
+      turfCaretakers.forEach((c) => {
+        if (c.phone) contacts.push({ name: c.name || "Caretaker", phone: c.phone, role: "Caretaker" });
+      });
+
+      if (contacts.length === 0) {
+        Alert.alert("Contact", "No contact numbers available for this turf.");
+        return;
+      }
+
+      const buttons = contacts.map((c) => ({
+        text: `${c.role}: ${c.name} (${c.phone})`,
+        onPress: () => Linking.openURL(`tel:${c.phone}`),
+      }));
+      buttons.push({ text: "Cancel", style: "cancel" });
+
+      Alert.alert("Contact Turf", booking.turfName || "Turf", buttons);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      Alert.alert("Error", "Failed to load contact information.");
     }
   };
 
@@ -751,7 +952,9 @@ export default function BookingsScreen({ navigation }) {
     [bookings]
   );
   const cancelledCount = useMemo(
-    () => bookings.filter((b) => b.status === "cancelled").length,
+    () => bookings.filter(
+      (b) => b.status === "cancelled" || b.status === "rejected" || b.status === "expired"
+    ).length,
     [bookings]
   );
 
@@ -809,6 +1012,7 @@ export default function BookingsScreen({ navigation }) {
       onCancel={handleCancel}
       onReview={handleReview}
       onContact={handleContact}
+      onPayment={handlePayment}
     />
   );
 
@@ -924,6 +1128,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: "#666",
   },
+
 
   // Header
   header: {
@@ -1058,6 +1263,31 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     borderRadius: 8,
+  },
+  paymentActionSection: {
+    padding: 12,
+  },
+  deadlineText: {
+    color: "#FF5722",
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  paymentErrorText: {
+    color: "#F44336",
+    marginBottom: 8,
+  },
+  paymentActionBtn: {
+    borderRadius: 8,
+  },
+  paymentInfoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    gap: 8,
+  },
+  paymentInfoText: {
+    color: "#673AB7",
+    flex: 1,
   },
 
   // Status Badge

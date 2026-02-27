@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -6,30 +6,101 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
-import { Text, Surface, Button, Avatar, Chip } from "react-native-paper";
+import { Text, Surface, Button, Avatar, Chip, Badge, FAB } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector, useDispatch } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
-import { selectCompany, selectSubscription } from "../../store/slices/companySlice";
-import { selectTurfs, selectPendingActions } from "../../store/slices/ownerSlice";
+import { selectCompany, selectSubscription, selectManagers, selectCaretakers } from "../../store/slices/companySlice";
+import { selectTurfs, selectPendingActions, setTurfs } from "../../store/slices/ownerSlice";
+import { queryDocuments } from "../../services/firebase/firestore";
+import { useNotifications } from "../../hooks";
 
 const OWNER_COLOR = "#9C27B0";
 
 export default function OwnerDashboardScreen({ navigation }) {
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
+  const { unreadCount } = useNotifications();
   const company = useSelector(selectCompany);
   const subscription = useSelector(selectSubscription);
-  const turfs = useSelector(selectTurfs);
+  const reduxTurfs = useSelector(selectTurfs);
   const pendingActions = useSelector(selectPendingActions);
+  const managers = useSelector(selectManagers);
+  const caretakers = useSelector(selectCaretakers);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingTurfRequests, setPendingTurfRequests] = useState([]);
+  const [liveStats, setLiveStats] = useState({
+    totalRevenue: 0,
+    totalBookings: 0,
+    totalTurfs: 0,
+  });
+  const [localTurfs, setLocalTurfs] = useState([]);
+
+  const turfs = reduxTurfs && reduxTurfs.length > 0 ? reduxTurfs : localTurfs;
+
+  // Fetch real stats on mount and when company changes
+  useEffect(() => {
+    fetchLiveStats();
+  }, [company]);
+
+  const fetchLiveStats = useCallback(async () => {
+    const companyId = company?.id || company?.companyId;
+    if (!companyId) return;
+
+    try {
+      // Fetch turfs if Redux is empty
+      let turfList = reduxTurfs && reduxTurfs.length > 0 ? reduxTurfs : [];
+      if (turfList.length === 0) {
+        turfList = await queryDocuments("turfs", [
+          { field: "companyId", operator: "==", value: companyId },
+        ]);
+        setLocalTurfs(turfList);
+        if (turfList.length > 0) {
+          dispatch(setTurfs(turfList));
+        }
+      }
+
+      // Fetch bookings across all turfs to compute real stats
+      let totalRevenue = 0;
+      let totalBookings = 0;
+      for (const turf of turfList) {
+        const turfId = turf.id || turf.turfId;
+        const bookings = await queryDocuments("bookings", [
+          { field: "turfId", operator: "==", value: turfId },
+        ]);
+        const confirmed = bookings.filter(
+          (b) => b.status === "confirmed" || b.status === "completed"
+        );
+        totalBookings += confirmed.length;
+        totalRevenue += confirmed.reduce(
+          (sum, b) => sum + (b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0),
+          0
+        );
+      }
+
+      setLiveStats({
+        totalRevenue,
+        totalBookings,
+        totalTurfs: turfList.length,
+      });
+
+      // Fetch pending turf requests
+      const turfReqs = await queryDocuments("turf_requests", [
+        { field: "companyId", operator: "==", value: companyId },
+        { field: "status", operator: "==", value: "pending" },
+      ]);
+      setPendingTurfRequests(turfReqs);
+    } catch (error) {
+      console.error("Error fetching live stats:", error);
+    }
+  }, [company, reduxTurfs]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // TODO: Fetch fresh data from Firestore
-    setTimeout(() => setRefreshing(false), 1000);
+    await fetchLiveStats();
+    setRefreshing(false);
   };
 
   const getSubscriptionStatusColor = () => {
@@ -132,14 +203,55 @@ export default function OwnerDashboardScreen({ navigation }) {
               {user?.name || "Owner"}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
-            <Avatar.Text
-              size={48}
-              label={user?.name?.charAt(0)?.toUpperCase() || "O"}
-              style={{ backgroundColor: OWNER_COLOR }}
-            />
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Notifications")}
+              style={{ position: "relative" }}
+            >
+              <MaterialCommunityIcons name="bell-outline" size={26} color="#666" />
+              {unreadCount > 0 && (
+                <Badge
+                  size={18}
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -6,
+                    backgroundColor: "#F44336",
+                  }}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Badge>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
+              <Avatar.Text
+                size={48}
+                label={user?.name?.charAt(0)?.toUpperCase() || "O"}
+                style={{ backgroundColor: OWNER_COLOR }}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
+
+        {/* UPI Warning Banner */}
+        {!company?.paymentConfig?.upiEnabled && (
+          <TouchableOpacity
+            style={styles.warningBanner}
+            onPress={() => navigation.navigate("PaymentSettings")}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="alert-circle" size={24} color="#E65100" />
+            <View style={styles.warningContent}>
+              <Text variant="titleSmall" style={styles.warningTitle}>
+                Configure UPI to receive advance payments
+              </Text>
+              <Text variant="bodySmall" style={styles.warningSubtext}>
+                Tap to set up payment settings
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#E65100" />
+          </TouchableOpacity>
+        )}
 
         {/* Company Card */}
         <Surface style={styles.companyCard} elevation={2}>
@@ -174,29 +286,28 @@ export default function OwnerDashboardScreen({ navigation }) {
           <StatCard
             icon="currency-inr"
             label="Revenue"
-            value={`₹${company?.stats?.totalRevenue?.toLocaleString() || 0}`}
+            value={`₹${liveStats.totalRevenue.toLocaleString()}`}
             color="#4CAF50"
+            onPress={() => navigation.navigate("OwnerAnalyticsDashboard")}
           />
           <StatCard
             icon="calendar-check"
             label="Bookings"
-            value={company?.stats?.totalBookings || 0}
+            value={liveStats.totalBookings}
             color="#2196F3"
+            onPress={() => navigation.navigate("OwnerAnalyticsDashboard")}
           />
           <StatCard
             icon="soccer-field"
             label="Turfs"
-            value={company?.stats?.totalTurfs || turfs.length || 0}
+            value={liveStats.totalTurfs || turfs.length || 0}
             color={OWNER_COLOR}
             onPress={() => navigation.navigate("Turfs")}
           />
           <StatCard
             icon="account-group"
             label="Team"
-            value={
-              (company?.managers?.length || 0) +
-              (company?.caretakers?.length || 0)
-            }
+            value={(managers?.length || 0) + (caretakers?.length || 0)}
             color="#FF9800"
             onPress={() => navigation.navigate("Team")}
           />
@@ -243,6 +354,46 @@ export default function OwnerDashboardScreen({ navigation }) {
           </Surface>
         )}
 
+        {/* Pending Turf Requests */}
+        {pendingTurfRequests.length > 0 && (
+          <Surface style={styles.turfRequestsCard} elevation={1}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("PendingTurfRequests")}
+              activeOpacity={0.7}
+            >
+              <View style={styles.turfRequestsHeader}>
+                <View style={styles.turfRequestsIconContainer}>
+                  <MaterialCommunityIcons name="soccer-field" size={24} color={OWNER_COLOR} />
+                </View>
+                <View style={styles.turfRequestsInfo}>
+                  <Text variant="titleSmall" style={styles.turfRequestsTitle}>
+                    Pending Turf Requests ({pendingTurfRequests.length})
+                  </Text>
+                  <Text variant="bodySmall" style={styles.turfRequestsSubtext}>
+                    Managers have requested new turfs
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={24} color="#999" />
+              </View>
+              {pendingTurfRequests.slice(0, 2).map((req) => (
+                <View key={req.id} style={styles.turfRequestPreview}>
+                  <Text variant="bodyMedium" style={styles.turfRequestName} numberOfLines={1}>
+                    {req.turfName || req.turfData?.name || "Unnamed"}
+                  </Text>
+                  <Text variant="bodySmall" style={styles.turfRequestMeta}>
+                    by {req.requestedByName || "Manager"} · {req.turfData?.location?.city || ""}
+                  </Text>
+                </View>
+              ))}
+              {pendingTurfRequests.length > 2 && (
+                <Text variant="bodySmall" style={styles.turfRequestMore}>
+                  +{pendingTurfRequests.length - 2} more
+                </Text>
+              )}
+            </TouchableOpacity>
+          </Surface>
+        )}
+
         {/* Quick Actions */}
         <Text variant="titleMedium" style={styles.sectionTitle}>
           Quick Actions
@@ -269,7 +420,31 @@ export default function OwnerDashboardScreen({ navigation }) {
           label="View Analytics"
           description="Company-wide performance reports"
           color="#4CAF50"
-          onPress={() => {}}
+          onPress={() => navigation.navigate("OwnerAnalyticsDashboard")}
+        />
+
+        <QuickActionCard
+          icon="cash-register"
+          label="Track Expenses"
+          description="View & manage company-wide expenses"
+          color="#F44336"
+          onPress={() => navigation.navigate("ExpenseTracking")}
+        />
+
+        <QuickActionCard
+          icon="star-outline"
+          label="Manage Reviews"
+          description="View & moderate customer reviews"
+          color="#FFC107"
+          onPress={() => navigation.navigate("ReviewManagement")}
+        />
+
+        <QuickActionCard
+          icon="file-document-check-outline"
+          label="Turf Requests"
+          description="Review manager turf requests"
+          color="#00BCD4"
+          onPress={() => navigation.navigate("PendingTurfRequests")}
         />
 
         <QuickActionCard
@@ -305,6 +480,18 @@ export default function OwnerDashboardScreen({ navigation }) {
           </Surface>
         )}
       </ScrollView>
+
+      {/* Operations Mode FAB */}
+      {user?.hasOperationalPermissions && (
+        <FAB
+          icon="briefcase-clock"
+          label="Operations"
+          style={styles.fab}
+          color="#fff"
+          customSize={52}
+          onPress={() => navigation.navigate("OperationsMode")}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -332,6 +519,28 @@ const styles = StyleSheet.create({
   userName: {
     fontWeight: "bold",
     color: "#333",
+  },
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF3E0",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FFE0B2",
+  },
+  warningContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  warningTitle: {
+    fontWeight: "600",
+    color: "#E65100",
+  },
+  warningSubtext: {
+    color: "#F57C00",
+    marginTop: 2,
   },
   companyCard: {
     padding: 16,
@@ -444,6 +653,57 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 2,
   },
+  turfRequestsCard: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#F3E5F5",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E1BEE7",
+  },
+  turfRequestsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  turfRequestsIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E1BEE7",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  turfRequestsInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  turfRequestsTitle: {
+    fontWeight: "bold",
+    color: OWNER_COLOR,
+  },
+  turfRequestsSubtext: {
+    color: "#7B1FA2",
+    marginTop: 1,
+  },
+  turfRequestPreview: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  turfRequestName: {
+    fontWeight: "600",
+  },
+  turfRequestMeta: {
+    color: "#666",
+    marginTop: 2,
+  },
+  turfRequestMore: {
+    color: OWNER_COLOR,
+    fontWeight: "600",
+    marginTop: 8,
+    textAlign: "center",
+  },
   emptyCard: {
     padding: 32,
     borderRadius: 16,
@@ -463,5 +723,12 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     borderRadius: 8,
+  },
+  fab: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    backgroundColor: "#00796B",
+    borderRadius: 28,
   },
 });

@@ -3,69 +3,112 @@ import { useAppSelector } from "./useAppSelector";
 import { useAppDispatch } from "./useAppDispatch";
 import {
   selectUser,
+  selectUserRole,
   selectAssignedTurfIds,
+  selectManagedTurfIds,
   selectSelectedTurfId,
   updateUserProfile,
 } from "../store/slices/authSlice";
+import { selectCompany } from "../store/slices/companySlice";
 import {
   getDocument,
   updateDocument,
   subscribeToDocument,
+  queryDocuments,
 } from "../services/firebase/firestore";
 
 /**
- * Custom hook for managing the selected turf for managers.
+ * Custom hook for managing the selected turf for managers and owners.
  *
+ * - For managers: uses assignedTurfIds from user profile
+ * - For owners: uses managedTurfIds (if set) or queries all company turfs
  * - Listens to the selected turf document in real-time
  * - Provides a changeTurf function that persists to Firestore + Redux
- * - Returns turf data, loading state, and whether the manager has multiple turfs
- * - Auto-selects the single turf if only one is assigned
+ * - Returns turf data, loading state, and whether the user has multiple turfs
+ * - Auto-selects the single turf if only one is available
  */
 export function useSelectedTurf() {
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
+  const role = useAppSelector(selectUserRole);
   const assignedTurfIds = useAppSelector(selectAssignedTurfIds);
+  const managedTurfIds = useAppSelector(selectManagedTurfIds);
   const persistedTurfId = useAppSelector(selectSelectedTurfId);
+  const company = useAppSelector(selectCompany);
 
+  const [ownerTurfIds, setOwnerTurfIds] = useState([]);
   const [selectedTurfId, setSelectedTurfId] = useState(persistedTurfId || null);
   const [turfData, setTurfData] = useState(null);
   const [allTurfs, setAllTurfs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const hasMultipleTurfs = assignedTurfIds.length > 1;
+  // Resolve owner turf IDs
+  useEffect(() => {
+    if (role !== "owner") return;
+
+    const companyId = company?.companyId || company?.id;
+    if (!companyId) {
+      setOwnerTurfIds([]);
+      return;
+    }
+
+    if (managedTurfIds && managedTurfIds.length > 0) {
+      // Owner selected specific turfs in Operational Settings
+      setOwnerTurfIds(managedTurfIds);
+    } else {
+      // managedTurfIds is empty → means "All turfs" — query all company turfs
+      const loadCompanyTurfs = async () => {
+        try {
+          const turfs = await queryDocuments("turfs", [
+            { field: "companyId", operator: "==", value: companyId },
+          ]);
+          setOwnerTurfIds(turfs.map((t) => t.id || t.turfId));
+        } catch (error) {
+          console.error("[useSelectedTurf] Error loading owner turfs:", error);
+          setOwnerTurfIds([]);
+        }
+      };
+      loadCompanyTurfs();
+    }
+  }, [role, managedTurfIds, company?.companyId, company?.id]);
+
+  // Compute effective turf IDs based on role
+  const effectiveTurfIds = role === "owner" ? ownerTurfIds : assignedTurfIds;
+
+  const hasMultipleTurfs = effectiveTurfIds.length > 1;
 
   // Auto-select single turf or restore persisted selection
   useEffect(() => {
-    if (!assignedTurfIds || assignedTurfIds.length === 0) {
+    if (!effectiveTurfIds || effectiveTurfIds.length === 0) {
       setSelectedTurfId(null);
       setTurfData(null);
       setIsLoading(false);
       return;
     }
 
-    if (persistedTurfId && assignedTurfIds.includes(persistedTurfId)) {
+    if (persistedTurfId && effectiveTurfIds.includes(persistedTurfId)) {
       setSelectedTurfId(persistedTurfId);
-    } else if (assignedTurfIds.length === 1) {
-      // Auto-select the only assigned turf
-      const singleId = assignedTurfIds[0];
+    } else if (effectiveTurfIds.length === 1) {
+      // Auto-select the only turf
+      const singleId = effectiveTurfIds[0];
       setSelectedTurfId(singleId);
       persistSelection(singleId);
     } else {
       // Multiple turfs but no valid persisted selection
-      setSelectedTurfId(assignedTurfIds[0]);
+      setSelectedTurfId(effectiveTurfIds[0]);
     }
-  }, [assignedTurfIds, persistedTurfId]);
+  }, [effectiveTurfIds, persistedTurfId]);
 
-  // Load all assigned turfs metadata
+  // Load all turf metadata
   useEffect(() => {
-    if (!assignedTurfIds || assignedTurfIds.length === 0) {
+    if (!effectiveTurfIds || effectiveTurfIds.length === 0) {
       setAllTurfs([]);
       return;
     }
 
     const loadAllTurfs = async () => {
       try {
-        const promises = assignedTurfIds.map((id) => getDocument("turfs", id));
+        const promises = effectiveTurfIds.map((id) => getDocument("turfs", id));
         const results = await Promise.all(promises);
         setAllTurfs(results.filter(Boolean));
       } catch (error) {
@@ -74,7 +117,7 @@ export function useSelectedTurf() {
     };
 
     loadAllTurfs();
-  }, [assignedTurfIds]);
+  }, [effectiveTurfIds]);
 
   // Subscribe to selected turf document for real-time updates
   useEffect(() => {
@@ -116,11 +159,11 @@ export function useSelectedTurf() {
    */
   const changeTurf = useCallback(
     async (turfId) => {
-      if (!turfId || !assignedTurfIds.includes(turfId)) return;
+      if (!turfId || !effectiveTurfIds.includes(turfId)) return;
       setSelectedTurfId(turfId);
       await persistSelection(turfId);
     },
-    [assignedTurfIds, persistSelection]
+    [effectiveTurfIds, persistSelection]
   );
 
   return {
@@ -128,11 +171,11 @@ export function useSelectedTurf() {
     turfData,
     /** Currently selected turf ID */
     selectedTurfId,
-    /** All assigned turf documents */
+    /** All turf documents available to this user */
     allTurfs,
-    /** Array of assigned turf IDs */
-    assignedTurfIds,
-    /** Whether the manager has more than one assigned turf */
+    /** Array of effective turf IDs (assigned for managers, managed for owners) */
+    assignedTurfIds: effectiveTurfIds,
+    /** Whether the user has more than one available turf */
     hasMultipleTurfs,
     /** Whether turf data is still loading */
     isLoading,

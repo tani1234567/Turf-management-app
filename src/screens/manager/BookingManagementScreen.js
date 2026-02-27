@@ -41,9 +41,15 @@ const MANAGER_BLUE = "#2196F3";
 // Status colors
 const STATUS_COLORS = {
   pending: "#FF9800",
+  pending_payment: "#9C27B0",
+  payment_submitted: "#673AB7",
+  awaiting_payment: "#FF5722",
+  payment_rejected: "#F44336",
+  expired: "#9E9E9E",
   confirmed: "#2196F3",
+  in_progress: "#00BCD4",
   completed: "#4CAF50",
-  cancelled: "#F44336",
+  cancelled: "#9E9E9E",
   rejected: "#F44336",
 };
 
@@ -108,13 +114,10 @@ export default function BookingManagementScreen({ navigation }) {
   // Filter state
   const [filterVisible, setFilterVisible] = useState(false);
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, custom
-  const [sportFilter, setSportFilter] = useState("all");
-  const [groundFilter, setGroundFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Ground & Sport options
+  // Ground options (used for display names)
   const [grounds, setGrounds] = useState([]);
-  const [sports, setSports] = useState([]);
 
   // Reject dialog state
   const [rejectDialogVisible, setRejectDialogVisible] = useState(false);
@@ -132,7 +135,6 @@ export default function BookingManagementScreen({ navigation }) {
   useEffect(() => {
     if (!turfData) {
       setGrounds([]);
-      setSports([]);
       return;
     }
 
@@ -147,15 +149,6 @@ export default function BookingManagementScreen({ navigation }) {
       }));
 
       setGrounds(groundsWithIds);
-
-      // Extract unique sports from grounds
-      const allSports = new Set();
-      groundsWithIds.forEach((g) => {
-        if (g.sports && Array.isArray(g.sports)) {
-          g.sports.forEach((s) => allSports.add(s));
-        }
-      });
-      setSports([...allSports]);
     } catch (error) {
       console.error("Error loading grounds:", error);
     }
@@ -181,12 +174,18 @@ export default function BookingManagementScreen({ navigation }) {
 
         setBookings(sorted);
 
-        // Calculate counts
+        // Calculate counts (include payment statuses in pending tab)
         tabCounts.current = {
-          pending: docs.filter((d) => d.status === "pending").length,
+          pending: docs.filter(
+            (d) => d.status === "pending" || d.status === "payment_submitted" ||
+                   d.status === "pending_payment" || d.status === "awaiting_payment"
+          ).length,
           confirmed: docs.filter((d) => d.status === "confirmed").length,
           completed: docs.filter((d) => d.status === "completed").length,
-          cancelled: docs.filter((d) => d.status === "cancelled" || d.status === "rejected").length,
+          cancelled: docs.filter(
+            (d) => d.status === "cancelled" || d.status === "rejected" ||
+                   d.status === "payment_rejected" || d.status === "expired"
+          ).length,
         };
 
         // Detect conflicts among pending bookings
@@ -213,7 +212,16 @@ export default function BookingManagementScreen({ navigation }) {
 
     // Filter by status (tab)
     if (activeTab === "cancelled") {
-      filtered = filtered.filter((b) => b.status === "cancelled" || b.status === "rejected");
+      filtered = filtered.filter(
+        (b) => b.status === "cancelled" || b.status === "rejected" ||
+               b.status === "payment_rejected" || b.status === "expired"
+      );
+    } else if (activeTab === "pending") {
+      // Include all payment-related pending statuses
+      filtered = filtered.filter(
+        (b) => b.status === "pending" || b.status === "payment_submitted" ||
+               b.status === "pending_payment" || b.status === "awaiting_payment"
+      );
     } else {
       filtered = filtered.filter((b) => b.status === activeTab);
     }
@@ -231,16 +239,6 @@ export default function BookingManagementScreen({ navigation }) {
       filtered = filtered.filter((b) => b.date >= today);
     }
 
-    // Filter by sport
-    if (sportFilter !== "all") {
-      filtered = filtered.filter((b) => b.sport === sportFilter);
-    }
-
-    // Filter by ground
-    if (groundFilter !== "all") {
-      filtered = filtered.filter((b) => b.groundId === groundFilter);
-    }
-
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -253,7 +251,7 @@ export default function BookingManagementScreen({ navigation }) {
     }
 
     setFilteredBookings(filtered);
-  }, [bookings, activeTab, dateFilter, sportFilter, groundFilter, searchQuery]);
+  }, [bookings, activeTab, dateFilter, searchQuery]);
 
   // Detect conflicts among pending bookings
   const detectConflicts = (pendingBookings) => {
@@ -292,17 +290,19 @@ export default function BookingManagementScreen({ navigation }) {
     const normalizedBookingGroundId = normalizeGroundId(booking.groundId);
 
     try {
-      // Check for conflicts with confirmed bookings
-      const confirmedBookings = await queryDocuments("bookings", [
+      // Check for conflicts with confirmed/locked bookings
+      const allBookings = await queryDocuments("bookings", [
         { field: "turfId", operator: "==", value: selectedTurfId },
       ]);
 
-      const conflictingConfirmed = confirmedBookings.filter(
+      const blockingStatuses = [
+        "confirmed", "in_progress", "awaiting_payment", "payment_submitted",
+      ];
+      const conflictingConfirmed = allBookings.filter(
         (b) =>
           b.id !== booking.id &&
-          b.status === "confirmed" &&
+          blockingStatuses.includes(b.status) &&
           b.date === booking.date &&
-          // Use normalized comparison for legacy data compatibility
           normalizeGroundId(b.groundId) === normalizedBookingGroundId &&
           hasTimeOverlap(booking.startTime, booking.endTime, b.startTime, b.endTime)
       );
@@ -310,7 +310,7 @@ export default function BookingManagementScreen({ navigation }) {
       if (conflictingConfirmed.length > 0) {
         Alert.alert(
           "Slot Conflict",
-          "This time slot conflicts with an existing confirmed booking. Please reject this booking or adjust the schedule.",
+          "This time slot conflicts with an existing confirmed or locked booking. Please reject this booking or adjust the schedule.",
           [{ text: "OK" }]
         );
         setActionLoading(null);
@@ -326,7 +326,6 @@ export default function BookingManagementScreen({ navigation }) {
         const conflictingSession = academySessions.find(
           (s) =>
             s.date === booking.date &&
-            // Use normalized comparison for legacy data compatibility
             normalizeGroundId(s.groundId) === normalizedBookingGroundId &&
             hasTimeOverlap(booking.startTime, booking.endTime, s.startTime, s.endTime)
         );
@@ -344,24 +343,62 @@ export default function BookingManagementScreen({ navigation }) {
         // Academy sessions collection might not exist, continue
       }
 
-      // Approve the booking
-      await updateDocument("bookings", booking.id, {
-        status: "confirmed",
-        approvedBy: user?.userId,
-        approvedAt: new Date().toISOString(),
-      });
+      // Determine approval flow based on advance payment config
+      const paymentTiming = booking.payment?.advanceConfig?.paymentTiming;
+      const isAdvanceRequired = booking.payment?.advanceConfig?.isRequired;
+      const paymentTimeout = booking.payment?.advanceConfig?.paymentTimeout || 120;
 
-      // Auto-reject other conflicting pending bookings
-      if (conflictWarnings[booking.id]) {
-        for (const conflictId of conflictWarnings[booking.id]) {
-          await updateDocument("bookings", conflictId, {
-            status: "rejected",
-            rejectedBy: user?.userId,
-            rejectedAt: new Date().toISOString(),
-            rejectionReason: "slot_unavailable",
-            rejectionNote: "Auto-rejected due to conflicting booking approval",
-          });
-        }
+      if (isAdvanceRequired && paymentTiming === "after_approval") {
+        // AFTER APPROVAL FLOW: Set to awaiting_payment with hard lock + deadline
+        const paymentDeadline = new Date(Date.now() + paymentTimeout * 60 * 1000);
+
+        await updateDocument("bookings", booking.id, {
+          status: "awaiting_payment",
+          approvedBy: user?.userId,
+          approvedAt: new Date().toISOString(),
+          "slotLock.isLocked": true,
+          "slotLock.lockType": "hard",
+          "slotLock.lockedAt": new Date().toISOString(),
+          "slotLock.lockExpiry": paymentDeadline.toISOString(),
+          "slotLock.lockReason": "awaiting_payment",
+          "payment.advance.paymentDeadline": paymentDeadline.toISOString(),
+        });
+      } else {
+        // NORMAL or BEFORE APPROVAL (already paid) flow: Confirm directly
+        await updateDocument("bookings", booking.id, {
+          status: "confirmed",
+          approvedBy: user?.userId,
+          approvedAt: new Date().toISOString(),
+          "slotLock.isLocked": true,
+          "slotLock.lockType": "hard",
+          "slotLock.lockedAt": new Date().toISOString(),
+          "slotLock.lockExpiry": null,
+          "slotLock.lockReason": "approved",
+        });
+      }
+
+      // Auto-reject other conflicting pending bookings for the same slot
+      const conflictingPending = allBookings.filter(
+        (b) =>
+          b.id !== booking.id &&
+          (b.status === "pending" || b.status === "pending_payment") &&
+          b.date === booking.date &&
+          normalizeGroundId(b.groundId) === normalizedBookingGroundId &&
+          hasTimeOverlap(booking.startTime, booking.endTime, b.startTime, b.endTime)
+      );
+
+      for (const conflict of conflictingPending) {
+        await updateDocument("bookings", conflict.id, {
+          status: "rejected",
+          rejectedBy: user?.userId,
+          rejectedAt: new Date().toISOString(),
+          rejectionReason: "slot_unavailable",
+          rejectionNote: "Auto-rejected: slot assigned to another booking",
+          "slotLock.isLocked": false,
+          "slotLock.lockType": null,
+          "slotLock.lockExpiry": null,
+          "slotLock.lockReason": null,
+        });
       }
     } catch (error) {
       console.error("Error approving booking:", error);
@@ -538,11 +575,29 @@ export default function BookingManagementScreen({ navigation }) {
 
         {/* Amount */}
         <View style={styles.amountRow}>
-          <Text variant="bodyMedium" style={styles.amountLabel}>Amount</Text>
+          <Text variant="bodyMedium" style={styles.amountLabel}>Total</Text>
           <Text variant="titleMedium" style={styles.amountValue}>
-            ₹{booking.totalPrice || booking.totalAmount || booking.amount || 0}
+            ₹{booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || booking.amount || 0}
           </Text>
         </View>
+        {booking.payment?.advanceAmount > 0 && (
+          <View style={styles.amountRow}>
+            <Text variant="bodySmall" style={styles.amountLabel}>
+              Advance ({booking.payment?.advanceConfig?.percentage || 0}%)
+            </Text>
+            <Text variant="bodyMedium" style={{ color: booking.payment?.advance?.status === "verified" ? "#4CAF50" : "#FF9800", fontWeight: "500" }}>
+              ₹{booking.payment.advanceAmount} {booking.payment?.advance?.status === "verified" ? "✓" : ""}
+            </Text>
+          </View>
+        )}
+        {booking.payment?.remainingAmount > 0 && (
+          <View style={styles.amountRow}>
+            <Text variant="bodySmall" style={styles.amountLabel}>Remaining</Text>
+            <Text variant="bodyMedium" style={{ color: "#FF9800", fontWeight: "500" }}>
+              ₹{booking.payment.remainingAmount}
+            </Text>
+          </View>
+        )}
 
         {/* Rejection reason for cancelled */}
         {(booking.status === "rejected" || booking.status === "cancelled") && booking.rejectionNote && (
@@ -555,9 +610,53 @@ export default function BookingManagementScreen({ navigation }) {
         )}
 
         {/* Actions */}
-        {activeTab === "pending" && (
+        {activeTab === "pending" && booking.status === "payment_submitted" && (
           <>
             <Divider style={styles.divider} />
+            <View style={styles.paymentPendingBanner}>
+              <MaterialCommunityIcons name="cash-clock" size={16} color="#673AB7" />
+              <Text variant="bodySmall" style={styles.paymentPendingText}>
+                Payment proof submitted - verification required
+              </Text>
+            </View>
+            <View style={styles.actionRow}>
+              <Button
+                mode="contained"
+                compact
+                buttonColor="#673AB7"
+                icon="credit-card-check"
+                style={styles.verifyBtn}
+                onPress={() => navigation.navigate("VerifyPayment", { bookingId: booking.id, booking })}
+              >
+                Verify Payment
+              </Button>
+            </View>
+          </>
+        )}
+
+        {activeTab === "pending" && booking.status === "awaiting_payment" && (
+          <>
+            <Divider style={styles.divider} />
+            <View style={styles.paymentPendingBanner}>
+              <MaterialCommunityIcons name="alert-circle" size={16} color="#FF5722" />
+              <Text variant="bodySmall" style={styles.paymentPendingText}>
+                Approved - waiting for user to pay advance
+              </Text>
+            </View>
+          </>
+        )}
+
+        {activeTab === "pending" && (booking.status === "pending" || booking.status === "pending_payment") && (
+          <>
+            <Divider style={styles.divider} />
+            {booking.status === "pending_payment" && (
+              <View style={styles.paymentPendingBanner}>
+                <MaterialCommunityIcons name="clock-outline" size={16} color="#9C27B0" />
+                <Text variant="bodySmall" style={styles.paymentPendingText}>
+                  Waiting for user to pay advance
+                </Text>
+              </View>
+            )}
             <View style={styles.actionRow}>
               {isLoading ? (
                 <ActivityIndicator size="small" color={MANAGER_BLUE} />
@@ -572,15 +671,17 @@ export default function BookingManagementScreen({ navigation }) {
                   >
                     Reject
                   </Button>
-                  <Button
-                    mode="contained"
-                    compact
-                    buttonColor="#4CAF50"
-                    style={styles.approveBtn}
-                    onPress={() => handleApprove(booking)}
-                  >
-                    Approve
-                  </Button>
+                  {booking.status === "pending" && (
+                    <Button
+                      mode="contained"
+                      compact
+                      buttonColor="#4CAF50"
+                      style={styles.approveBtn}
+                      onPress={() => handleApprove(booking)}
+                    >
+                      Approve
+                    </Button>
+                  )}
                 </>
               )}
             </View>
@@ -672,7 +773,7 @@ export default function BookingManagementScreen({ navigation }) {
         <IconButton
           icon="filter-variant"
           size={24}
-          iconColor={filterVisible || dateFilter !== "all" || sportFilter !== "all" || groundFilter !== "all" ? MANAGER_BLUE : "#666"}
+          iconColor={filterVisible || dateFilter !== "all" ? MANAGER_BLUE : "#666"}
           onPress={() => setFilterVisible(!filterVisible)}
         />
       </View>
@@ -712,71 +813,11 @@ export default function BookingManagementScreen({ navigation }) {
             </View>
           </View>
 
-          {sports.length > 0 && (
-            <View style={styles.filterRow}>
-              <Text variant="labelMedium" style={styles.filterLabel}>Sport:</Text>
-              <View style={styles.filterChips}>
-                <Chip
-                  selected={sportFilter === "all"}
-                  onPress={() => setSportFilter("all")}
-                  mode="outlined"
-                  compact
-                  style={styles.filterChip}
-                >
-                  All
-                </Chip>
-                {sports.map((sport) => (
-                  <Chip
-                    key={sport}
-                    selected={sportFilter === sport}
-                    onPress={() => setSportFilter(sport)}
-                    mode="outlined"
-                    compact
-                    style={styles.filterChip}
-                  >
-                    {sport}
-                  </Chip>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {grounds.length > 1 && (
-            <View style={styles.filterRow}>
-              <Text variant="labelMedium" style={styles.filterLabel}>Ground:</Text>
-              <View style={styles.filterChips}>
-                <Chip
-                  selected={groundFilter === "all"}
-                  onPress={() => setGroundFilter("all")}
-                  mode="outlined"
-                  compact
-                  style={styles.filterChip}
-                >
-                  All
-                </Chip>
-                {grounds.map((ground) => (
-                  <Chip
-                    key={ground.id}
-                    selected={groundFilter === ground.id}
-                    onPress={() => setGroundFilter(ground.id)}
-                    mode="outlined"
-                    compact
-                    style={styles.filterChip}
-                  >
-                    {ground.name}
-                  </Chip>
-                ))}
-              </View>
-            </View>
-          )}
-
           <Button
             mode="text"
             compact
             onPress={() => {
               setDateFilter("all");
-              setSportFilter("all");
-              setGroundFilter("all");
             }}
           >
             Clear Filters
@@ -1079,6 +1120,21 @@ const styles = StyleSheet.create({
   },
   approveBtn: {
     borderRadius: 8,
+  },
+  verifyBtn: {
+    borderRadius: 8,
+  },
+  paymentPendingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "#F3E5F5",
+    gap: 8,
+  },
+  paymentPendingText: {
+    color: "#673AB7",
+    flex: 1,
   },
 
   // Empty state

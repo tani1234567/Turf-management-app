@@ -448,7 +448,7 @@ export default function ManagerManagementScreen({ navigation }) {
     try {
       const link = generateInviteLink(code);
       await Share.share({
-        message: `Join ${company?.name || "our company"} as a manager on Turf Booking!\n\nUse invite code: ${formatCodeForDisplay(code)}\n\nOr tap this link: ${link}`,
+        message: `Join ${company?.name || "our company"} as a manager on Play Grid!\n\nUse invite code: ${formatCodeForDisplay(code)}\n\nOr tap this link: ${link}`,
         title: "Join Our Team",
       });
     } catch (error) {

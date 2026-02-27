@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -8,6 +8,9 @@ import {
   RefreshControl,
   Image,
   ScrollView,
+  Alert,
+  Animated,
+  Pressable,
 } from "react-native";
 import {
   Text,
@@ -25,14 +28,43 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
+import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { selectUser } from "../../store/slices/authSlice";
 import { queryDocuments } from "../../services/firebase/firestore";
+import { useNotifications } from "../../hooks";
+import {
+  MUMBAI_AREAS,
+  getAreasByZone,
+  findNearestArea,
+  getAreasWithDistances,
+  calculateDistance
+} from "../../constants/mumbaiAreas";
+
+/**
+ * Calculate distance between two points using the Haversine formula.
+ * @returns distance in km
+ */
+const haversineDistance = (lat1, lon1, lat2, lon2) => {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#4CAF50";
-const CARD_MARGIN = 8;
-const GRID_CARD_WIDTH = (SCREEN_WIDTH - 48 - CARD_MARGIN) / 2;
+const GRID_CONTAINER_WIDTH = SCREEN_WIDTH * 0.9;
+const GRID_GAP = 12;
+const GRID_CARD_WIDTH = (GRID_CONTAINER_WIDTH - GRID_GAP) / 2;
 
 // Sports options for filter
 const SPORTS = [
@@ -58,6 +90,193 @@ const AMENITIES = [
 ];
 
 const ITEMS_PER_PAGE = 10;
+
+// Separate TurfCard component to properly use hooks
+const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation }) => {
+  const isGrid = viewMode === "grid";
+  const isFavorite = favorites.includes(item.id);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 3,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Get first ground for quick stats
+  const firstGround = item.grounds && item.grounds.length > 0 ? item.grounds[0] : null;
+  const groundSize = firstGround?.size || "Standard";
+  const surfaceType = firstGround?.surfaceType || "Grass";
+
+  // Check if turf is currently available (simplified logic)
+  const isAvailableNow = true; // You can add real-time slot checking logic here
+  const openTime = "6:00 AM"; // You can extract from actual turf data
+
+  // Format price range
+  const priceDisplay =
+    item.priceRange?.min && item.priceRange?.max
+      ? item.priceRange.min === item.priceRange.max
+        ? `₹${item.priceRange.min}`
+        : `₹${item.priceRange.min}-₹${item.priceRange.max}`
+      : `₹${item.pricePerHour}`;
+
+  return (
+    <Animated.View
+      style={[
+        styles.turfCard,
+        isGrid ? styles.gridCard : styles.listCard,
+        { transform: [{ scale: scaleAnim }] },
+      ]}
+    >
+      <Pressable
+        onPress={() => navigation.navigate("TurfDetails", { turfId: item.id })}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <Surface style={[styles.cardSurface, isGrid && styles.gridCardSurface]} elevation={3}>
+          {/* Image Section with Gradient Overlay */}
+          <View style={[styles.cardImageContainer, isGrid && styles.gridImageContainer]}>
+            {item.imageUrl ? (
+              <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
+            ) : (
+              <View style={[styles.cardImage, styles.placeholderImage]}>
+                <MaterialCommunityIcons name="soccer-field" size={isGrid ? 40 : 60} color="#ccc" />
+              </View>
+            )}
+
+            {/* Gradient Overlay */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0.6)", "rgba(0,0,0,0.3)", "rgba(0,0,0,0)"]}
+              style={styles.gradientOverlay}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+
+            {/* Favorite Button */}
+            <Pressable
+              style={styles.favoriteButton}
+              onPress={() => toggleFavorite(item.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MaterialCommunityIcons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={24}
+                color={isFavorite ? "#FF4444" : "#fff"}
+              />
+            </Pressable>
+
+            {/* Sport Chips */}
+            <View style={styles.sportChipsContainer}>
+              {(item.sports || []).slice(0, 3).map((sport, idx) => (
+                <View key={idx} style={styles.modernSportChip}>
+                  <Text style={styles.modernSportChipText}>{sport}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Content Section */}
+          <View style={styles.modernCardContent}>
+            {/* Turf Name */}
+            <Text style={styles.modernTurfName} numberOfLines={1}>
+              {item.name}
+            </Text>
+
+            {/* Location */}
+            <View style={styles.modernLocationRow}>
+              <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
+              <Text style={styles.modernLocationText} numberOfLines={1}>
+                {item.locationText || "Location not specified"}
+              </Text>
+            </View>
+
+            {/* Rating & Reviews */}
+            <View style={styles.modernRatingRow}>
+              <View style={styles.modernRatingContainer}>
+                <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
+                <Text style={styles.modernRatingText}>{item.rating.toFixed(1)}</Text>
+                <Text style={styles.modernReviewCount}>({item.reviewCount})</Text>
+              </View>
+              {item.distance != null && (
+                <View style={styles.modernDistanceContainer}>
+                  <MaterialCommunityIcons name="map-marker-distance" size={14} color={USER_COLOR} />
+                  <Text style={styles.modernDistanceText}>{item.distance} km</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Stats */}
+            {!isGrid && (
+              <View style={styles.quickStatsRow}>
+                <View style={styles.quickStatItem}>
+                  <MaterialCommunityIcons name="resize" size={16} color="#666" />
+                  <Text style={styles.quickStatText}>{groundSize}</Text>
+                </View>
+                <View style={styles.quickStatDivider} />
+                <View style={styles.quickStatItem}>
+                  <MaterialCommunityIcons name="grass" size={16} color="#666" />
+                  <Text style={styles.quickStatText}>{surfaceType}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Price & Availability */}
+            <View style={styles.modernPriceSection}>
+              <View style={styles.modernPriceContainer}>
+                <Text style={styles.modernPriceText}>{priceDisplay}</Text>
+                <Text style={styles.modernPerHourText}>/hour</Text>
+              </View>
+              <View
+                style={[
+                  styles.availabilityBadge,
+                  isAvailableNow ? styles.availableBadge : styles.unavailableBadge,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.availabilityDot,
+                    { backgroundColor: isAvailableNow ? "#4CAF50" : "#FF9800" },
+                  ]}
+                />
+                <Text style={styles.availabilityText}>
+                  {isAvailableNow ? "Available" : `Opens ${openTime}`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Quick Book Button */}
+            {!isGrid && (
+              <Pressable
+                style={styles.quickBookButton}
+                onPress={() => navigation.navigate("TurfDetails", { turfId: item.id })}
+              >
+                <LinearGradient
+                  colors={["#4CAF50", "#45A049"]}
+                  style={styles.quickBookGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Text style={styles.quickBookText}>Quick Book</Text>
+                  <MaterialCommunityIcons name="arrow-right" size={18} color="#fff" />
+                </LinearGradient>
+              </Pressable>
+            )}
+          </View>
+        </Surface>
+      </Pressable>
+    </Animated.View>
+  );
+};
 
 const formatLocationText = (location) => {
   if (!location) return "";
@@ -106,8 +325,55 @@ const getMinPriceFromGrounds = (grounds) => {
   return minPrice === Infinity ? null : minPrice;
 };
 
+// Calculate price range from grounds pricing
+const getPriceRangeFromGrounds = (grounds) => {
+  if (!grounds || grounds.length === 0) return { min: null, max: null };
+
+  let minPrice = Infinity;
+  let maxPrice = -Infinity;
+
+  grounds.forEach((ground) => {
+    const pricing = ground.pricing;
+    if (!pricing) return;
+
+    // Check all day rate
+    if (pricing.allDayRate) {
+      minPrice = Math.min(minPrice, pricing.allDayRate);
+      maxPrice = Math.max(maxPrice, pricing.allDayRate);
+    }
+
+    // Check weekday rates
+    if (pricing.weekday) {
+      ["morning", "afternoon", "evening"].forEach((slot) => {
+        const rate = pricing.weekday[slot]?.rate;
+        if (rate) {
+          minPrice = Math.min(minPrice, rate);
+          maxPrice = Math.max(maxPrice, rate);
+        }
+      });
+    }
+
+    // Check weekend rates
+    if (pricing.weekend) {
+      ["morning", "afternoon", "evening"].forEach((slot) => {
+        const rate = pricing.weekend[slot]?.rate;
+        if (rate) {
+          minPrice = Math.min(minPrice, rate);
+          maxPrice = Math.max(maxPrice, rate);
+        }
+      });
+    }
+  });
+
+  return {
+    min: minPrice === Infinity ? null : minPrice,
+    max: maxPrice === -Infinity ? null : maxPrice,
+  };
+};
+
 export default function HomeScreen({ navigation }) {
   const user = useSelector(selectUser);
+  const { unreadCount } = useNotifications();
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -133,9 +399,21 @@ export default function HomeScreen({ navigation }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [favorites, setFavorites] = useState([]); // Array of turf IDs
 
-  // Location state
-  const [userLocation, setUserLocation] = useState("Detecting location...");
+  // Location filter state
+  const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [locationSearch, setLocationSearch] = useState("");
+  const [selectedAreas, setSelectedAreas] = useState([]); // Array of area IDs for multi-selection
+  const [areasWithDistances, setAreasWithDistances] = useState([]); // Mumbai areas with calculated distances
+  const [selectedZone, setSelectedZone] = useState("All"); // Zone filter in location modal
+
+  // User GPS location
+  const [userCoords, setUserCoords] = useState(null); // { latitude, longitude }
+  const [nearestArea, setNearestArea] = useState(null); // Auto-detected nearest area
+
+  // Ref for search query (prevents keyboard dismiss on re-render)
+  const searchQueryRef = useRef("");
 
   // Calculate active filters count
   useEffect(() => {
@@ -144,8 +422,9 @@ export default function HomeScreen({ navigation }) {
     if (selectedAmenities.length > 0) count++;
     if (minRating > 0) count++;
     if (maxDistance < 50) count++;
+    if (selectedAreas.length > 0) count++;
     setActiveFiltersCount(count);
-  }, [priceRange, selectedAmenities, minRating, maxDistance]);
+  }, [priceRange, selectedAmenities, minRating, maxDistance, selectedAreas]);
 
   // Fetch turfs from Firestore
   const fetchTurfs = useCallback(async ({ refresh = false } = {}) => {
@@ -157,42 +436,90 @@ export default function HomeScreen({ navigation }) {
         setLoading(true);
       }
 
-      // Build query constraints
+      // Query all active turfs (sport/location filtering done locally)
       const constraints = [
         { field: "isActive", operator: "==", value: true },
       ];
 
-      // Add sport filter
-      if (selectedSport !== "all") {
-        constraints.push({
-          field: "sports",
-          operator: "array-contains",
-          value: selectedSport,
-        });
-      }
-
       const turfsData = await queryDocuments("turfs", constraints);
 
-      // Filter turfs locally for additional criteria
+      // Map turfs to display format and calculate real distance
       let filteredTurfs = turfsData.map(doc => {
-        // Get actual minimum price from grounds
         const minPrice = getMinPriceFromGrounds(doc.grounds);
-
+        const priceRange = getPriceRangeFromGrounds(doc.grounds);
+        let distance = null;
+        if (userCoords && doc.location?.coordinates) {
+          const coords = doc.location.coordinates;
+          const turfLat = coords.latitude ?? coords.lat;
+          const turfLon = coords.longitude ?? coords.lng ?? coords.lon;
+          if (turfLat != null && turfLon != null) {
+            distance = Math.round(
+              haversineDistance(userCoords.latitude, userCoords.longitude, turfLat, turfLon) * 10
+            ) / 10; // round to 1 decimal
+          } else {
+            console.log(`Turf ${doc.name} has null/invalid coordinates:`, coords);
+          }
+        }
         return {
           id: doc.id,
           ...doc,
           locationText: formatLocationText(doc.location),
-          // Use actual data or defaults for display
           rating: doc.rating || 4.0,
           reviewCount: doc.reviewCount || 0,
-          distance: doc.distance || null,
+          distance,
           pricePerHour: minPrice || doc.pricePerHour || 0,
+          priceRange: priceRange,
           imageUrl: doc.imageUrl || doc.coverImage || null,
         };
       });
 
       // Apply local filters
       filteredTurfs = filteredTurfs.filter(turf => {
+        // Sport filter — check top-level sports AND each ground's sports
+        if (selectedSport !== "all") {
+          const turfSports = (turf.sports || []).map(s => s.toLowerCase());
+          const groundSports = (turf.grounds || [])
+            .flatMap(g => g.sports || [])
+            .map(s => s.toLowerCase());
+          const allSports = [...new Set([...turfSports, ...groundSports])];
+          if (!allSports.includes(selectedSport.toLowerCase())) return false;
+        }
+
+        // Combined Area + Distance Filter (OR logic when both active)
+        const hasAreaFilter = selectedAreas.length > 0;
+        const hasDistanceFilter = maxDistance < 50 && userCoords;
+
+        if (hasAreaFilter || hasDistanceFilter) {
+          let matchesArea = false;
+          let matchesDistance = false;
+
+          // Check area filter
+          if (hasAreaFilter) {
+            const loc = turf.location;
+            if (loc && typeof loc !== "string") {
+              const turfAreaName = loc.area?.toLowerCase() || "";
+              matchesArea = selectedAreas.some(areaId => {
+                const area = MUMBAI_AREAS.find(a => a.id === areaId);
+                return area && area.name.toLowerCase() === turfAreaName;
+              });
+            }
+          }
+
+          // Check distance filter
+          if (hasDistanceFilter && turf.distance != null) {
+            matchesDistance = turf.distance <= maxDistance;
+          }
+
+          // OR logic: pass if matches EITHER area OR distance
+          if (hasAreaFilter && hasDistanceFilter) {
+            if (!matchesArea && !matchesDistance) return false;
+          } else if (hasAreaFilter) {
+            if (!matchesArea) return false;
+          } else if (hasDistanceFilter) {
+            if (!matchesDistance) return false;
+          }
+        }
+
         // Price filter
         const price = turf.pricePerHour || 0;
         if (price < priceRange[0] || price > priceRange[1]) return false;
@@ -204,18 +531,16 @@ export default function HomeScreen({ navigation }) {
         // Amenities filter
         if (selectedAmenities.length > 0) {
           const turfAmenities = turf.amenities || [];
-          const hasAllAmenities = selectedAmenities.every(a => turfAmenities.includes(a));
-          if (!hasAllAmenities) return false;
+          if (!selectedAmenities.every(a => turfAmenities.includes(a))) return false;
         }
 
-        // Search filter
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase();
+        // Search filter (read from ref to avoid stale closure)
+        const currentSearch = searchQueryRef.current;
+        if (currentSearch) {
+          const query = currentSearch.toLowerCase();
           const matchesName = turf.name?.toLowerCase().includes(query);
-          const matchesLocation = (turf.locationText || "")
-            .toLowerCase()
-            .includes(query);
-          const matchesSport = turf.sports?.some(s => s.toLowerCase().includes(query));
+          const matchesLocation = (turf.locationText || "").toLowerCase().includes(query);
+          const matchesSport = (turf.sports || []).some(s => s.toLowerCase().includes(query));
           if (!matchesName && !matchesLocation && !matchesSport) return false;
         }
 
@@ -226,9 +551,8 @@ export default function HomeScreen({ navigation }) {
       filteredTurfs.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
 
       // Pagination
-      const startIndex = 0;
       const endIndex = page * ITEMS_PER_PAGE;
-      const paginatedTurfs = filteredTurfs.slice(startIndex, endIndex);
+      const paginatedTurfs = filteredTurfs.slice(0, endIndex);
 
       setTurfs(paginatedTurfs);
       setHasMore(paginatedTurfs.length < filteredTurfs.length);
@@ -239,36 +563,159 @@ export default function HomeScreen({ navigation }) {
       setRefreshing(false);
       setLoadingMore(false);
     }
-  }, [selectedSport, priceRange, minRating, selectedAmenities, searchQuery, page]);
+  }, [selectedSport, priceRange, minRating, selectedAmenities, selectedAreas, maxDistance, userCoords, page]);
+
+  // Load saved areas and favorites from AsyncStorage on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedAreas = await AsyncStorage.getItem("selectedAreas");
+        if (savedAreas) {
+          setSelectedAreas(JSON.parse(savedAreas));
+        }
+        const savedFavorites = await AsyncStorage.getItem("favoriteTurfs");
+        if (savedFavorites) {
+          setFavorites(JSON.parse(savedFavorites));
+        }
+      } catch (e) {
+        console.log("Error loading saved data:", e);
+      }
+    })();
+  }, []);
+
+  // Toggle favorite status
+  const toggleFavorite = useCallback(async (turfId) => {
+    setFavorites((prev) => {
+      const newFavorites = prev.includes(turfId)
+        ? prev.filter((id) => id !== turfId)
+        : [...prev, turfId];
+
+      // Save to AsyncStorage
+      AsyncStorage.setItem("favoriteTurfs", JSON.stringify(newFavorites)).catch((e) =>
+        console.log("Error saving favorites:", e)
+      );
+
+      return newFavorites;
+    });
+  }, []);
+
+  // Request location permission and auto-detect nearest area
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          const coords = {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          };
+          setUserCoords(coords);
+
+          // Find nearest area
+          const nearest = findNearestArea(coords.latitude, coords.longitude);
+          setNearestArea(nearest);
+
+          // Calculate distances for all areas
+          const withDistances = getAreasWithDistances(coords.latitude, coords.longitude);
+          setAreasWithDistances(withDistances);
+
+          // Auto-select nearest area if no areas are currently selected
+          if (selectedAreas.length === 0 && nearest) {
+            const newSelection = [nearest.id];
+            setSelectedAreas(newSelection);
+            await AsyncStorage.setItem("selectedAreas", JSON.stringify(newSelection));
+          }
+        } else {
+          // Location not granted - just show all areas without distances
+          setAreasWithDistances(MUMBAI_AREAS);
+        }
+      } catch (e) {
+        console.log("Location permission error:", e);
+        setAreasWithDistances(MUMBAI_AREAS);
+      }
+    })();
+  }, []);
 
   // Initial fetch
   useEffect(() => {
     fetchTurfs();
-    // Simulate location detection
-    setTimeout(() => {
-      setUserLocation("Mumbai, Maharashtra");
-    }, 1000);
   }, []);
 
   // Refetch when filters change
   useEffect(() => {
     setPage(1);
     fetchTurfs({ refresh: true });
-  }, [selectedSport, priceRange, minRating, selectedAmenities]);
+  }, [selectedSport, priceRange, minRating, selectedAmenities, selectedAreas, maxDistance]);
 
-  // Handle search
+  // Handle search change (updates ref + state without keyboard dismiss)
+  const handleSearchChange = useCallback((text) => {
+    searchQueryRef.current = text;
+    setSearchQuery(text);
+  }, []);
+
+  // Handle search submit
   const handleSearch = useCallback(() => {
-    if (searchQuery.trim()) {
-      // Add to recent searches
+    const query = searchQueryRef.current.trim();
+    if (query) {
       setRecentSearches(prev => {
-        const updated = [searchQuery, ...prev.filter(s => s !== searchQuery)].slice(0, 5);
+        const updated = [query, ...prev.filter(s => s !== query)].slice(0, 5);
         return updated;
       });
       setShowRecentSearches(false);
       setPage(1);
       fetchTurfs({ refresh: true });
     }
-  }, [searchQuery, fetchTurfs]);
+  }, [fetchTurfs]);
+
+  // Filter areas by search and zone
+  const filteredAreas = useMemo(() => {
+    let areas = areasWithDistances;
+
+    // Filter by zone
+    if (selectedZone !== "All") {
+      areas = areas.filter(area => area.zone === selectedZone);
+    }
+
+    // Filter by search query
+    if (locationSearch.trim()) {
+      const query = locationSearch.toLowerCase();
+      areas = areas.filter(area => area.name.toLowerCase().includes(query));
+    }
+
+    return areas;
+  }, [areasWithDistances, selectedZone, locationSearch]);
+
+  // Toggle area selection (multi-select)
+  const toggleAreaSelection = useCallback(async (areaId) => {
+    setSelectedAreas(prev => {
+      const newSelection = prev.includes(areaId)
+        ? prev.filter(id => id !== areaId)
+        : [...prev, areaId];
+
+      // Persist to AsyncStorage
+      AsyncStorage.setItem("selectedAreas", JSON.stringify(newSelection)).catch(e =>
+        console.log("Error saving areas:", e)
+      );
+
+      return newSelection;
+    });
+  }, []);
+
+  const clearAreaSelection = useCallback(async () => {
+    setSelectedAreas([]);
+    await AsyncStorage.removeItem("selectedAreas").catch(e =>
+      console.log("Error clearing areas:", e)
+    );
+  }, []);
+
+  const closeLocationModal = useCallback(() => {
+    setLocationModalVisible(false);
+    setLocationSearch("");
+    setSelectedZone("All");
+  }, []);
 
   // Load more turfs
   const loadMoreTurfs = useCallback(() => {
@@ -299,13 +746,18 @@ export default function HomeScreen({ navigation }) {
   };
 
   // Clear all filters
-  const clearFilters = () => {
+  const clearFilters = async () => {
     setPriceRange([0, 5000]);
     setSelectedAmenities([]);
     setMinRating(0);
     setMaxDistance(50);
     setSelectedSport("all");
     setSearchQuery("");
+    searchQueryRef.current = "";
+    setSelectedAreas([]);
+    await AsyncStorage.removeItem("selectedAreas").catch(e =>
+      console.log("Error clearing areas:", e)
+    );
   };
 
   // Apply filters
@@ -315,108 +767,16 @@ export default function HomeScreen({ navigation }) {
     fetchTurfs({ refresh: true });
   };
 
-  // Render turf card
+  // Render modern interactive turf card
   const renderTurfCard = ({ item, index }) => {
-    const isGrid = viewMode === "grid";
-
     return (
-      <TouchableOpacity
-        style={[
-          styles.turfCard,
-          isGrid ? styles.gridCard : styles.listCard,
-        ]}
-        onPress={() => navigation.navigate("TurfDetails", { turfId: item.id })}
-        activeOpacity={0.8}
-      >
-        <Surface style={[styles.cardSurface, isGrid && styles.gridCardSurface]} elevation={2}>
-          {/* Image */}
-          <View style={[styles.cardImageContainer, isGrid && styles.gridImageContainer]}>
-            {item.imageUrl ? (
-              <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
-            ) : (
-              <View style={[styles.cardImage, styles.placeholderImage]}>
-                <MaterialCommunityIcons name="soccer-field" size={isGrid ? 32 : 48} color="#ccc" />
-              </View>
-            )}
-            {/* Rating badge */}
-            <View style={styles.ratingBadge}>
-              <MaterialCommunityIcons name="star" size={12} color="#FFD700" />
-              <Text style={styles.ratingText}>{item.rating}</Text>
-            </View>
-            {/* Sport badges */}
-            <View style={styles.sportBadges}>
-              {(item.sports || []).slice(0, 2).map((sport, idx) => (
-                <View key={idx} style={styles.sportBadge}>
-                  <Text style={styles.sportBadgeText}>{sport}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Content */}
-          <View style={[styles.cardContent, isGrid && styles.gridCardContent]}>
-            <Text
-              variant={isGrid ? "titleSmall" : "titleMedium"}
-              style={styles.turfName}
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
-
-            <View style={styles.locationRow}>
-              <MaterialCommunityIcons name="map-marker" size={14} color="#666" />
-              <Text variant="bodySmall" style={styles.locationText} numberOfLines={1}>
-                {item.locationText || "Location not specified"}
-              </Text>
-            </View>
-
-            {!isGrid && (
-              <>
-                <View style={styles.detailsRow}>
-                  <View style={styles.detailItem}>
-                    <MaterialCommunityIcons name="map-marker-distance" size={14} color={USER_COLOR} />
-                    <Text variant="bodySmall" style={styles.detailText}>{item.distance} km</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <MaterialCommunityIcons name="star" size={14} color="#FFD700" />
-                    <Text variant="bodySmall" style={styles.detailText}>
-                      {item.rating} ({item.reviewCount})
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Amenities preview */}
-                <View style={styles.amenitiesPreview}>
-                  {(item.amenities || []).slice(0, 4).map((amenity, idx) => {
-                    const amenityData = AMENITIES.find(a => a.id === amenity);
-                    return amenityData ? (
-                      <MaterialCommunityIcons
-                        key={idx}
-                        name={amenityData.icon}
-                        size={14}
-                        color="#666"
-                        style={styles.amenityIcon}
-                      />
-                    ) : null;
-                  })}
-                  {(item.amenities || []).length > 4 && (
-                    <Text variant="labelSmall" style={styles.moreAmenities}>
-                      +{item.amenities.length - 4}
-                    </Text>
-                  )}
-                </View>
-              </>
-            )}
-
-            <View style={styles.priceRow}>
-              <Text variant={isGrid ? "titleSmall" : "titleMedium"} style={styles.priceText}>
-                ₹{item.pricePerHour}
-              </Text>
-              <Text variant="bodySmall" style={styles.perHourText}>/hr</Text>
-            </View>
-          </View>
-        </Surface>
-      </TouchableOpacity>
+      <TurfCard
+        item={item}
+        viewMode={viewMode}
+        favorites={favorites}
+        toggleFavorite={toggleFavorite}
+        navigation={navigation}
+      />
     );
   };
 
@@ -467,18 +827,36 @@ export default function HomeScreen({ navigation }) {
           </Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.locationButton}>
+          <TouchableOpacity style={styles.locationButton} onPress={() => setLocationModalVisible(true)}>
             <MaterialCommunityIcons name="map-marker" size={16} color={USER_COLOR} />
             <Text variant="bodySmall" style={styles.locationButtonText} numberOfLines={1}>
-              {userLocation}
+              {selectedAreas.length === 0
+                ? "All Areas"
+                : selectedAreas.length === 1
+                ? MUMBAI_AREAS.find(a => a.id === selectedAreas[0])?.name || "1 Area"
+                : `${selectedAreas.length} Areas`}
             </Text>
             <MaterialCommunityIcons name="chevron-down" size={16} color="#666" />
           </TouchableOpacity>
-          <IconButton
-            icon="bell-outline"
-            size={24}
+          <TouchableOpacity
             onPress={() => navigation.navigate("Notifications")}
-          />
+            style={{ position: "relative", padding: 8 }}
+          >
+            <MaterialCommunityIcons name="bell-outline" size={24} color="#666" />
+            {unreadCount > 0 && (
+              <Badge
+                size={18}
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  backgroundColor: "#F44336",
+                }}
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </Badge>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -487,7 +865,7 @@ export default function HomeScreen({ navigation }) {
         <Searchbar
           placeholder="Search turfs, sports, locations..."
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={handleSearchChange}
           onSubmitEditing={handleSearch}
           onFocus={() => setShowRecentSearches(true)}
           onBlur={() => setTimeout(() => setShowRecentSearches(false), 200)}
@@ -517,9 +895,10 @@ export default function HomeScreen({ navigation }) {
               key={index}
               style={styles.recentSearchItem}
               onPress={() => {
+                searchQueryRef.current = search;
                 setSearchQuery(search);
                 setShowRecentSearches(false);
-                handleSearch();
+                fetchTurfs({ refresh: true });
               }}
             >
               <MaterialCommunityIcons name="history" size={16} color="#666" />
@@ -610,11 +989,12 @@ export default function HomeScreen({ navigation }) {
           renderItem={renderTurfCard}
           keyExtractor={(item) => item.id}
           numColumns={viewMode === "grid" ? 2 : 1}
-          key={viewMode} // Re-render when view mode changes
-          ListHeaderComponent={renderHeader}
+          key={viewMode}
+          ListHeaderComponent={renderHeader()}
           ListEmptyComponent={renderEmptyState}
           ListFooterComponent={renderFooter}
           contentContainerStyle={styles.listContent}
+          columnWrapperStyle={viewMode === "grid" ? styles.gridRow : undefined}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -636,7 +1016,14 @@ export default function HomeScreen({ navigation }) {
           onDismiss={() => setFilterModalVisible(false)}
           style={styles.filterDialog}
         >
-          <Dialog.Title>Filter Turfs</Dialog.Title>
+          <View style={styles.filterDialogHeader}>
+            <Text variant="titleLarge" style={styles.filterDialogTitle}>Filter Turfs</Text>
+            <IconButton
+              icon="close"
+              size={24}
+              onPress={() => setFilterModalVisible(false)}
+            />
+          </View>
           <Dialog.ScrollArea style={styles.dialogScrollArea}>
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Price Range */}
@@ -745,6 +1132,23 @@ export default function HomeScreen({ navigation }) {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {maxDistance < 50 && (
+                  <View style={styles.distanceHint}>
+                    <MaterialCommunityIcons
+                      name={userCoords ? "information" : "crosshairs-gps"}
+                      size={14}
+                      color={userCoords ? "#4CAF50" : "#FF9800"}
+                    />
+                    <Text variant="bodySmall" style={[
+                      styles.distanceHintText,
+                      userCoords && { color: "#4CAF50" }
+                    ]}>
+                      {userCoords
+                        ? `Filtering turfs within ${maxDistance} km of your location`
+                        : "Enable location access for distance filtering"}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <Divider style={styles.filterDivider} />
@@ -787,6 +1191,195 @@ export default function HomeScreen({ navigation }) {
             <Button onPress={clearFilters}>Clear All</Button>
             <Button mode="contained" onPress={applyFilters} buttonColor={USER_COLOR}>
               Apply Filters
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Enhanced Location Picker Modal */}
+      <Portal>
+        <Dialog
+          visible={locationModalVisible}
+          onDismiss={closeLocationModal}
+          style={styles.locationDialog}
+        >
+          <View style={styles.locationDialogHeader}>
+            <View>
+              <Text variant="titleLarge" style={styles.locationDialogTitle}>
+                Select Areas
+              </Text>
+              {selectedAreas.length > 0 && (
+                <Text variant="bodySmall" style={styles.locationDialogSubtitle}>
+                  {selectedAreas.length} area{selectedAreas.length > 1 ? 's' : ''} selected
+                </Text>
+              )}
+            </View>
+            <IconButton
+              icon="close"
+              size={24}
+              onPress={closeLocationModal}
+            />
+          </View>
+
+          {/* Nearest Area Info */}
+          {nearestArea && selectedAreas.length === 0 && (
+            <Surface style={styles.nearestAreaBanner} elevation={0}>
+              <MaterialCommunityIcons name="crosshairs-gps" size={20} color={USER_COLOR} />
+              <View style={styles.nearestAreaInfo}>
+                <Text variant="bodySmall" style={styles.nearestAreaLabel}>
+                  Nearest to you
+                </Text>
+                <Text variant="bodyMedium" style={styles.nearestAreaName}>
+                  {nearestArea.name} ({nearestArea.distance} km)
+                </Text>
+              </View>
+              <Button
+                mode="contained"
+                compact
+                onPress={() => toggleAreaSelection(nearestArea.id)}
+                buttonColor={USER_COLOR}
+                labelStyle={styles.nearestAreaButtonLabel}
+              >
+                Select
+              </Button>
+            </Surface>
+          )}
+
+          {/* Search Bar */}
+          <View style={styles.locationSearchWrapper}>
+            <Searchbar
+              placeholder="Search Mumbai areas..."
+              value={locationSearch}
+              onChangeText={setLocationSearch}
+              style={styles.locationSearchbar}
+              inputStyle={styles.locationSearchInput}
+              icon="magnify"
+            />
+          </View>
+
+          {/* Zone Filter Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.zoneFilterContainer}
+            contentContainerStyle={styles.zoneFilterContent}
+          >
+            {["All", "Western", "Central", "South", "Eastern"].map((zone) => (
+              <Chip
+                key={zone}
+                selected={selectedZone === zone}
+                onPress={() => setSelectedZone(zone)}
+                style={[
+                  styles.zoneChip,
+                  selectedZone === zone && styles.selectedZoneChip,
+                ]}
+                textStyle={[
+                  styles.zoneChipText,
+                  selectedZone === zone && styles.selectedZoneChipText,
+                ]}
+              >
+                {zone}
+              </Chip>
+            ))}
+          </ScrollView>
+
+          {/* Areas List */}
+          <Dialog.ScrollArea style={styles.locationScrollArea}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Clear All Option */}
+              {selectedAreas.length > 0 && (
+                <>
+                  <TouchableOpacity
+                    style={styles.locationItem}
+                    onPress={clearAreaSelection}
+                  >
+                    <MaterialCommunityIcons name="earth" size={22} color="#666" />
+                    <View style={styles.locationItemContent}>
+                      <Text style={styles.locationItemText}>All Areas</Text>
+                      <Text style={styles.locationItemType}>Clear selection</Text>
+                    </View>
+                    <MaterialCommunityIcons name="close-circle" size={20} color="#666" />
+                  </TouchableOpacity>
+                  <Divider />
+                </>
+              )}
+
+              {/* Area Items */}
+              {filteredAreas.map((area) => {
+                const isSelected = selectedAreas.includes(area.id);
+                return (
+                  <TouchableOpacity
+                    key={area.id}
+                    style={[
+                      styles.locationItem,
+                      isSelected && styles.selectedLocationItem,
+                    ]}
+                    onPress={() => toggleAreaSelection(area.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.areaItemLeft}>
+                      <MaterialCommunityIcons
+                        name={isSelected ? "checkbox-marked-circle" : "map-marker-outline"}
+                        size={22}
+                        color={isSelected ? USER_COLOR : "#666"}
+                      />
+                      <View style={styles.locationItemContent}>
+                        <Text style={[
+                          styles.locationItemText,
+                          isSelected && styles.locationItemActive
+                        ]}>
+                          {area.name}
+                        </Text>
+                        <View style={styles.areaMetaRow}>
+                          <Text style={styles.locationItemType}>{area.zone}</Text>
+                          {area.distance != null && (
+                            <>
+                              <Text style={styles.dotSeparator}>•</Text>
+                              <MaterialCommunityIcons
+                                name="map-marker-distance"
+                                size={12}
+                                color="#999"
+                              />
+                              <Text style={styles.areaDistance}>{area.distance} km</Text>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <MaterialCommunityIcons
+                        name="check-circle"
+                        size={20}
+                        color={USER_COLOR}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+
+              {filteredAreas.length === 0 && (
+                <View style={styles.noLocationsContainer}>
+                  <MaterialCommunityIcons name="map-search" size={48} color="#ddd" />
+                  <Text style={styles.noLocationsText}>No areas found</Text>
+                  <Text style={styles.noLocationsSubtext}>
+                    Try adjusting your search or zone filter
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </Dialog.ScrollArea>
+
+          {/* Action Buttons */}
+          <Dialog.Actions style={styles.locationDialogActions}>
+            <Button onPress={clearAreaSelection} disabled={selectedAreas.length === 0}>
+              Clear All
+            </Button>
+            <Button
+              mode="contained"
+              onPress={closeLocationModal}
+              buttonColor={USER_COLOR}
+            >
+              Done
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -943,131 +1536,228 @@ const styles = StyleSheet.create({
   },
   turfCard: {
     marginHorizontal: 8,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   gridCard: {
     width: GRID_CARD_WIDTH,
+    marginHorizontal: 0,
   },
   listCard: {
     marginHorizontal: 16,
   },
   cardSurface: {
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: "#fff",
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   gridCardSurface: {
-    height: 220,
+    // Height will be auto-calculated based on content
   },
   cardImageContainer: {
-    height: 120,
+    height: 180,
     position: "relative",
+    backgroundColor: "#f0f0f0",
   },
   gridImageContainer: {
-    height: 100,
+    height: 140,
   },
   cardImage: {
     width: "100%",
     height: "100%",
+    resizeMode: "cover",
   },
   placeholderImage: {
     backgroundColor: "#f0f0f0",
     justifyContent: "center",
     alignItems: "center",
   },
-  ratingBadge: {
+  gradientOverlay: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    flexDirection: "row",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "60%",
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.7)",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
   },
-  ratingText: {
-    color: "#fff",
-    fontSize: 12,
-    marginLeft: 2,
-    fontWeight: "600",
-  },
-  sportBadges: {
+  sportChipsContainer: {
     position: "absolute",
-    bottom: 8,
-    left: 8,
+    top: 12,
+    left: 12,
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
   },
-  sportBadge: {
-    backgroundColor: USER_COLOR,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 4,
+  modernSportChip: {
+    backgroundColor: "rgba(76, 175, 80, 0.9)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backdropFilter: "blur(10px)",
   },
-  sportBadgeText: {
+  modernSportChipText: {
     color: "#fff",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
     textTransform: "capitalize",
   },
-  cardContent: {
-    padding: 12,
+  modernCardContent: {
+    padding: 16,
   },
-  gridCardContent: {
-    padding: 8,
+  modernTurfName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginBottom: 6,
+    fontFamily: "Ubuntu-Bold",
   },
-  turfName: {
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
-  },
-  locationRow: {
+  modernLocationRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  locationText: {
+  modernLocationText: {
+    fontSize: 13,
     color: "#666",
     marginLeft: 4,
     flex: 1,
   },
-  detailsRow: {
-    flexDirection: "row",
-    marginVertical: 4,
-  },
-  detailItem: {
+  modernRatingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginRight: 16,
+    justifyContent: "space-between",
+    marginBottom: 10,
   },
-  detailText: {
-    color: "#666",
+  modernRatingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  modernRatingText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1a1a1a",
     marginLeft: 4,
   },
-  amenitiesPreview: {
+  modernReviewCount: {
+    fontSize: 13,
+    color: "#999",
+    marginLeft: 4,
+  },
+  modernDistanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  amenityIcon: {
-    marginRight: 8,
+  modernDistanceText: {
+    fontSize: 12,
+    color: USER_COLOR,
+    marginLeft: 4,
+    fontWeight: "600",
   },
-  moreAmenities: {
-    color: "#999",
+  quickStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f8f8",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 12,
   },
-  priceRow: {
+  quickStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  quickStatText: {
+    fontSize: 12,
+    color: "#666",
+    marginLeft: 6,
+    fontWeight: "500",
+  },
+  quickStatDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: "#ddd",
+    marginHorizontal: 8,
+  },
+  modernPriceSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  modernPriceContainer: {
     flexDirection: "row",
     alignItems: "baseline",
+  },
+  modernPriceText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: USER_COLOR,
+    fontFamily: "Ubuntu-Bold",
+  },
+  modernPerHourText: {
+    fontSize: 13,
+    color: "#666",
+    marginLeft: 3,
+  },
+  availabilityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  availableBadge: {
+    backgroundColor: "#E8F5E9",
+  },
+  unavailableBadge: {
+    backgroundColor: "#FFF3E0",
+  },
+  availabilityDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  availabilityText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#666",
+  },
+  quickBookButton: {
+    borderRadius: 12,
+    overflow: "hidden",
     marginTop: 4,
   },
-  priceText: {
-    fontWeight: "bold",
-    color: USER_COLOR,
+  quickBookGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
   },
-  perHourText: {
-    color: "#666",
-    marginLeft: 2,
+  quickBookText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+    marginRight: 6,
   },
   emptyContainer: {
     flex: 1,
@@ -1102,6 +1792,18 @@ const styles = StyleSheet.create({
   },
   filterDialog: {
     maxHeight: "80%",
+  },
+  filterDialogHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingLeft: 24,
+    paddingRight: 8,
+    paddingTop: 8,
+  },
+  filterDialogTitle: {
+    fontWeight: "bold",
+    color: "#333",
   },
   dialogScrollArea: {
     paddingHorizontal: 0,
@@ -1203,5 +1905,170 @@ const styles = StyleSheet.create({
   },
   selectedAmenityChipText: {
     color: "#fff",
+  },
+  gridRow: {
+    justifyContent: "flex-start",
+    gap: GRID_GAP,
+    paddingHorizontal: SCREEN_WIDTH * 0.05,
+  },
+  locationDialog: {
+    maxHeight: "85%",
+    borderRadius: 16,
+  },
+  locationDialogHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingLeft: 24,
+    paddingRight: 8,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  locationDialogTitle: {
+    fontFamily: "Ubuntu-Bold",
+    color: "#333",
+  },
+  locationDialogSubtitle: {
+    color: USER_COLOR,
+    marginTop: 2,
+  },
+  nearestAreaBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#E8F5E9",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  nearestAreaInfo: {
+    flex: 1,
+  },
+  nearestAreaLabel: {
+    color: "#666",
+  },
+  nearestAreaName: {
+    fontFamily: "Ubuntu-Medium",
+    color: "#333",
+    marginTop: 2,
+  },
+  nearestAreaButtonLabel: {
+    fontSize: 12,
+  },
+  locationSearchWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  locationSearchbar: {
+    backgroundColor: "#f5f5f5",
+    borderRadius: 12,
+    elevation: 0,
+  },
+  locationSearchInput: {
+    fontSize: 14,
+    fontFamily: "Ubuntu-Regular",
+  },
+  zoneFilterContainer: {
+    marginBottom: 8,
+  },
+  zoneFilterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  zoneChip: {
+    backgroundColor: "#f5f5f5",
+  },
+  selectedZoneChip: {
+    backgroundColor: USER_COLOR,
+  },
+  zoneChipText: {
+    color: "#666",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 12,
+  },
+  selectedZoneChipText: {
+    color: "#fff",
+  },
+  locationScrollArea: {
+    maxHeight: 400,
+    paddingHorizontal: 0,
+  },
+  locationItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  selectedLocationItem: {
+    backgroundColor: "#F1F8F4",
+  },
+  areaItemLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  locationItemContent: {
+    flex: 1,
+  },
+  locationItemText: {
+    fontSize: 15,
+    color: "#333",
+    fontFamily: "Ubuntu-Regular",
+  },
+  locationItemActive: {
+    color: USER_COLOR,
+    fontFamily: "Ubuntu-Medium",
+  },
+  areaMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    gap: 4,
+  },
+  locationItemType: {
+    fontSize: 11,
+    color: "#999",
+    textTransform: "capitalize",
+  },
+  dotSeparator: {
+    color: "#ddd",
+    fontSize: 10,
+  },
+  areaDistance: {
+    fontSize: 11,
+    color: "#999",
+  },
+  locationDialogActions: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  distanceHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  distanceHintText: {
+    color: "#FF9800",
+  },
+  noLocationsContainer: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+  noLocationsText: {
+    color: "#999",
+    fontSize: 15,
+    fontFamily: "Ubuntu-Medium",
+    marginTop: 12,
+  },
+  noLocationsSubtext: {
+    color: "#bbb",
+    fontSize: 13,
+    marginTop: 4,
+    textAlign: "center",
+    paddingHorizontal: 32,
   },
 });

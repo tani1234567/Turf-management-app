@@ -785,7 +785,7 @@ export default function CalendarScreen({ navigation }) {
                   <DetailRow
                     icon="currency-inr"
                     label="Amount"
-                    value={`₹${selectedBooking.totalPrice || selectedBooking.totalAmount || selectedBooking.amount || 0}`}
+                    value={`₹${selectedBooking.totalAmount || selectedBooking.totalPrice || selectedBooking.payment?.slotAmount || selectedBooking.amount || 0}`}
                   />
                 </>
               )}

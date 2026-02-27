@@ -1,27 +1,33 @@
 import React, { memo, useState, useCallback } from "react";
-import { View, StyleSheet, Platform, KeyboardAvoidingView } from "react-native";
-import { TextInput, IconButton, Button } from "react-native-paper";
+import {
+  View,
+  StyleSheet,
+  Platform,
+  Alert,
+  TextInput as RNTextInput,
+  TouchableOpacity,
+} from "react-native";
+import { IconButton, Button, ActivityIndicator } from "react-native-paper";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../constants/theme";
 
 /**
- * ChatInput component for typing and sending messages
- * @param {object} props
- * @param {function} props.onSend - Send message handler
- * @param {function} props.onRequestBooking - Request booking handler (user only)
- * @param {boolean} props.showRequestBooking - Whether to show request booking button
- * @param {boolean} props.isLoading - Loading state
- * @param {string} props.placeholder - Input placeholder text
- * @param {string} props.accentColor - Accent color for buttons
+ * WhatsApp-style ChatInput component
  */
 const ChatInput = ({
   onSend,
+  onSendImage,
   onRequestBooking,
   showRequestBooking = false,
   isLoading = false,
-  placeholder = "Type a message...",
+  placeholder = "Message",
   accentColor = COLORS.primary,
 }) => {
   const [message, setMessage] = useState("");
+  const [isPickingImage, setIsPickingImage] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleSend = useCallback(() => {
     if (!message.trim() || isLoading) return;
@@ -35,97 +41,117 @@ const ChatInput = ({
     }
   }, [onRequestBooking]);
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
-      <View style={styles.container}>
-        {/* Request Booking Button (for users) */}
-        {showRequestBooking && (
-          <View style={styles.requestBookingContainer}>
-            <Button
-              mode="outlined"
-              onPress={handleRequestBooking}
-              icon="calendar-plus"
-              style={styles.requestBookingButton}
-              labelStyle={styles.requestBookingLabel}
-              contentStyle={styles.requestBookingContent}
-              compact
-            >
-              Request Booking
-            </Button>
-          </View>
-        )}
+  const handlePickImage = useCallback(async () => {
+    if (!onSendImage || isPickingImage) return;
 
-        {/* Input Row */}
-        <View style={styles.inputRow}>
-          {/* Attachment Button */}
-          <IconButton
-            icon="plus-circle-outline"
-            size={26}
-            iconColor={COLORS.textSecondary}
-            onPress={() => {
-              // TODO: Implement attachment options
-            }}
-            style={styles.attachButton}
-          />
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Please allow access to your photo library to send images.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: false,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setIsPickingImage(true);
+        await onSendImage(result.assets[0].uri);
+        setIsPickingImage(false);
+      }
+    } catch (error) {
+      console.error("[ChatInput] Error picking image:", error);
+      setIsPickingImage(false);
+      Alert.alert("Error", "Failed to send image. Please try again.");
+    }
+  }, [onSendImage, isPickingImage]);
+
+  const hasText = message.trim().length > 0;
+  const bottomPadding = Math.max(insets.bottom, 6);
+
+  return (
+    <View style={[styles.wrapper, { paddingBottom: bottomPadding }]}>
+      {/* Request Booking Button */}
+      {showRequestBooking && (
+        <View style={styles.requestBookingContainer}>
+          <Button
+            mode="outlined"
+            onPress={handleRequestBooking}
+            icon="calendar-plus"
+            style={styles.requestBookingButton}
+            labelStyle={styles.requestBookingLabel}
+            contentStyle={styles.requestBookingContent}
+            compact
+          >
+            Request Booking
+          </Button>
+        </View>
+      )}
+
+      {/* Input Row */}
+      <View style={styles.inputRow}>
+        {/* Input field with attach button inside */}
+        <View style={styles.inputContainer}>
+          {/* Attachment / image button */}
+          {isPickingImage ? (
+            <View style={styles.inlineIcon}>
+              <ActivityIndicator size={20} color={accentColor} />
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.inlineIcon}
+              onPress={handlePickImage}
+              disabled={isPickingImage}
+            >
+              <MaterialCommunityIcons name="paperclip" size={22} color="#9E9E9E" />
+            </TouchableOpacity>
+          )}
 
           {/* Text Input */}
-          <TextInput
-            mode="outlined"
+          <RNTextInput
             value={message}
             onChangeText={setMessage}
             placeholder={placeholder}
-            style={styles.input}
-            outlineStyle={styles.inputOutline}
-            contentStyle={styles.inputContent}
+            placeholderTextColor="#9E9E9E"
+            style={styles.textInput}
             multiline
             maxLength={1000}
-            dense
-            right={
-              message.trim() ? (
-                <TextInput.Icon
-                  icon="send"
-                  color={accentColor}
-                  onPress={handleSend}
-                  disabled={isLoading}
-                />
-              ) : null
-            }
-            onSubmitEditing={handleSend}
-            blurOnSubmit={false}
+            textAlignVertical="center"
           />
-
-          {/* Send Button (alternative, visible when no text) */}
-          {!message.trim() && (
-            <IconButton
-              icon="microphone"
-              size={26}
-              iconColor={COLORS.textSecondary}
-              onPress={() => {
-                // TODO: Implement voice message
-              }}
-              style={styles.micButton}
-            />
-          )}
         </View>
+
+        {/* Send button */}
+        <TouchableOpacity
+          style={[styles.sendButton, { backgroundColor: accentColor }]}
+          onPress={handleSend}
+          disabled={isLoading || !hasText}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons
+            name="send"
+            size={20}
+            color="#fff"
+          />
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  wrapper: {
     backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-    paddingBottom: Platform.OS === "ios" ? 20 : 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E0E0E0",
+    paddingTop: 6,
+    paddingHorizontal: 6,
   },
   requestBookingContainer: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingHorizontal: 6,
+    paddingBottom: 6,
   },
   requestBookingButton: {
     borderColor: COLORS.primary,
@@ -141,28 +167,42 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    paddingHorizontal: 4,
-    paddingTop: 4,
+    gap: 6,
   },
-  attachButton: {
-    margin: 0,
-    marginBottom: 4,
-  },
-  input: {
+  inputContainer: {
     flex: 1,
-    maxHeight: 100,
-    backgroundColor: "#f5f5f5",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 24,
+    paddingHorizontal: 4,
+    minHeight: 44,
+    maxHeight: 120,
   },
-  inputOutline: {
-    borderRadius: 20,
-    borderColor: "#e0e0e0",
+  inlineIcon: {
+    width: 36,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  inputContent: {
-    paddingVertical: 8,
+  textInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#212121",
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingRight: 12,
+    paddingLeft: 2,
+    maxHeight: 120,
+    textAlignVertical: "center",
+    includeFontPadding: false,
   },
-  micButton: {
-    margin: 0,
-    marginBottom: 4,
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 

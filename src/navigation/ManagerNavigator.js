@@ -17,6 +17,16 @@ import TurfSelectionScreen from "../screens/manager/TurfSelectionScreen";
 import CreateBookingScreen from "../screens/manager/CreateBookingScreen";
 import BlockSlotsScreen from "../screens/manager/BlockSlotsScreen";
 import ManagerChatScreen from "../screens/manager/ManagerChatScreen";
+import AdvancePaymentSettingsScreen from "../screens/manager/AdvancePaymentSettingsScreen";
+import VerifyPaymentScreen from "../screens/manager/VerifyPaymentScreen";
+import AnalyticsDashboardScreen from "../screens/manager/AnalyticsDashboardScreen";
+import ExpenseTrackingScreen from "../screens/manager/ExpenseTrackingScreen";
+import ReviewManagementScreen from "../screens/manager/ReviewManagementScreen";
+import AcademyManagementScreen from "../screens/manager/AcademyManagementScreen";
+import TurfRequestScreen from "../screens/manager/TurfRequestScreen";
+import TurfRequestsListScreen from "../screens/manager/TurfRequestsListScreen";
+import EditTurfScreen from "../screens/owner/EditTurfScreen";
+import NotificationsScreen from "../screens/common/NotificationsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -38,7 +48,7 @@ function ManagerTabs() {
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "500",
+          fontFamily: "Ubuntu-Medium",
         },
       }}
     >
@@ -142,6 +152,76 @@ export default function ManagerNavigator() {
       <Stack.Screen
         name="ManagerChatScreen"
         component={ManagerChatScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="AdvancePaymentSettings"
+        component={AdvancePaymentSettingsScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="VerifyPayment"
+        component={VerifyPaymentScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="AnalyticsDashboard"
+        component={AnalyticsDashboardScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="ExpenseTracking"
+        component={ExpenseTrackingScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="ReviewManagement"
+        component={ReviewManagementScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="AcademyManagement"
+        component={AcademyManagementScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="TurfRequest"
+        component={TurfRequestScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="TurfRequestsList"
+        component={TurfRequestsListScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="EditTurf"
+        component={EditTurfScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
         options={{
           presentation: "card",
         }}

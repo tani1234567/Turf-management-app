@@ -59,16 +59,18 @@ export default function ManagerChatListScreen() {
     [navigation]
   );
 
+  const viewerType = user?.role === "owner" ? "owner" : "manager";
+
   const renderChatItem = useCallback(
     ({ item }) => (
       <ChatListItem
         chat={item}
-        viewerType="manager"
+        viewerType={viewerType}
         viewerId={user?.userId}
         onPress={() => handleChatPress(item)}
       />
     ),
-    [user?.userId, handleChatPress]
+    [user?.userId, viewerType, handleChatPress]
   );
 
   const keyExtractor = useCallback((item) => item.id, []);

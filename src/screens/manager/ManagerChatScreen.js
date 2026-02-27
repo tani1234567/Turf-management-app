@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
+  Platform,
+  KeyboardAvoidingView,
+  Linking,
 } from "react-native";
 import { Text, Avatar, IconButton, ActivityIndicator, Snackbar } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +29,8 @@ import {
   updateNegotiationStatus,
   updateBookingCardStatus,
   sendLocationMessage,
+  uploadChatImage,
+  sendImageMessage,
 } from "../../services/firebase/chat";
 import {
   createBookingFromNegotiation,
@@ -143,6 +148,24 @@ export default function ManagerChatScreen() {
       }
     },
     [sendTextMessage, user?.name]
+  );
+
+  const handleSendImage = useCallback(
+    async (imageUri) => {
+      try {
+        const imageUrl = await uploadChatImage(chatId, imageUri);
+        await sendImageMessage(chatId, {
+          imageUrl,
+          senderId: user?.userId,
+          senderType: "manager",
+          senderName: user?.name || "Manager",
+        });
+      } catch (error) {
+        console.error("Error sending image:", error);
+        setSnackbar({ visible: true, message: "Failed to send image" });
+      }
+    },
+    [chatId, user]
   );
 
   // Accept negotiation - creates booking with transaction
@@ -446,7 +469,12 @@ export default function ManagerChatScreen() {
             size={22}
             iconColor={COLORS.text}
             onPress={() => {
-              // TODO: Implement call functionality
+              const phone = chatData?.participants?.user?.phone;
+              if (phone) {
+                Linking.openURL(`tel:${phone}`);
+              } else {
+                Alert.alert("Contact", "Phone number not available for this user.");
+              }
             }}
           />
           <IconButton
@@ -460,46 +488,53 @@ export default function ManagerChatScreen() {
         </View>
       </View>
 
-      {/* Messages List */}
-      {isLoading && messages.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={MANAGER_COLOR} />
-          <Text variant="bodyMedium" style={styles.loadingText}>
-            Loading messages...
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={processedMessages}
-          renderItem={renderMessage}
-          keyExtractor={keyExtractor}
-          inverted
-          contentContainerStyle={styles.messagesList}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons
-                name="chat-outline"
-                size={48}
-                color="#ccc"
-              />
-              <Text variant="bodyMedium" style={styles.emptyText}>
-                Start a conversation
-              </Text>
-            </View>
-          }
-        />
-      )}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        {/* Messages List */}
+        {isLoading && messages.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={MANAGER_COLOR} />
+            <Text variant="bodyMedium" style={styles.loadingText}>
+              Loading messages...
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            data={processedMessages}
+            renderItem={renderMessage}
+            keyExtractor={keyExtractor}
+            inverted
+            contentContainerStyle={styles.messagesList}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons
+                  name="chat-outline"
+                  size={48}
+                  color="#ccc"
+                />
+                <Text variant="bodyMedium" style={styles.emptyText}>
+                  Start a conversation
+                </Text>
+              </View>
+            }
+          />
+        )}
 
-      {/* Chat Input (no request booking for managers) */}
-      <ChatInput
-        onSend={handleSendMessage}
-        showRequestBooking={false}
-        accentColor={MANAGER_COLOR}
-        placeholder="Type a reply..."
-      />
+        {/* Chat Input (no request booking for managers) */}
+        <ChatInput
+          onSend={handleSendMessage}
+          onSendImage={handleSendImage}
+          showRequestBooking={false}
+          accentColor={MANAGER_COLOR}
+          placeholder="Message"
+        />
+      </KeyboardAvoidingView>
 
       {/* Snackbar for feedback */}
       <Snackbar
@@ -521,6 +556,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  keyboardAvoid: {
+    flex: 1,
   },
   header: {
     flexDirection: "row",

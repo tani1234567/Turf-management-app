@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -15,14 +15,18 @@ import {
   TextInput,
   Divider,
   ActivityIndicator,
+  RadioButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 
 import { selectUser } from "../../store/slices/authSlice";
+import { selectCompany } from "../../store/slices/companySlice";
 import { ConfirmationDialog } from "../../components/booking";
-import { createBookingWithTransaction } from "../../services/firebase/firestore";
+import { createBookingWithTransaction, getDocument } from "../../services/firebase/firestore";
+import { canUserBook } from "../../services/firebase/payments";
+import { checkSlotAvailability } from "../../utils/slotLockUtils";
 import {
   calculateBookingPrice,
   calculateDuration,
@@ -44,11 +48,40 @@ export default function BookingConfirmationScreen({ navigation, route }) {
   } = route.params || {};
 
   const user = useSelector(selectUser);
+  const company = useSelector(selectCompany);
 
   // State
   const [specialRequests, setSpecialRequests] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("upi"); // "upi" or "cash_at_venue"
+  const [companyPaymentConfig, setCompanyPaymentConfig] = useState(null);
+
+  // Get advance payment settings from turf
+  const advancePayment = turf?.advancePayment || {
+    isRequired: false,
+    percentage: 0,
+    paymentTiming: "before_approval",
+    paymentTimeout: 120,
+    allowedMethods: ["upi", "cash_at_venue"],
+  };
+
+  // Fetch company payment config if needed
+  useEffect(() => {
+    const fetchCompanyPaymentConfig = async () => {
+      if (advancePayment.isRequired && turf?.companyId) {
+        try {
+          const companyDoc = await getDocument("companies", turf.companyId);
+          if (companyDoc?.paymentConfig) {
+            setCompanyPaymentConfig(companyDoc.paymentConfig);
+          }
+        } catch (error) {
+          console.error("Error fetching company payment config:", error);
+        }
+      }
+    };
+    fetchCompanyPaymentConfig();
+  }, [advancePayment.isRequired, turf?.companyId]);
 
   // Calculate duration in hours
   const duration = useMemo(() => {
@@ -80,13 +113,22 @@ export default function BookingConfirmationScreen({ navigation, route }) {
 
     const convenienceFee = 0; // Can add platform fee here
 
+    // Calculate advance amount if required
+    const total = result.subtotal + convenienceFee;
+    const advanceAmount = advancePayment.isRequired
+      ? Math.round((total * advancePayment.percentage) / 100)
+      : 0;
+    const remainingAmount = total - advanceAmount;
+
     return {
       slots,
       subtotal: result.subtotal,
       convenienceFee,
-      total: result.subtotal + convenienceFee,
+      total,
+      advanceAmount,
+      remainingAmount,
     };
-  }, [ground, startTime, endTime, date, sport, totalPrice]);
+  }, [ground, startTime, endTime, date, sport, totalPrice, advancePayment]);
 
   // Get user ID (handles different property names: id, userId, uid)
   const getUserId = () => user?.id || user?.userId || user?.uid;
@@ -99,11 +141,88 @@ export default function BookingConfirmationScreen({ navigation, route }) {
       return;
     }
 
+    // Check if user is banned from booking
+    const banCheck = canUserBook(user);
+    if (!banCheck.allowed) {
+      Alert.alert("Booking Restricted", banCheck.reason);
+      return;
+    }
+
+    // Check if UPI is selected but not configured
+    if (
+      advancePayment.isRequired &&
+      advancePayment.paymentTiming === "before_approval" &&
+      paymentMethod === "upi" &&
+      !companyPaymentConfig?.upiEnabled
+    ) {
+      Alert.alert(
+        "UPI Not Available",
+        "The turf owner hasn't configured UPI payments. Please select 'Pay at Venue' or contact the turf."
+      );
+      return;
+    }
+
     setIsLoading(true);
 
     try {
+      // Pre-check slot availability (catches soft locks with friendly message)
+      const availability = await checkSlotAvailability(
+        turfId,
+        ground?.id,
+        date.dateString,
+        startTime.time,
+        endTime.time,
+        advancePayment.paymentTiming || "before_approval"
+      );
+
+      if (!availability.available) {
+        setIsLoading(false);
+        setShowConfirmDialog(false);
+        Alert.alert(
+          availability.reason === "being_booked" ? "Slot Currently Unavailable" : "Booking Failed",
+          availability.message || "This slot is no longer available.",
+          [
+            {
+              text: "OK",
+              onPress: () => navigation.goBack(),
+            },
+          ]
+        );
+        return;
+      }
+
+      // Determine initial status based on advance payment settings
+      let initialStatus = "pending";
+      let advanceStatus = "not_required";
+
+      if (advancePayment.isRequired) {
+        if (advancePayment.paymentTiming === "before_approval") {
+          if (paymentMethod === "upi") {
+            initialStatus = "pending_payment";
+            advanceStatus = "pending";
+          } else {
+            // Cash at venue - proceed to pending for approval
+            initialStatus = "pending";
+            advanceStatus = "cash_at_venue";
+          }
+        } else {
+          // after_approval - normal pending, payment after manager approves
+          initialStatus = "pending";
+          advanceStatus = "pending";
+        }
+      }
+
+      // Build slot lock based on payment flow
+      const now = new Date();
+      const isSoftLock =
+        advancePayment.isRequired &&
+        advancePayment.paymentTiming === "before_approval" &&
+        paymentMethod === "upi";
+      const softLockExpiry = new Date(now.getTime() + 10 * 60 * 1000);
+
       const bookingData = {
         turfId,
+        companyId: turf?.companyId || "",
         turfName: turf?.name || "",
         groundId: ground?.id,
         groundName: ground?.name || "",
@@ -116,10 +235,72 @@ export default function BookingConfirmationScreen({ navigation, route }) {
         endTime: endTime.time,
         sport,
         duration,
-        totalPrice: priceBreakdown.total,
+        totalAmount: priceBreakdown.total,
         specialRequests: specialRequests.trim(),
-        status: "pending",
-        paymentStatus: "pending",
+        status: initialStatus,
+        // Slot Lock
+        slotLock: {
+          isLocked: isSoftLock,
+          lockType: isSoftLock ? "soft" : null,
+          lockedAt: isSoftLock ? now.toISOString() : null,
+          lockExpiry: isSoftLock ? softLockExpiry.toISOString() : null,
+          lockReason: isSoftLock ? "payment_pending" : null,
+        },
+        // Payment structure following V2.1 schema
+        payment: {
+          slotAmount: priceBreakdown.total,
+          advanceConfig: {
+            isRequired: advancePayment.isRequired,
+            percentage: advancePayment.percentage,
+            paymentTiming: advancePayment.paymentTiming,
+            paymentTimeout: advancePayment.paymentTimeout,
+          },
+          advanceAmount: priceBreakdown.advanceAmount,
+          remainingAmount: priceBreakdown.remainingAmount,
+          advance: {
+            status: advanceStatus,
+            method: advancePayment.isRequired ? paymentMethod : "not_applicable",
+            upiDetails: null,
+            verification: null,
+            submittedAt: null,
+            paymentDeadline: null,
+            isExpired: false,
+          },
+          onGround: {
+            status: "pending",
+            cashAmount: 0,
+            onlineAmount: 0,
+            totalCollected: 0,
+            collectedBy: null,
+            collectedAt: null,
+            notes: "",
+          },
+          refund: {
+            isRequired: false,
+            refundAmount: 0,
+            refundReason: "",
+            refundStatus: "not_required",
+            refundMethod: "",
+            refundedBy: null,
+            refundedAt: null,
+            refundNote: "",
+          },
+          totalPaid: 0,
+          totalPending: priceBreakdown.total,
+          isFullyPaid: false,
+        },
+        paymentAttempts: [],
+        statusHistory: [
+          {
+            status: initialStatus,
+            timestamp: now.toISOString(),
+            changedBy: currentUserId,
+            changedByRole: "user",
+            reason: isSoftLock
+              ? "Booking created, awaiting payment"
+              : "Booking request submitted",
+          },
+        ],
       };
 
       // Create booking with transaction to handle race conditions
@@ -127,19 +308,38 @@ export default function BookingConfirmationScreen({ navigation, route }) {
 
       if (result.success) {
         setShowConfirmDialog(false);
-        // Navigate to success screen
-        navigation.replace("BookingSuccess", {
-          bookingId: result.bookingId,
-          booking: {
-            ...bookingData,
-            id: result.bookingId,
-          },
-          turf,
-          ground,
-          date,
-          startTime,
-          endTime,
-        });
+
+        // Check if we need to redirect to UPI payment
+        if (
+          advancePayment.isRequired &&
+          advancePayment.paymentTiming === "before_approval" &&
+          paymentMethod === "upi"
+        ) {
+          // Navigate to UPI Payment screen
+          navigation.replace("UpiPayment", {
+            bookingId: result.bookingId,
+            amount: priceBreakdown.advanceAmount,
+            upiId: companyPaymentConfig?.upiId,
+            upiHolderName: companyPaymentConfig?.upiHolderName,
+            qrCodeUrl: companyPaymentConfig?.upiQrCode,
+            turfName: turf?.name || "",
+            lockExpiry: softLockExpiry.getTime(),
+          });
+        } else {
+          // Navigate to success screen
+          navigation.replace("BookingSuccess", {
+            bookingId: result.bookingId,
+            booking: {
+              ...bookingData,
+              id: result.bookingId,
+            },
+            turf,
+            ground,
+            date,
+            startTime,
+            endTime,
+          });
+        }
       } else {
         Alert.alert(
           "Booking Failed",
@@ -177,6 +377,9 @@ export default function BookingConfirmationScreen({ navigation, route }) {
     priceBreakdown,
     specialRequests,
     navigation,
+    advancePayment,
+    paymentMethod,
+    companyPaymentConfig,
   ]);
 
   return (
@@ -322,6 +525,130 @@ export default function BookingConfirmationScreen({ navigation, route }) {
             </View>
           </Surface>
 
+          {/* Advance Payment Card - Only show if required */}
+          {advancePayment.isRequired && priceBreakdown.advanceAmount > 0 && (
+            <Surface style={styles.card} elevation={1}>
+              <View style={styles.cardHeader}>
+                <MaterialCommunityIcons name="cash-clock" size={24} color="#FF5722" />
+                <Text variant="titleMedium" style={styles.cardTitle}>
+                  Advance Payment
+                </Text>
+              </View>
+              <Divider style={styles.divider} />
+
+              {/* Advance Amount Info */}
+              <View style={styles.advanceInfoSection}>
+                <View style={styles.advanceAmountRow}>
+                  <Text variant="bodyMedium" style={styles.advanceLabel}>
+                    Advance Required ({advancePayment.percentage}%)
+                  </Text>
+                  <Text variant="titleMedium" style={styles.advanceAmount}>
+                    ₹{priceBreakdown.advanceAmount}
+                  </Text>
+                </View>
+                <View style={styles.advanceAmountRow}>
+                  <Text variant="bodyMedium" style={styles.advanceLabel}>
+                    Pay at Venue
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.remainingAmount}>
+                    ₹{priceBreakdown.remainingAmount}
+                  </Text>
+                </View>
+
+                {/* Payment Timing Info */}
+                <View style={styles.timingInfoBox}>
+                  <MaterialCommunityIcons
+                    name={advancePayment.paymentTiming === "before_approval" ? "clock-alert" : "clock-check"}
+                    size={18}
+                    color={advancePayment.paymentTiming === "before_approval" ? "#FF5722" : "#4CAF50"}
+                  />
+                  <Text variant="bodySmall" style={styles.timingText}>
+                    {advancePayment.paymentTiming === "before_approval"
+                      ? "Pay advance now to submit your booking request"
+                      : `Pay within ${advancePayment.paymentTimeout} minutes after manager approves`}
+                  </Text>
+                </View>
+              </View>
+
+              <Divider style={styles.divider} />
+
+              {/* Payment Method Selection - Only for before_approval */}
+              {advancePayment.paymentTiming === "before_approval" && (
+                <View style={styles.paymentMethodSection}>
+                  <Text variant="titleSmall" style={styles.paymentMethodTitle}>
+                    Choose Payment Method
+                  </Text>
+
+                  <RadioButton.Group
+                    value={paymentMethod}
+                    onValueChange={setPaymentMethod}
+                  >
+                    {advancePayment.allowedMethods?.includes("upi") && (
+                      <View style={styles.radioOption}>
+                        <RadioButton.Android value="upi" color={USER_COLOR} />
+                        <View style={styles.radioContent}>
+                          <View style={styles.radioLabelRow}>
+                            <MaterialCommunityIcons name="cellphone" size={20} color="#666" />
+                            <Text variant="bodyMedium" style={styles.radioLabel}>
+                              Pay via UPI
+                            </Text>
+                            {companyPaymentConfig?.upiEnabled && (
+                              <View style={styles.recommendedBadge}>
+                                <Text variant="labelSmall" style={styles.recommendedText}>
+                                  Recommended
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text variant="bodySmall" style={styles.radioDescription}>
+                            Pay ₹{priceBreakdown.advanceAmount} via GPay, PhonePe, Paytm
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {advancePayment.allowedMethods?.includes("cash_at_venue") && (
+                      <View style={styles.radioOption}>
+                        <RadioButton.Android value="cash_at_venue" color={USER_COLOR} />
+                        <View style={styles.radioContent}>
+                          <View style={styles.radioLabelRow}>
+                            <MaterialCommunityIcons name="cash" size={20} color="#666" />
+                            <Text variant="bodyMedium" style={styles.radioLabel}>
+                              Pay at Venue
+                            </Text>
+                          </View>
+                          <Text variant="bodySmall" style={styles.radioDescription}>
+                            Pay full amount ₹{priceBreakdown.total} when you arrive
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </RadioButton.Group>
+
+                  {/* UPI not configured warning */}
+                  {paymentMethod === "upi" && !companyPaymentConfig?.upiEnabled && (
+                    <View style={styles.warningBox}>
+                      <MaterialCommunityIcons name="alert" size={18} color="#FF9800" />
+                      <Text variant="bodySmall" style={styles.warningText}>
+                        UPI payments not available for this turf. Please select 'Pay at Venue'.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* After approval info */}
+              {advancePayment.paymentTiming === "after_approval" && (
+                <View style={styles.afterApprovalInfo}>
+                  <MaterialCommunityIcons name="information" size={18} color="#2196F3" />
+                  <Text variant="bodySmall" style={styles.afterApprovalText}>
+                    Your booking will be sent for approval. Once approved, you'll have {advancePayment.paymentTimeout} minutes to pay the advance.
+                  </Text>
+                </View>
+              )}
+            </Surface>
+          )}
+
           {/* Special Requests Card */}
           <Surface style={styles.card} elevation={1}>
             <View style={styles.cardHeader}>
@@ -385,19 +712,32 @@ export default function BookingConfirmationScreen({ navigation, route }) {
       <Surface style={styles.bottomAction} elevation={8}>
         <View style={styles.bottomContent}>
           <View style={styles.bottomPrice}>
-            <Text variant="bodySmall" style={styles.bottomPriceLabel}>Total</Text>
-            <Text variant="headlineSmall" style={styles.bottomPriceValue}>
-              ₹{priceBreakdown.total}
-            </Text>
+            {advancePayment.isRequired && advancePayment.paymentTiming === "before_approval" && paymentMethod === "upi" ? (
+              <>
+                <Text variant="bodySmall" style={styles.bottomPriceLabel}>Pay Now</Text>
+                <Text variant="headlineSmall" style={[styles.bottomPriceValue, { color: "#FF5722" }]}>
+                  ₹{priceBreakdown.advanceAmount}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text variant="bodySmall" style={styles.bottomPriceLabel}>Total</Text>
+                <Text variant="headlineSmall" style={styles.bottomPriceValue}>
+                  ₹{priceBreakdown.total}
+                </Text>
+              </>
+            )}
           </View>
           <Button
             mode="contained"
             onPress={() => setShowConfirmDialog(true)}
-            buttonColor={USER_COLOR}
+            buttonColor={advancePayment.isRequired && advancePayment.paymentTiming === "before_approval" && paymentMethod === "upi" ? "#FF5722" : USER_COLOR}
             style={styles.confirmButton}
             contentStyle={styles.confirmButtonContent}
           >
-            Proceed to Confirm
+            {advancePayment.isRequired && advancePayment.paymentTiming === "before_approval" && paymentMethod === "upi"
+              ? "Proceed to Pay"
+              : "Proceed to Confirm"}
           </Button>
         </View>
       </Surface>
@@ -621,5 +961,109 @@ const styles = StyleSheet.create({
   },
   confirmButtonContent: {
     paddingVertical: 4,
+  },
+
+  // Advance Payment Section
+  advanceInfoSection: {
+    padding: 16,
+    paddingTop: 12,
+  },
+  advanceAmountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  advanceLabel: {
+    color: "#666",
+  },
+  advanceAmount: {
+    fontWeight: "bold",
+    color: "#FF5722",
+  },
+  remainingAmount: {
+    color: "#666",
+  },
+  timingInfoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#FFF3E0",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  timingText: {
+    flex: 1,
+    color: "#666",
+    lineHeight: 18,
+  },
+  paymentMethodSection: {
+    padding: 16,
+    paddingTop: 12,
+  },
+  paymentMethodTitle: {
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 12,
+  },
+  radioOption: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  radioContent: {
+    flex: 1,
+    marginLeft: 4,
+    paddingTop: 6,
+  },
+  radioLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  radioLabel: {
+    color: "#333",
+    fontWeight: "500",
+  },
+  radioDescription: {
+    color: "#999",
+    marginTop: 2,
+  },
+  recommendedBadge: {
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  recommendedText: {
+    color: "#4CAF50",
+  },
+  warningBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#FFF8E1",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 8,
+  },
+  warningText: {
+    flex: 1,
+    color: "#F57C00",
+    lineHeight: 18,
+  },
+  afterApprovalInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: 16,
+    paddingTop: 12,
+    backgroundColor: "#E3F2FD",
+    gap: 8,
+  },
+  afterApprovalText: {
+    flex: 1,
+    color: "#1976D2",
+    lineHeight: 18,
   },
 });

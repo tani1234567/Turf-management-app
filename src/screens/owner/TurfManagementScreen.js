@@ -24,6 +24,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { selectTurfs, setTurfs, updateTurf } from "../../store/slices/ownerSlice";
 import { selectCompany } from "../../store/slices/companySlice";
 import { queryDocuments, updateDocument } from "../../services/firebase/firestore";
+import { isRemoteImageUri } from "../../services/firebase/turfImages";
 
 const OWNER_COLOR = "#9C27B0";
 
@@ -128,7 +129,7 @@ export default function TurfManagementScreen({ navigation, route }) {
         onLongPress={() => setMenuVisible(turf.turfId || turf.id)}
       >
         {/* Cover Image */}
-        {turf.coverImage && (
+        {isRemoteImageUri(turf.coverImage) && (
           <Image
             source={{ uri: turf.coverImage }}
             style={styles.coverImage}
@@ -225,6 +226,17 @@ export default function TurfManagementScreen({ navigation, route }) {
               Alert.alert("Coming Soon", "Analytics feature coming soon!");
             }}
             title="View Analytics"
+          />
+          <Menu.Item
+            leadingIcon="history"
+            onPress={() => {
+              setMenuVisible(null);
+              navigation.navigate("TurfEditLogs", {
+                turfId: turf.turfId || turf.id,
+                turfName: turf.name,
+              });
+            }}
+            title="View Edit Logs"
           />
           <Menu.Item
             leadingIcon={turf.isActive ? "close-circle" : "check-circle"}

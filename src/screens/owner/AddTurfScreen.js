@@ -21,6 +21,9 @@ import {
   Switch,
   Divider,
   ActivityIndicator,
+  Dialog,
+  Portal,
+  Searchbar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -31,7 +34,9 @@ import { selectUser } from "../../store/slices/authSlice";
 import { selectCompany, updateStats } from "../../store/slices/companySlice";
 import { addTurf } from "../../store/slices/ownerSlice";
 import { SPORTS, AMENITIES, TIME_SLOTS } from "../../constants/sports";
+import { MUMBAI_AREAS } from "../../constants/mumbaiAreas";
 import { setDocument, updateDocument, serverTimestamp } from "../../services/firebase/firestore";
+import { uploadTurfImages } from "../../services/firebase/turfImages";
 
 const OWNER_COLOR = "#9C27B0";
 const TOTAL_STEPS = 5;
@@ -78,6 +83,10 @@ export default function AddTurfScreen({ navigation }) {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
+  const [area, setArea] = useState("");
+  const [areaSearch, setAreaSearch] = useState("");
+  const [areaModalVisible, setAreaModalVisible] = useState(false);
+  const [selectedZone, setSelectedZone] = useState("All");
   const [coordinates, setCoordinates] = useState({ lat: null, lng: null });
   const [googleMapsLink, setGoogleMapsLink] = useState("");
 
@@ -231,6 +240,14 @@ export default function AddTurfScreen({ navigation }) {
           Alert.alert("Required", "Please enter a city.");
           return false;
         }
+        if (!area.trim()) {
+          Alert.alert("Missing Info", "Area is required");
+          return false;
+        }
+        if (!coordinates.lat || !coordinates.lng) {
+          Alert.alert("Missing Info", "Coordinates are required. Please enter Google Maps link or coordinates manually.");
+          return false;
+        }
         return true;
       case 3:
         return true;
@@ -273,6 +290,66 @@ export default function AddTurfScreen({ navigation }) {
     }
   };
 
+  const extractCoordinatesFromMapsLink = (link) => {
+    if (!link) return null;
+
+    // Pattern 1: https://maps.app.goo.gl/... (shortened link - can't extract)
+    if (link.includes('maps.app.goo.gl')) {
+      // TODO: Make API call to expand shortened URL
+      return null;
+    }
+
+    // Pattern 2: https://www.google.com/maps?q=19.1234,72.5678
+    const qPattern = /[?&]q=([-\d.]+),([-\d.]+)/;
+    const qMatch = link.match(qPattern);
+    if (qMatch) {
+      return {
+        lat: parseFloat(qMatch[1]),
+        lng: parseFloat(qMatch[2])
+      };
+    }
+
+    // Pattern 3: https://www.google.com/maps/@19.1234,72.5678,15z
+    const atPattern = /@([-\d.]+),([-\d.]+)/;
+    const atMatch = link.match(atPattern);
+    if (atMatch) {
+      return {
+        lat: parseFloat(atMatch[1]),
+        lng: parseFloat(atMatch[2])
+      };
+    }
+
+    // Pattern 4: https://maps.google.com/?q=19.1234,72.5678
+    const coordPattern = /([-\d.]+),([-\d.]+)/;
+    const coordMatch = link.match(coordPattern);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      // Validate it's in Mumbai range
+      if (lat >= 18.8 && lat <= 19.5 && lng >= 72.7 && lng <= 73.1) {
+        return { lat, lng };
+      }
+    }
+
+    return null;
+  };
+
+  const handleGoogleMapsLinkChange = (link) => {
+    setGoogleMapsLink(link);
+
+    // Try to extract coordinates
+    const coords = extractCoordinatesFromMapsLink(link);
+    if (coords) {
+      setCoordinates(coords);
+      Alert.alert("Success", "Coordinates extracted from Google Maps link!");
+    } else if (link.includes('maps.app.goo.gl')) {
+      Alert.alert(
+        "Shortened Link Detected",
+        "Please open the link and copy the full URL with coordinates, or enter coordinates manually below."
+      );
+    }
+  };
+
   const generateTurfId = () => {
     return `turf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   };
@@ -297,6 +374,12 @@ export default function AddTurfScreen({ navigation }) {
     try {
       const turfId = generateTurfId();
       const qrCodes = generateQRCodeData(turfId);
+      const uploadedMedia = await uploadTurfImages({
+        companyId,
+        turfId,
+        coverImage,
+        images: additionalImages,
+      });
 
       // Prepare ground documents
       const groundsData = grounds.map((ground, index) => ({
@@ -315,9 +398,10 @@ export default function AddTurfScreen({ navigation }) {
         companyId,
         name: turfName.trim(),
         description: description.trim() || null,
-        coverImage: coverImage || null,
-        images: additionalImages || [],
+        coverImage: uploadedMedia.coverImage || null,
+        images: uploadedMedia.images || [],
         location: {
+          area: area.trim(),
           address: address.trim() || null,
           city: city.trim(),
           state: state.trim() || null,
@@ -529,25 +613,78 @@ export default function AddTurfScreen({ navigation }) {
         />
       </View>
 
+      {/* Area Selection */}
+      <Text variant="titleSmall" style={styles.inputLabel}>
+        Area *
+      </Text>
+      <TouchableOpacity
+        style={styles.areaSelector}
+        onPress={() => setAreaModalVisible(true)}
+      >
+        <Text style={area ? styles.areaSelectorText : styles.areaSelectorPlaceholder}>
+          {area || "Select Mumbai area"}
+        </Text>
+        <MaterialCommunityIcons name="chevron-down" size={20} color="#666" />
+      </TouchableOpacity>
+
       <TextInput
         mode="outlined"
         label="Google Maps Link"
         placeholder="Paste Google Maps URL"
         value={googleMapsLink}
-        onChangeText={setGoogleMapsLink}
+        onChangeText={handleGoogleMapsLinkChange}
         style={styles.input}
         left={<TextInput.Icon icon="google-maps" />}
       />
 
-      <Surface style={styles.mapPlaceholder} elevation={1}>
-        <MaterialCommunityIcons name="map-marker" size={48} color="#999" />
-        <Text variant="bodyMedium" style={styles.mapPlaceholderText}>
-          Map integration coming soon
-        </Text>
-        <Text variant="bodySmall" style={styles.mapSubtext}>
-          For now, paste your Google Maps link above
-        </Text>
-      </Surface>
+      {/* Coordinates Display/Input */}
+      <Text variant="titleSmall" style={styles.inputLabel}>
+        Coordinates {coordinates.lat && coordinates.lng ? "✓" : "*"}
+      </Text>
+      {coordinates.lat && coordinates.lng ? (
+        <View style={styles.coordinatesDisplay}>
+          <MaterialCommunityIcons name="map-marker-check" size={20} color="#4CAF50" />
+          <Text style={styles.coordinatesText}>
+            {coordinates.lat.toFixed(6)}, {coordinates.lng.toFixed(6)}
+          </Text>
+          <TouchableOpacity onPress={() => setCoordinates({ lat: null, lng: null })}>
+            <MaterialCommunityIcons name="close-circle" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Surface style={styles.coordinatesInputContainer} elevation={0}>
+          <Text variant="bodySmall" style={styles.coordinatesHint}>
+            Coordinates will be extracted from Google Maps link above
+          </Text>
+          <Text variant="bodySmall" style={styles.coordinatesHint}>
+            Or enter manually:
+          </Text>
+          <View style={styles.manualCoordinatesRow}>
+            <TextInput
+              label="Latitude"
+              value={coordinates.lat?.toString() || ""}
+              onChangeText={(text) => setCoordinates(prev => ({
+                ...prev,
+                lat: parseFloat(text) || null
+              }))}
+              keyboardType="decimal-pad"
+              style={styles.coordinateInput}
+              dense
+            />
+            <TextInput
+              label="Longitude"
+              value={coordinates.lng?.toString() || ""}
+              onChangeText={(text) => setCoordinates(prev => ({
+                ...prev,
+                lng: parseFloat(text) || null
+              }))}
+              keyboardType="decimal-pad"
+              style={styles.coordinateInput}
+              dense
+            />
+          </View>
+        </Surface>
+      )}
     </View>
   );
 
@@ -865,6 +1002,99 @@ export default function AddTurfScreen({ navigation }) {
           </Text>
         </View>
       </View>
+
+      {/* Area Selection Modal */}
+      <Portal>
+        <Dialog
+          visible={areaModalVisible}
+          onDismiss={() => setAreaModalVisible(false)}
+          style={styles.areaDialog}
+        >
+          <Dialog.Title>Select Area</Dialog.Title>
+
+          {/* Search */}
+          <View style={styles.areaSearchWrapper}>
+            <Searchbar
+              placeholder="Search areas..."
+              value={areaSearch}
+              onChangeText={setAreaSearch}
+              style={styles.areaSearchbar}
+            />
+          </View>
+
+          {/* Zone Filter */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.zoneFilterContainer}
+            contentContainerStyle={styles.zoneFilterContent}
+          >
+            {["All", "Western", "Central", "South", "Eastern"].map((zone) => (
+              <Chip
+                key={zone}
+                selected={selectedZone === zone}
+                onPress={() => setSelectedZone(zone)}
+                style={[
+                  styles.zoneChip,
+                  selectedZone === zone && styles.selectedZoneChip,
+                ]}
+              >
+                {zone}
+              </Chip>
+            ))}
+          </ScrollView>
+
+          {/* Area List */}
+          <Dialog.ScrollArea style={styles.areaScrollArea}>
+            <ScrollView>
+              {MUMBAI_AREAS
+                .filter(a => {
+                  if (selectedZone !== "All" && a.zone !== selectedZone) return false;
+                  if (areaSearch && !a.name.toLowerCase().includes(areaSearch.toLowerCase())) return false;
+                  return true;
+                })
+                .map((areaItem) => (
+                  <TouchableOpacity
+                    key={areaItem.id}
+                    style={styles.areaItem}
+                    onPress={() => {
+                      setArea(areaItem.name);
+                      setAreaModalVisible(false);
+                      setAreaSearch("");
+                      // Auto-fill coordinates if not set
+                      if (!coordinates.lat || !coordinates.lng) {
+                        setCoordinates({ lat: areaItem.lat, lng: areaItem.lng });
+                        Alert.alert(
+                          "Coordinates Set",
+                          "Area center coordinates have been set. You can update them manually if needed."
+                        );
+                      }
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={area === areaItem.name ? "checkbox-marked-circle" : "map-marker-outline"}
+                      size={20}
+                      color={area === areaItem.name ? "#4CAF50" : "#666"}
+                    />
+                    <View style={styles.areaItemContent}>
+                      <Text style={[
+                        styles.areaItemText,
+                        area === areaItem.name && styles.areaItemActive
+                      ]}>
+                        {areaItem.name}
+                      </Text>
+                      <Text style={styles.areaItemZone}>{areaItem.zone}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+          </Dialog.ScrollArea>
+
+          <Dialog.Actions>
+            <Button onPress={() => setAreaModalVisible(false)}>Cancel</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {renderStepIndicator()}
 
@@ -1232,5 +1462,113 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     flex: 2,
+  },
+  inputLabel: {
+    fontWeight: "bold",
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  areaSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f5f5f5",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  areaSelectorText: {
+    fontSize: 15,
+    color: "#333",
+  },
+  areaSelectorPlaceholder: {
+    fontSize: 15,
+    color: "#999",
+  },
+  coordinatesDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 8,
+  },
+  coordinatesText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+  },
+  coordinatesInputContainer: {
+    backgroundColor: "#FFF8E1",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  coordinatesHint: {
+    color: "#666",
+    marginBottom: 8,
+  },
+  manualCoordinatesRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  coordinateInput: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  areaDialog: {
+    maxHeight: "80%",
+  },
+  areaSearchWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  areaSearchbar: {
+    backgroundColor: "#f5f5f5",
+    elevation: 0,
+  },
+  zoneFilterContainer: {
+    marginBottom: 8,
+  },
+  zoneFilterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  zoneChip: {
+    backgroundColor: "#f5f5f5",
+  },
+  selectedZoneChip: {
+    backgroundColor: "#4CAF50",
+  },
+  areaScrollArea: {
+    maxHeight: 300,
+    paddingHorizontal: 0,
+  },
+  areaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  areaItemContent: {
+    flex: 1,
+  },
+  areaItemText: {
+    fontSize: 15,
+    color: "#333",
+  },
+  areaItemActive: {
+    color: "#4CAF50",
+    fontFamily: "Ubuntu-Medium",
+  },
+  areaItemZone: {
+    fontSize: 11,
+    color: "#999",
+    marginTop: 2,
   },
 });

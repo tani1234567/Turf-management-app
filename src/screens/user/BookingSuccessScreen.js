@@ -196,7 +196,7 @@ export default function BookingSuccessScreen({ navigation, route }) {
           <View style={styles.totalRow}>
             <Text variant="titleMedium" style={styles.totalLabel}>Total Paid</Text>
             <Text variant="headlineSmall" style={styles.totalValue}>
-              ₹{booking?.totalPrice || 0}
+              ₹{booking?.totalAmount || booking?.totalPrice || booking?.payment?.slotAmount || 0}
             </Text>
           </View>
         </Surface>

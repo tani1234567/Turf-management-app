@@ -16,6 +16,18 @@ import InviteCodeScreen from "../screens/owner/InviteCodeScreen";
 import ManagerManagementScreen from "../screens/owner/ManagerManagementScreen";
 import CaretakerManagementScreen from "../screens/owner/CaretakerManagementScreen";
 import OperationalSettingsScreen from "../screens/owner/OperationalSettingsScreen";
+import PaymentSettingsScreen from "../screens/owner/PaymentSettingsScreen";
+import SubscriptionPaymentScreen from "../screens/owner/SubscriptionPaymentScreen";
+import OwnerAnalyticsDashboardScreen from "../screens/owner/OwnerAnalyticsDashboardScreen";
+import ExpenseTrackingScreen from "../screens/owner/ExpenseTrackingScreen";
+import ReviewManagementScreen from "../screens/owner/ReviewManagementScreen";
+import PendingTurfRequestsScreen from "../screens/owner/PendingTurfRequestsScreen";
+import TurfEditLogsScreen from "../screens/owner/TurfEditLogsScreen";
+import OperationsModeNavigator from "../navigation/OperationsModeNavigator";
+import NotificationsScreen from "../screens/common/NotificationsScreen";
+
+// VerifyPayment still needed from other owner screens (e.g. OwnerDashboard)
+import VerifyPaymentScreen from "../screens/manager/VerifyPaymentScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -39,7 +51,7 @@ function OwnerTabs() {
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: "500",
+          fontFamily: "Ubuntu-Medium",
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
@@ -145,6 +157,76 @@ export default function OwnerNavigator() {
       <Stack.Screen
         name="OperationalSettings"
         component={OperationalSettingsScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="PaymentSettings"
+        component={PaymentSettingsScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="SubscriptionPayment"
+        component={SubscriptionPaymentScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="OwnerAnalyticsDashboard"
+        component={OwnerAnalyticsDashboardScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="ExpenseTracking"
+        component={ExpenseTrackingScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="ReviewManagement"
+        component={ReviewManagementScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="TurfEditLogs"
+        component={TurfEditLogsScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="PendingTurfRequests"
+        component={PendingTurfRequestsScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="OperationsMode"
+        component={OperationsModeNavigator}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="VerifyPayment"
+        component={VerifyPaymentScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
         options={{
           presentation: "card",
         }}

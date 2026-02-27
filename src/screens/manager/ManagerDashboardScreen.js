@@ -20,7 +20,7 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useAuth, useAppSelector, useAppDispatch } from "../../hooks";
+import { useAuth, useAppSelector, useAppDispatch, useNotifications } from "../../hooks";
 import { usePermissions } from "../../hooks";
 import {
   queryDocuments,
@@ -121,6 +121,7 @@ export default function ManagerDashboardScreen({ navigation }) {
   const { user, logout } = useAuth();
   const dispatch = useAppDispatch();
   const permissions = usePermissions();
+  const { unreadCount } = useNotifications();
   const reduxUser = useAppSelector(selectUser);
   const assignedTurfIds = useAppSelector(selectAssignedTurfIds);
 
@@ -146,6 +147,9 @@ export default function ManagerDashboardScreen({ navigation }) {
 
   // Recent activity
   const [activities, setActivities] = useState([]);
+
+  // Turf requests
+  const [pendingTurfRequests, setPendingTurfRequests] = useState(0);
 
   // Refs for cleanup
   const unsubscribeRef = useRef(null);
@@ -180,6 +184,23 @@ export default function ManagerDashboardScreen({ navigation }) {
 
     loadTurfs();
   }, [assignedTurfIds, reduxUser?.selectedTurfId]);
+
+  // Fetch pending turf requests count
+  useEffect(() => {
+    const fetchTurfRequests = async () => {
+      if (!reduxUser?.userId) return;
+      try {
+        const docs = await queryDocuments("turf_requests", [
+          { field: "requestedBy", operator: "==", value: reduxUser.userId },
+          { field: "status", operator: "==", value: "pending" },
+        ]);
+        setPendingTurfRequests(docs.length);
+      } catch (error) {
+        console.error("Error fetching turf requests:", error);
+      }
+    };
+    fetchTurfRequests();
+  }, [reduxUser?.userId]);
 
   // Fetch dashboard data when selected turf changes
   useEffect(() => {
@@ -257,7 +278,7 @@ export default function ManagerDashboardScreen({ navigation }) {
       // Calculate today's revenue
       const revenue = todayBookings
         .filter((b) => b.status === "confirmed" || b.status === "completed")
-        .reduce((sum, b) => sum + (b.totalPrice || b.totalAmount || b.amount || 0), 0);
+        .reduce((sum, b) => sum + (b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0), 0);
       setTodayRevenue(revenue);
 
       // Week's booking count (confirmed + completed)
@@ -428,10 +449,7 @@ export default function ManagerDashboardScreen({ navigation }) {
       label: "Academy",
       icon: "school",
       color: "#FF9800",
-      onPress: () => {
-        // Academy screen - navigate when available
-        Alert.alert("Coming Soon", "Academy management will be available soon.");
-      },
+      onPress: () => navigation.navigate("AcademyManagement"),
     },
     {
       id: "block",
@@ -443,13 +461,25 @@ export default function ManagerDashboardScreen({ navigation }) {
       },
     },
     {
+      id: "analytics",
+      label: "Analytics",
+      icon: "chart-bar",
+      color: "#795548",
+      onPress: () => navigation.navigate("AnalyticsDashboard"),
+    },
+    {
       id: "expenses",
       label: "Expenses",
       icon: "cash-register",
-      color: "#795548",
-      onPress: () => {
-        Alert.alert("Coming Soon", "Expense tracking will be available soon.");
-      },
+      color: "#9C27B0",
+      onPress: () => navigation.navigate("ExpenseTracking"),
+    },
+    {
+      id: "reviews",
+      label: "Reviews",
+      icon: "star-outline",
+      color: "#FFC107",
+      onPress: () => navigation.navigate("ReviewManagement"),
     },
     {
       id: "caretaker",
@@ -457,6 +487,14 @@ export default function ManagerDashboardScreen({ navigation }) {
       icon: "account-group",
       color: "#607D8B",
       onPress: () => navigation.navigate("CaretakerAssignment"),
+    },
+    {
+      id: "turfRequest",
+      label: "Request Turf",
+      icon: "soccer-field",
+      color: "#00BCD4",
+      badge: pendingTurfRequests > 0 ? pendingTurfRequests : null,
+      onPress: () => navigation.navigate("TurfRequestsList"),
     },
   ];
 
@@ -497,15 +535,36 @@ export default function ManagerDashboardScreen({ navigation }) {
               {user?.name || "Manager"}
             </Text>
           </View>
-          <TouchableOpacity onPress={logout}>
-            <Surface style={styles.avatarContainer} elevation={2}>
-              <MaterialCommunityIcons
-                name="account-tie"
-                size={28}
-                color={MANAGER_BLUE}
-              />
-            </Surface>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Notifications")}
+              style={{ position: "relative" }}
+            >
+              <MaterialCommunityIcons name="bell-outline" size={26} color="#666" />
+              {unreadCount > 0 && (
+                <Badge
+                  size={18}
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -6,
+                    backgroundColor: "#F44336",
+                  }}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Badge>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={logout}>
+              <Surface style={styles.avatarContainer} elevation={2}>
+                <MaterialCommunityIcons
+                  name="account-tie"
+                  size={28}
+                  color={MANAGER_BLUE}
+                />
+              </Surface>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Turf Selector */}
@@ -794,11 +853,11 @@ export default function ManagerDashboardScreen({ navigation }) {
                             {booking.groundName}
                           </Chip>
                         )}
-                        {(booking.totalPrice || booking.totalAmount || booking.amount) && (
+                        {(booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || booking.amount) ? (
                           <Text variant="labelMedium" style={styles.pendingAmount}>
-                            ₹{booking.totalPrice || booking.totalAmount || booking.amount}
+                            ₹{booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || booking.amount}
                           </Text>
-                        )}
+                        ) : null}
                       </View>
                     </View>
                   </View>

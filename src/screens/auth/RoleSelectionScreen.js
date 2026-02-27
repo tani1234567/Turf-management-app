@@ -144,7 +144,7 @@ export default function RoleSelectionScreen({ route, navigation }) {
             Choose Your Role
           </Text>
           <Text variant="bodyMedium" style={styles.subtitle}>
-            Select how you want to use Turf Booking
+            Select how you want to use Play Grid
           </Text>
         </View>
 

@@ -28,6 +28,7 @@ import { useSelector } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
 import { getDocument, queryDocuments } from "../../services/firebase/firestore";
 import { getOrCreateChat } from "../../services/firebase/chat";
+import { getReviewsForTurf } from "../../services/firebase/reviews";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#4CAF50";
@@ -179,9 +180,8 @@ export default function TurfDetailScreen({ navigation, route }) {
         setTurf({
           ...turfData,
           id: turfId,
-          // Mock data for display
-          rating: turfData.rating || 4.2,
-          reviewCount: turfData.reviewCount || 124,
+          rating: turfData.rating || 0,
+          reviewCount: turfData.reviewCount || 0,
           images: turfData.images || (turfData.coverImage ? [turfData.coverImage] : []),
         });
 
@@ -193,30 +193,14 @@ export default function TurfDetailScreen({ navigation, route }) {
         })));
       }
 
-      // Mock reviews (replace with actual fetch)
-      setReviews([
-        {
-          id: "1",
-          userName: "Rahul S.",
-          rating: 5,
-          comment: "Excellent turf! Well maintained and great facilities.",
-          date: "2 days ago",
-        },
-        {
-          id: "2",
-          userName: "Priya M.",
-          rating: 4,
-          comment: "Good experience overall. Floodlights could be better.",
-          date: "1 week ago",
-        },
-        {
-          id: "3",
-          userName: "Amit K.",
-          rating: 5,
-          comment: "Best turf in the area. Staff is very helpful.",
-          date: "2 weeks ago",
-        },
-      ]);
+      // Fetch real reviews
+      try {
+        const reviewDocs = await getReviewsForTurf(turfId, { status: "active" });
+        setReviews(reviewDocs);
+      } catch (err) {
+        console.error("Error fetching reviews:", err);
+        setReviews([]);
+      }
     } catch (error) {
       console.error("Error fetching turf details:", error);
     } finally {
@@ -407,10 +391,10 @@ export default function TurfDetailScreen({ navigation, route }) {
         <View style={styles.ratingContainer}>
           <View style={styles.ratingBadge}>
             <MaterialCommunityIcons name="star" size={18} color="#FFD700" />
-            <Text style={styles.ratingText}>{turf?.rating}</Text>
+            <Text style={styles.ratingText}>{turf?.rating || "New"}</Text>
           </View>
           <Text variant="bodySmall" style={styles.reviewCount}>
-            {turf?.reviewCount} reviews
+            {turf?.reviewCount || 0} review{(turf?.reviewCount || 0) !== 1 ? "s" : ""}
           </Text>
         </View>
       </View>
@@ -636,6 +620,27 @@ export default function TurfDetailScreen({ navigation, route }) {
     </View>
   );
 
+  // Format review date
+  const formatReviewDate = (dateValue) => {
+    if (!dateValue) return "";
+    let date;
+    if (dateValue.toDate) {
+      date = dateValue.toDate();
+    } else if (dateValue.seconds) {
+      date = new Date(dateValue.seconds * 1000);
+    } else {
+      date = new Date(dateValue);
+    }
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   // Render reviews section
   const renderReviewsSection = () => (
     <View style={styles.section}>
@@ -643,64 +648,77 @@ export default function TurfDetailScreen({ navigation, route }) {
         <Text variant="titleMedium" style={styles.sectionTitle}>
           Reviews
         </Text>
-        <TouchableOpacity onPress={() => navigation.navigate("Reviews", { turfId })}>
-          <Text style={styles.seeAllText}>See All</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Rating summary */}
       <View style={styles.ratingSummary}>
         <View style={styles.ratingBig}>
-          <Text style={styles.ratingBigNumber}>{turf?.rating || 4.2}</Text>
+          <Text style={styles.ratingBigNumber}>{turf?.rating || 0}</Text>
           <View style={styles.starsRow}>
             {[1, 2, 3, 4, 5].map((star) => (
               <MaterialCommunityIcons
                 key={star}
-                name={star <= Math.floor(turf?.rating || 4) ? "star" : "star-outline"}
+                name={star <= Math.floor(turf?.rating || 0) ? "star" : "star-outline"}
                 size={16}
                 color="#FFD700"
               />
             ))}
           </View>
           <Text variant="bodySmall" style={styles.totalReviews}>
-            {turf?.reviewCount || 124} reviews
+            {turf?.reviewCount || reviews.length} review{(turf?.reviewCount || reviews.length) !== 1 ? "s" : ""}
           </Text>
         </View>
       </View>
 
       {/* Recent reviews */}
-      {reviews.slice(0, 3).map((review) => (
-        <Surface key={review.id} style={styles.reviewCard} elevation={1}>
-          <View style={styles.reviewHeader}>
-            <View style={styles.reviewUser}>
-              <View style={styles.reviewAvatar}>
-                <MaterialCommunityIcons name="account" size={20} color="#666" />
+      {reviews.length > 0 ? (
+        reviews.slice(0, 3).map((review) => (
+          <Surface key={review.id} style={styles.reviewCard} elevation={1}>
+            <View style={styles.reviewHeader}>
+              <View style={styles.reviewUser}>
+                <View style={styles.reviewAvatar}>
+                  <MaterialCommunityIcons name="account" size={20} color="#666" />
+                </View>
+                <View>
+                  <Text variant="titleSmall" style={styles.reviewUserName}>
+                    {review.userName || "Anonymous"}
+                  </Text>
+                  <Text variant="bodySmall" style={styles.reviewDate}>
+                    {formatReviewDate(review.createdAt)}
+                  </Text>
+                </View>
               </View>
-              <View>
-                <Text variant="titleSmall" style={styles.reviewUserName}>
-                  {review.userName}
-                </Text>
-                <Text variant="bodySmall" style={styles.reviewDate}>
-                  {review.date}
-                </Text>
+              <View style={styles.reviewRating}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <MaterialCommunityIcons
+                    key={star}
+                    name={star <= review.rating ? "star" : "star-outline"}
+                    size={14}
+                    color="#FFD700"
+                  />
+                ))}
               </View>
             </View>
-            <View style={styles.reviewRating}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <MaterialCommunityIcons
-                  key={star}
-                  name={star <= review.rating ? "star" : "star-outline"}
-                  size={14}
-                  color="#FFD700"
-                />
-              ))}
-            </View>
-          </View>
-          <Text variant="bodyMedium" style={styles.reviewComment}>
-            {review.comment}
-          </Text>
-        </Surface>
-      ))}
+            <Text variant="bodyMedium" style={styles.reviewComment}>
+              {review.comment}
+            </Text>
+            {review.response && (
+              <View style={{ marginTop: 8, padding: 10, backgroundColor: "#F5F5F5", borderRadius: 8 }}>
+                <Text variant="labelSmall" style={{ color: USER_COLOR, fontWeight: "600", marginBottom: 4 }}>
+                  Response from Management
+                </Text>
+                <Text variant="bodySmall" style={{ color: "#555" }}>
+                  {review.response}
+                </Text>
+              </View>
+            )}
+          </Surface>
+        ))
+      ) : (
+        <Text variant="bodyMedium" style={{ color: "#999", textAlign: "center", paddingVertical: 16 }}>
+          No reviews yet. Be the first to review!
+        </Text>
+      )}
     </View>
   );
 
@@ -730,7 +748,7 @@ export default function TurfDetailScreen({ navigation, route }) {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -785,7 +803,7 @@ export default function TurfDetailScreen({ navigation, route }) {
           </View>
         </View>
       </Surface>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -840,7 +858,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: "absolute",
-    top: 44,
+    top: 12,
     left: 16,
     width: 40,
     height: 40,
@@ -851,7 +869,7 @@ const styles = StyleSheet.create({
   },
   imageActions: {
     position: "absolute",
-    top: 44,
+    top: 15,
     right: 16,
     flexDirection: "row",
   },

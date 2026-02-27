@@ -11,6 +11,9 @@ import CaretakerCalendarScreen from "../screens/caretaker/CaretakerCalendarScree
 import CaretakerProfileScreen from "../screens/caretaker/CaretakerProfileScreen";
 import WaitingForAssignmentScreen from "../screens/caretaker/WaitingForAssignmentScreen";
 import PaymentCollectionScreen from "../screens/caretaker/PaymentCollectionScreen";
+import MaintenanceLogScreen from "../screens/caretaker/MaintenanceLogScreen";
+import ExpenseTrackingScreen from "../screens/caretaker/ExpenseTrackingScreen";
+import NotificationsScreen from "../screens/common/NotificationsScreen";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -33,7 +36,7 @@ function CaretakerTabs() {
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "500",
+          fontFamily: "Ubuntu-Medium",
         },
       }}
     >
@@ -94,6 +97,27 @@ export default function CaretakerNavigator() {
           headerShown: true,
           headerTitle: "Collect Payment",
           headerBackTitle: "Back",
+        }}
+      />
+      <Stack.Screen
+        name="MaintenanceLog"
+        component={MaintenanceLogScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="ExpenseTracking"
+        component={ExpenseTrackingScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { Text, Surface, Card, Chip, Divider } from "react-native-paper";
+import { Text, Surface, Card, Chip, Divider, Badge } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
@@ -16,12 +16,14 @@ import {
   selectAssignedTurfId,
 } from "../../store/slices/authSlice";
 import { getTodayBookingsForCaretaker } from "../../services/firebase/firestore";
+import { useNotifications } from "../../hooks";
 
 const CARETAKER_COLOR = "#FF9800";
 
 export default function CaretakerDashboardScreen({ navigation }) {
   const user = useSelector(selectUser);
   const assignedTurfId = useSelector(selectAssignedTurfId);
+  const { unreadCount } = useNotifications();
 
   const [turfName, setTurfName] = useState("");
   const [bookings, setBookings] = useState([]);
@@ -117,32 +119,32 @@ export default function CaretakerDashboardScreen({ navigation }) {
     const inProgress = bookingsList.filter((b) => b.status === "in_progress").length;
     const pending = bookingsList.filter((b) => b.status === "pending").length;
 
-    // Count bookings with pending payment
+    // Count bookings with pending payment (not fully paid)
     const pendingPayment = bookingsList.filter((b) => {
+      if (b.status === "cancelled" || b.status === "rejected") return false;
       const payment = b.payment || {};
-      return !payment.remainingPaid || payment.remainingAmount > 0;
+      return !payment.isFullyPaid && !payment.remainingPaid;
     }).length;
 
-    // Calculate cash collection (completed bookings with cash payment)
+    // Calculate cash collection (completed bookings with cash/on-ground payment)
     const totalCashCollection = bookingsList
-      .filter((b) => b.status === "completed" && b.payment?.remainingPaid)
+      .filter((b) => b.status === "completed")
       .reduce((sum, b) => {
         const payment = b.payment || {};
-        if (payment.paymentMethod === "cash") {
-          return sum + (payment.remainingAmount || 0);
-        }
-        return sum;
+        // Use onGround.cashAmount (V2.1 schema) or payment.cashAmount (legacy)
+        return sum + (payment.onGround?.cashAmount || payment.cashAmount || 0);
       }, 0);
 
-    // Calculate online collection
+    // Calculate online collection (advance payments + on-ground online)
     const totalOnlineCollection = bookingsList
-      .filter((b) => b.status === "completed" && b.payment?.remainingPaid)
+      .filter((b) => b.status === "completed")
       .reduce((sum, b) => {
         const payment = b.payment || {};
-        if (payment.paymentMethod === "online" || payment.paymentMethod === "upi") {
-          return sum + (payment.remainingAmount || 0);
-        }
-        return sum;
+        // Advance amount paid via UPI
+        const advancePaid = payment.advance?.status === "verified" ? (payment.advanceAmount || 0) : 0;
+        // On-ground online payments
+        const onlineOnGround = payment.onGround?.onlineAmount || payment.onlineAmount || 0;
+        return sum + advancePaid + onlineOnGround;
       }, 0);
 
     setStats({
@@ -243,13 +245,34 @@ export default function CaretakerDashboardScreen({ navigation }) {
               Hello, {user?.name || "Caretaker"}
             </Text>
           </View>
-          <Surface style={styles.avatarContainer} elevation={2}>
-            <MaterialCommunityIcons
-              name="account-hard-hat"
-              size={28}
-              color={CARETAKER_COLOR}
-            />
-          </Surface>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Notifications")}
+              style={{ position: "relative" }}
+            >
+              <MaterialCommunityIcons name="bell-outline" size={26} color="#666" />
+              {unreadCount > 0 && (
+                <Badge
+                  size={18}
+                  style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -6,
+                    backgroundColor: "#F44336",
+                  }}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Badge>
+              )}
+            </TouchableOpacity>
+            <Surface style={styles.avatarContainer} elevation={2}>
+              <MaterialCommunityIcons
+                name="account-hard-hat"
+                size={28}
+                color={CARETAKER_COLOR}
+              />
+            </Surface>
+          </View>
         </View>
 
         {/* Assigned Turf Card */}
@@ -421,7 +444,10 @@ export default function CaretakerDashboardScreen({ navigation }) {
             </Surface>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard}>
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate("MaintenanceLog")}
+          >
             <Surface style={styles.actionCardSurface} elevation={1}>
               <MaterialCommunityIcons
                 name="alert-circle"
@@ -430,6 +456,22 @@ export default function CaretakerDashboardScreen({ navigation }) {
               />
               <Text variant="bodySmall" style={styles.actionText}>
                 Report Issue
+              </Text>
+            </Surface>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => navigation.navigate("ExpenseTracking")}
+          >
+            <Surface style={styles.actionCardSurface} elevation={1}>
+              <MaterialCommunityIcons
+                name="cash-register"
+                size={32}
+                color="#9C27B0"
+              />
+              <Text variant="bodySmall" style={styles.actionText}>
+                Expenses
               </Text>
             </Surface>
           </TouchableOpacity>
@@ -510,14 +552,14 @@ export default function CaretakerDashboardScreen({ navigation }) {
                 <View style={styles.bookingFooter}>
                   <View style={styles.priceContainer}>
                     <Text variant="bodySmall" style={styles.priceLabel}>
-                      Amount:
+                      Total:
                     </Text>
                     <Text variant="titleMedium" style={styles.priceValue}>
-                      ₹{booking.totalAmount || 0}
+                      ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
                     </Text>
                   </View>
 
-                  {booking.payment?.remainingPaid ? (
+                  {booking.payment?.isFullyPaid || booking.payment?.remainingPaid ? (
                     <Chip
                       icon="check-circle"
                       style={styles.paidChip}
@@ -525,13 +567,21 @@ export default function CaretakerDashboardScreen({ navigation }) {
                     >
                       Paid
                     </Chip>
+                  ) : booking.payment?.advance?.status === "verified" ? (
+                    <Chip
+                      icon="cash-clock"
+                      style={styles.unpaidChip}
+                      textStyle={styles.unpaidChipText}
+                    >
+                      Due: ₹{booking.payment?.remainingAmount || 0}
+                    </Chip>
                   ) : (
                     <Chip
                       icon="clock-outline"
                       style={styles.unpaidChip}
                       textStyle={styles.unpaidChipText}
                     >
-                      Payment Pending
+                      Pending: ₹{booking.payment?.remainingAmount ?? (booking.totalAmount || booking.payment?.slotAmount || 0)}
                     </Chip>
                   )}
                 </View>

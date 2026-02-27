@@ -2699,7 +2699,8 @@ export default function ManagerManagementScreen() {
 | Recurring Schedule | Manager selects any combination of days (Mon-Sun) |
 | Contract Period | 1-3 months, manually renewable |
 | Auto-Generation | All sessions auto-generated for contract period |
-| Slot Blocking | Academy slots blocked from regular bookings |
+| Slot Blocking | Academy 
+slots blocked from regular bookings |
 | Payment Tracking | Track cash + online payments for academy |
 | Session Cancellation | Manager/Owner (with operational permissions) can cancel individual sessions |
 | Renewal Notifications | 5 days before expiry reminder |

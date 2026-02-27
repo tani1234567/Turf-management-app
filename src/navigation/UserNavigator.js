@@ -16,7 +16,11 @@ import BookingScreen from "../screens/user/BookingScreen";
 import BookingConfirmationScreen from "../screens/user/BookingConfirmationScreen";
 import BookingSuccessScreen from "../screens/user/BookingSuccessScreen";
 import ChatScreen from "../screens/user/ChatScreen";
-// import NotificationsScreen from "../screens/user/NotificationsScreen";
+import UpiPaymentScreen from "../screens/user/UpiPaymentScreen";
+import PaymentConfirmationScreen from "../screens/user/PaymentConfirmationScreen";
+import PaymentSubmittedScreen from "../screens/user/PaymentSubmittedScreen";
+import WriteReviewScreen from "../screens/user/WriteReviewScreen";
+import NotificationsScreen from "../screens/common/NotificationsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -40,7 +44,7 @@ function UserTabs() {
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "500",
+          fontFamily: "Ubuntu-Medium",
         },
       }}
     >
@@ -142,8 +146,35 @@ export default function UserNavigator() {
           presentation: "card",
         }}
       />
-      {/* Stack screens for nested navigation - uncomment as screens are created */}
-      {/*
+      <Stack.Screen
+        name="UpiPayment"
+        component={UpiPaymentScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="PaymentConfirmation"
+        component={PaymentConfirmationScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="PaymentSubmitted"
+        component={PaymentSubmittedScreen}
+        options={{
+          presentation: "card",
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="WriteReview"
+        component={WriteReviewScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
@@ -151,7 +182,6 @@ export default function UserNavigator() {
           presentation: "card",
         }}
       />
-      */}
     </Stack.Navigator>
   );
 }

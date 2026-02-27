@@ -28,6 +28,7 @@ import { useAuth } from "../../hooks/useAuth";
 import {
   selectCompany,
   selectInviteCode,
+  selectSubscription,
   selectSubscriptionStatus,
   setInviteCode,
 } from "../../store/slices/companySlice";
@@ -46,6 +47,30 @@ export default function OwnerSettingsScreen({ navigation }) {
   const company = useSelector(selectCompany);
   const inviteCode = useSelector(selectInviteCode);
   const subscriptionStatus = useSelector(selectSubscriptionStatus);
+  const subscription = useSelector(selectSubscription);
+
+  // Compute days remaining for the relevant deadline
+  const getDaysRemaining = (dateValue) => {
+    if (!dateValue) return null;
+    const endDate = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+    if (isNaN(endDate.getTime())) return null;
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const subscriptionDaysLeft = getDaysRemaining(subscription?.subscriptionEndDate);
+  const trialDaysLeft = getDaysRemaining(subscription?.trialEndDate);
+  const graceDaysLeft = getDaysRemaining(subscription?.gracePeriodEndDate);
+
+  const formatDateDisplay = (dateValue) => {
+    if (!dateValue) return "";
+    const d = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  };
 
   const [regenerateDialogVisible, setRegenerateDialogVisible] = useState(false);
   const [editCompanyDialogVisible, setEditCompanyDialogVisible] = useState(false);
@@ -230,46 +255,183 @@ export default function OwnerSettingsScreen({ navigation }) {
           <Text variant="titleMedium" style={styles.sectionTitle}>
             Subscription
           </Text>
+
+          {/* Status Row */}
           <View style={styles.subscriptionRow}>
             <View style={styles.subscriptionInfo}>
-              <Text variant="titleSmall">
-                {subscriptionStatus === "trial" ? "Free Trial" : "Active Plan"}
-              </Text>
-              <Text variant="bodySmall" style={styles.subscriptionSubtext}>
-                {subscriptionStatus === "trial"
-                  ? "14 days remaining"
-                  : "Your subscription is active"}
-              </Text>
+              {subscriptionStatus === "trial" && (
+                <>
+                  <Text variant="titleSmall">Free Trial</Text>
+                  <Text variant="bodySmall" style={styles.subscriptionSubtext}>
+                    {trialDaysLeft !== null && trialDaysLeft >= 0
+                      ? `${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining`
+                      : "Trial period"}
+                  </Text>
+                </>
+              )}
+              {subscriptionStatus === "active" && (
+                <>
+                  <Text variant="titleSmall">Active Plan</Text>
+                  <Text variant="bodySmall" style={styles.subscriptionSubtext}>
+                    {subscriptionDaysLeft !== null
+                      ? subscriptionDaysLeft <= 7
+                        ? `Expires in ${subscriptionDaysLeft} day${subscriptionDaysLeft !== 1 ? "s" : ""}`
+                        : `Expires ${formatDateDisplay(subscription?.subscriptionEndDate)}`
+                      : "Your subscription is active"}
+                  </Text>
+                </>
+              )}
+              {subscriptionStatus === "grace_period" && (
+                <>
+                  <Text variant="titleSmall" style={{ color: "#E65100" }}>
+                    Grace Period
+                  </Text>
+                  <Text variant="bodySmall" style={[styles.subscriptionSubtext, { color: "#BF360C" }]}>
+                    {graceDaysLeft !== null && graceDaysLeft >= 0
+                      ? `${graceDaysLeft} day${graceDaysLeft !== 1 ? "s" : ""} left to renew`
+                      : "Renew now to keep turfs active"}
+                  </Text>
+                </>
+              )}
+              {subscriptionStatus === "expired" && (
+                <>
+                  <Text variant="titleSmall" style={{ color: "#D32F2F" }}>
+                    Expired
+                  </Text>
+                  <Text variant="bodySmall" style={[styles.subscriptionSubtext, { color: "#D32F2F" }]}>
+                    Turfs deactivated — renew to reactivate
+                  </Text>
+                </>
+              )}
             </View>
             <View
               style={[
                 styles.statusBadge,
-                {
-                  backgroundColor:
-                    subscriptionStatus === "active" ? "#E8F5E9" : "#FFF3E0",
-                },
+                subscriptionStatus === "active" && { backgroundColor: "#E8F5E9" },
+                subscriptionStatus === "trial" && { backgroundColor: "#E3F2FD" },
+                subscriptionStatus === "grace_period" && { backgroundColor: "#FFF3E0" },
+                subscriptionStatus === "expired" && { backgroundColor: "#FFEBEE" },
               ]}
             >
               <Text
                 style={{
-                  color: subscriptionStatus === "active" ? "#4CAF50" : "#FF9800",
                   fontSize: 12,
                   fontWeight: "600",
+                  color:
+                    subscriptionStatus === "active" ? "#4CAF50"
+                    : subscriptionStatus === "trial" ? "#1976D2"
+                    : subscriptionStatus === "grace_period" ? "#E65100"
+                    : "#D32F2F",
                 }}
               >
-                {subscriptionStatus === "active" ? "Active" : "Trial"}
+                {subscriptionStatus === "active" ? "Active"
+                  : subscriptionStatus === "trial" ? "Trial"
+                  : subscriptionStatus === "grace_period" ? "Grace"
+                  : "Expired"}
               </Text>
             </View>
           </View>
-          <Button
-            mode="outlined"
-            onPress={() => {
-              // TODO: Navigate to subscription management
-            }}
-            style={styles.subscriptionButton}
+
+          {/* Grace Period Warning Banner */}
+          {subscriptionStatus === "grace_period" && (
+            <View style={styles.subscriptionWarningBanner}>
+              <MaterialCommunityIcons name="alert-circle" size={20} color="#E65100" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.subscriptionWarningTitle}>
+                  Subscription expired
+                </Text>
+                <Text style={styles.subscriptionWarningText}>
+                  Your turfs are still active during the grace period.
+                  {graceDaysLeft !== null && graceDaysLeft >= 0
+                    ? ` You have ${graceDaysLeft} day${graceDaysLeft !== 1 ? "s" : ""} to renew before they are deactivated.`
+                    : " Renew immediately to avoid deactivation."}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Expired Warning Banner */}
+          {subscriptionStatus === "expired" && (
+            <View style={styles.subscriptionErrorBanner}>
+              <MaterialCommunityIcons name="close-circle" size={20} color="#D32F2F" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.subscriptionErrorTitle}>
+                  Turfs deactivated
+                </Text>
+                <Text style={styles.subscriptionErrorText}>
+                  Your subscription has expired and your turfs are no longer visible to users. Renew your subscription to reactivate them.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Active expiring soon warning */}
+          {subscriptionStatus === "active" && subscriptionDaysLeft !== null && subscriptionDaysLeft <= 7 && subscriptionDaysLeft >= 0 && (
+            <View style={styles.subscriptionWarningBanner}>
+              <MaterialCommunityIcons name="clock-alert-outline" size={20} color="#E65100" />
+              <Text style={[styles.subscriptionWarningText, { flex: 1, marginLeft: 8 }]}>
+                Renew soon to avoid service disruption.
+              </Text>
+            </View>
+          )}
+
+          {/* Action Button */}
+          {(subscriptionStatus === "grace_period" || subscriptionStatus === "expired") ? (
+            <Button
+              mode="contained"
+              onPress={() => navigation.navigate("SubscriptionPayment")}
+              style={styles.subscriptionButton}
+              buttonColor={subscriptionStatus === "expired" ? "#D32F2F" : "#E65100"}
+              icon="refresh"
+            >
+              Renew Subscription
+            </Button>
+          ) : (
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate("SubscriptionPayment")}
+              style={styles.subscriptionButton}
+            >
+              Manage Subscription
+            </Button>
+          )}
+        </Surface>
+
+        {/* Payment Settings Section */}
+        <Surface style={styles.section} elevation={1}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            Payments
+          </Text>
+          <TouchableOpacity
+            style={styles.permissionRow}
+            onPress={() => navigation.navigate("PaymentSettings")}
           >
-            Manage Subscription
-          </Button>
+            <View style={styles.paymentIconContainer}>
+              <MaterialCommunityIcons name="credit-card-settings" size={24} color={OWNER_COLOR} />
+            </View>
+            <View style={styles.permissionInfo}>
+              <Text variant="titleSmall">Payment Settings</Text>
+              <Text variant="bodySmall" style={styles.permissionSubtext}>
+                Configure UPI & bank details for advance payments
+              </Text>
+            </View>
+            <View style={styles.permissionStatus}>
+              {company?.paymentConfig?.upiEnabled ? (
+                <View style={[styles.permissionBadge, { backgroundColor: "#E8F5E9" }]}>
+                  <Text style={{ color: "#4CAF50", fontSize: 11, fontWeight: "600" }}>
+                    Active
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.permissionBadge, { backgroundColor: "#FFF3E0" }]}>
+                  <Text style={{ color: "#FF9800", fontSize: 11, fontWeight: "600" }}>
+                    Setup
+                  </Text>
+                </View>
+              )}
+              <MaterialCommunityIcons name="chevron-right" size={24} color="#999" />
+            </View>
+          </TouchableOpacity>
         </Surface>
 
         {/* Permissions Section */}
@@ -539,6 +701,53 @@ const styles = StyleSheet.create({
   },
   subscriptionButton: {
     borderRadius: 8,
+  },
+  subscriptionWarningBanner: {
+    backgroundColor: "#FFF3E0",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  subscriptionWarningTitle: {
+    fontWeight: "bold",
+    color: "#E65100",
+    marginBottom: 2,
+  },
+  subscriptionWarningText: {
+    color: "#BF360C",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  subscriptionErrorBanner: {
+    backgroundColor: "#FFEBEE",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  subscriptionErrorTitle: {
+    fontWeight: "bold",
+    color: "#C62828",
+    marginBottom: 2,
+  },
+  subscriptionErrorText: {
+    color: "#B71C1C",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  paymentIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F3E5F5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
   permissionRow: {
     flexDirection: "row",

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Alert,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import {
   Text,
@@ -20,12 +21,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector, useDispatch } from "react-redux";
 import { selectUser, selectAssignedTurfIds } from "../../store/slices/authSlice";
 import {
-  selectUnassignedCaretakers,
+  selectCompany,
   removeUnassignedCaretaker,
-  addCaretaker,
 } from "../../store/slices/companySlice";
-import { selectTurfs } from "../../store/slices/ownerSlice";
-import { updateDocument } from "../../services/firebase/firestore";
+import {
+  queryDocuments,
+  updateDocument,
+} from "../../services/firebase/firestore";
 
 const MANAGER_COLOR = "#2196F3";
 const CARETAKER_COLOR = "#FF9800";
@@ -33,61 +35,84 @@ const CARETAKER_COLOR = "#FF9800";
 export default function CaretakerAssignmentScreen({ navigation, route }) {
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
-  const unassignedCaretakers = useSelector(selectUnassignedCaretakers);
-  const allTurfs = useSelector(selectTurfs);
-  const assignedTurfIds = useSelector(selectAssignedTurfIds);
+  const company = useSelector(selectCompany);
+  const assignedTurfIds = useSelector(selectAssignedTurfIds) || user?.assignedTurfIds || [];
+  const companyId = company?.id || company?.companyId || user?.companyId;
 
   const [selectedCaretaker, setSelectedCaretaker] = useState(
     route.params?.caretakerId || null
   );
   const [selectedTurf, setSelectedTurf] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [caretakersData, setCaretakersData] = useState([]);
+  const [turfsData, setTurfsData] = useState([]);
 
-  // Get turfs this manager can assign to (their assigned turfs)
-  const availableTurfs = allTurfs.filter(
+  // Fetch caretakers and turfs from Firestore
+  const fetchData = useCallback(
+    async ({ showRefresh = false } = {}) => {
+      if (!companyId) {
+        setFetchingData(false);
+        return;
+      }
+
+      if (showRefresh) {
+        setRefreshing(true);
+      } else {
+        setFetchingData(true);
+      }
+
+      try {
+        // Fetch caretakers for this company
+        const users = await queryDocuments("users", [
+          { field: "companyId", operator: "==", value: companyId },
+          { field: "role", operator: "==", value: "caretaker" },
+        ]);
+
+        const caretakerDocs = users.map((u) => ({
+          ...u,
+          id: u.id || u.userId,
+        }));
+        setCaretakersData(caretakerDocs);
+
+        // Fetch turfs for this company
+        const turfs = await queryDocuments("turfs", [
+          { field: "companyId", operator: "==", value: companyId },
+        ]);
+
+        const turfDocs = turfs.map((t) => ({
+          ...t,
+          id: t.id || t.turfId,
+        }));
+        setTurfsData(turfDocs);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        Alert.alert("Error", "Failed to load data. Please try again.");
+      } finally {
+        setFetchingData(false);
+        setRefreshing(false);
+      }
+    },
+    [companyId]
+  );
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Filter unassigned caretakers (not assigned, not suspended)
+  const displayCaretakers = caretakersData.filter(
+    (c) => !c.isAssigned && !c.isSuspended
+  );
+
+  // Filter turfs this manager can assign to
+  const displayTurfs = turfsData.filter(
     (turf) =>
       assignedTurfIds.includes(turf.turfId) ||
       assignedTurfIds.includes(turf.id) ||
-      // If user is owner with operational permissions, they can assign to any turf
       user?.role === "owner"
   );
-
-  // Mock data for demonstration
-  const mockUnassignedCaretakers = [
-    {
-      id: "c1",
-      userId: "c1",
-      name: "Amit Patel",
-      phone: "+91 98765 43213",
-      joinedAt: new Date().toISOString(),
-    },
-    {
-      id: "c2",
-      userId: "c2",
-      name: "Rahul Sharma",
-      phone: "+91 98765 43214",
-      joinedAt: new Date().toISOString(),
-    },
-  ];
-
-  const mockTurfs = [
-    {
-      id: "turf1",
-      turfId: "turf1",
-      name: "Green Field Sports",
-      location: { city: "Mumbai" },
-    },
-    {
-      id: "turf2",
-      turfId: "turf2",
-      name: "Victory Arena",
-      location: { city: "Mumbai" },
-    },
-  ];
-
-  const displayCaretakers =
-    unassignedCaretakers.length > 0 ? unassignedCaretakers : mockUnassignedCaretakers;
-  const displayTurfs = availableTurfs.length > 0 ? availableTurfs : mockTurfs;
 
   const handleAssign = async () => {
     if (!selectedCaretaker || !selectedTurf) {
@@ -252,10 +277,28 @@ export default function CaretakerAssignmentScreen({ navigation, route }) {
         </View>
       </View>
 
-      {displayCaretakers.length === 0 ? (
+      {fetchingData ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={MANAGER_COLOR} />
+          <Text variant="bodyMedium" style={styles.loadingText}>
+            Loading caretakers...
+          </Text>
+        </View>
+      ) : displayCaretakers.length === 0 ? (
         <EmptyCaretakers />
       ) : (
-        <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => fetchData({ showRefresh: true })}
+              colors={[MANAGER_COLOR]}
+              tintColor={MANAGER_COLOR}
+            />
+          }
+        >
           {/* Step 1: Select Caretaker */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -271,8 +314,8 @@ export default function CaretakerAssignmentScreen({ navigation, route }) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
             >
-              {displayCaretakers.map((caretaker) => (
-                <CaretakerItem key={caretaker.id || caretaker.userId} caretaker={caretaker} />
+              {displayCaretakers.map((caretaker, index) => (
+                <CaretakerItem key={caretaker.id || caretaker.userId || `caretaker-${index}`} caretaker={caretaker} />
               ))}
             </ScrollView>
           </View>
@@ -457,6 +500,15 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: "#999",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    color: "#666",
   },
   emptyContainer: {
     flex: 1,

@@ -174,7 +174,7 @@ export const createBookingFromNegotiation = async (
   try {
     if (hasNativeFirestore) {
       return await nativeFirestore().runTransaction(async (transaction) => {
-        // 1. Check for conflicting bookings
+        // 1. Check for conflicting bookings, but also look for existing pending booking from this negotiation
         const bookingsRef = nativeFirestore().collection("bookings");
         const conflictingBookings = await bookingsRef
           .where("turfId", "==", turfId)
@@ -182,10 +182,19 @@ export const createBookingFromNegotiation = async (
           .where("status", "in", ["pending", "confirmed", "in_progress"])
           .get();
 
-        const hasConflict = conflictingBookings.docs.some((doc) => {
-          const booking = doc.data();
+        let existingBookingDoc = null;
+
+        const hasConflict = conflictingBookings.docs.some((docRef) => {
+          const booking = docRef.data();
           if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) return false;
-          return booking.startTime < endTime && booking.endTime > startTime;
+          const overlaps = booking.startTime < endTime && booking.endTime > startTime;
+          if (!overlaps) return false;
+          // If this is OUR pending booking from the same negotiation, update it instead
+          if (booking.status === "pending" && booking.negotiation?.negotiationCardId === messageId) {
+            existingBookingDoc = docRef;
+            return false; // not a real conflict
+          }
+          return true;
         });
 
         if (hasConflict) {
@@ -195,29 +204,202 @@ export const createBookingFromNegotiation = async (
           };
         }
 
-        // 2. Create the booking
+        let bookingId;
+
+        if (existingBookingDoc) {
+          // Update existing pending booking to confirmed
+          bookingId = existingBookingDoc.id;
+          transaction.update(existingBookingDoc.ref, {
+            status: "confirmed",
+            totalAmount: requestedPrice || originalPrice || 0,
+            totalPrice: requestedPrice || originalPrice || 0,
+            "negotiation.finalPrice": requestedPrice || originalPrice || 0,
+            "payment.remainingAmount": requestedPrice || originalPrice || 0,
+            statusHistory: [
+              ...(existingBookingDoc.data().statusHistory || []),
+              {
+                status: "confirmed",
+                timestamp: new Date(),
+                changedBy: respondedBy,
+                changedByRole: "manager",
+                reason: "Accepted via negotiation",
+              },
+            ],
+            confirmedAt: nativeFirestore.FieldValue.serverTimestamp(),
+            updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
+          });
+        } else {
+          // 2. Create a new booking
+          const bookingData = {
+            userId: userId,
+            userName: userName,
+            userPhone: userPhone,
+            userEmail: userEmail,
+            companyId: bookingCompanyId,
+            turfId,
+            turfName: turfName || "Unknown Turf",
+            groundId,
+            groundName: groundName || "Unknown Ground",
+            bookingType: "regular",
+            sport: sport || "Unknown",
+            date,
+            startTime,
+            endTime,
+            timeSlots: [{
+              startTime,
+              endTime,
+              duration: bookingDuration,
+              hourlyRate: originalPrice ? originalPrice / bookingDuration : 0,
+              amount: requestedPrice || originalPrice || 0,
+            }],
+            totalDuration: bookingDuration,
+            baseAmount: originalPrice || 0,
+            totalAmount: requestedPrice || originalPrice || 0,
+            totalPrice: requestedPrice || originalPrice || 0,
+            status: "confirmed",
+            statusHistory: [
+              {
+                status: "pending",
+                timestamp: new Date(),
+                changedBy: userId,
+                changedByRole: "user",
+                reason: "Booking request created via negotiation",
+              },
+              {
+                status: "confirmed",
+                timestamp: new Date(),
+                changedBy: respondedBy,
+                changedByRole: "manager",
+                reason: "Accepted via negotiation",
+              },
+            ],
+            negotiation: {
+              isNegotiated: true,
+              requestedPrice: requestedPrice || originalPrice || 0,
+              finalPrice: requestedPrice || originalPrice || 0,
+              chatId,
+              negotiationCardId: messageId,
+            },
+            payment: {
+              advanceAmount: 0,
+              advancePaid: false,
+              remainingAmount: requestedPrice || originalPrice || 0,
+              remainingPaid: false,
+            },
+            createdAt: nativeFirestore.FieldValue.serverTimestamp(),
+            requestedAt: nativeFirestore.FieldValue.serverTimestamp(),
+            confirmedAt: nativeFirestore.FieldValue.serverTimestamp(),
+            updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
+          };
+
+          const newBookingRef = bookingsRef.doc();
+          transaction.set(newBookingRef, bookingData);
+          bookingId = newBookingRef.id;
+        }
+
+        // 3. Update the negotiation card status
+        const messageRef = nativeFirestore()
+          .collection("chats")
+          .doc(chatId)
+          .collection("messages")
+          .doc(messageId);
+
+        transaction.update(messageRef, {
+          "negotiationCard.status": "accepted",
+          "negotiationCard.respondedBy": respondedBy,
+          "negotiationCard.respondedByName": respondedByName,
+          "negotiationCard.respondedAt": nativeFirestore.FieldValue.serverTimestamp(),
+          "negotiationCard.bookingId": bookingId,
+        });
+
+        // 4. Update chat metadata
+        const chatRef = nativeFirestore().collection("chats").doc(chatId);
+        transaction.update(chatRef, {
+          "lastMessage.text": "Booking confirmed!",
+          hasActiveNegotiation: false,
+          updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
+        });
+
+        return { success: true, bookingId };
+      });
+    }
+
+    // Web SDK transaction
+    return await webRunTransaction(db, async (transaction) => {
+      // 1. Check for conflicting bookings
+      const bookingsRef = collection(db, "bookings");
+      const q = query(
+        bookingsRef,
+        where("turfId", "==", turfId),
+        where("date", "==", date),
+        where("status", "in", ["pending", "confirmed", "in_progress"])
+      );
+
+      const conflictingBookings = await getDocs(q);
+
+      let existingBookingDoc = null;
+
+      const hasConflict = conflictingBookings.docs.some((docSnap) => {
+        const booking = docSnap.data();
+        if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) return false;
+        const overlaps = booking.startTime < endTime && booking.endTime > startTime;
+        if (!overlaps) return false;
+        if (booking.status === "pending" && booking.negotiation?.negotiationCardId === messageId) {
+          existingBookingDoc = docSnap;
+          return false;
+        }
+        return true;
+      });
+
+      if (hasConflict) {
+        return {
+          success: false,
+          message: "This time slot is no longer available. Someone else booked it.",
+        };
+      }
+
+      let bookingId;
+
+      if (existingBookingDoc) {
+        // Update existing pending booking to confirmed
+        bookingId = existingBookingDoc.id;
+        const existingRef = doc(db, "bookings", bookingId);
+        transaction.update(existingRef, {
+          status: "confirmed",
+          totalAmount: requestedPrice || originalPrice || 0,
+          totalPrice: requestedPrice || originalPrice || 0,
+          "negotiation.finalPrice": requestedPrice || originalPrice || 0,
+          "payment.remainingAmount": requestedPrice || originalPrice || 0,
+          statusHistory: [
+            ...(existingBookingDoc.data().statusHistory || []),
+            {
+              status: "confirmed",
+              timestamp: new Date(),
+              changedBy: respondedBy,
+              changedByRole: "manager",
+              reason: "Accepted via negotiation",
+            },
+          ],
+          confirmedAt: webServerTimestamp(),
+          updatedAt: webServerTimestamp(),
+        });
+      } else {
+        // 2. Create a new booking
         const bookingData = {
-          // User info
           userId: userId,
           userName: userName,
           userPhone: userPhone,
           userEmail: userEmail,
-
-          // Turf info
           companyId: bookingCompanyId,
           turfId,
           turfName: turfName || "Unknown Turf",
           groundId,
           groundName: groundName || "Unknown Ground",
-
-          // Booking details
           bookingType: "regular",
           sport: sport || "Unknown",
           date,
           startTime,
           endTime,
-
-          // Time slots
           timeSlots: [{
             startTime,
             endTime,
@@ -225,15 +407,10 @@ export const createBookingFromNegotiation = async (
             hourlyRate: originalPrice ? originalPrice / bookingDuration : 0,
             amount: requestedPrice || originalPrice || 0,
           }],
-
           totalDuration: bookingDuration,
-
-          // Pricing
           baseAmount: originalPrice || 0,
           totalAmount: requestedPrice || originalPrice || 0,
           totalPrice: requestedPrice || originalPrice || 0,
-
-          // Status
           status: "confirmed",
           statusHistory: [
             {
@@ -251,8 +428,6 @@ export const createBookingFromNegotiation = async (
               reason: "Accepted via negotiation",
             },
           ],
-
-          // Negotiation reference
           negotiation: {
             isNegotiated: true,
             requestedPrice: requestedPrice || originalPrice || 0,
@@ -260,143 +435,22 @@ export const createBookingFromNegotiation = async (
             chatId,
             negotiationCardId: messageId,
           },
-
-          // Payment (not paid yet)
           payment: {
             advanceAmount: 0,
             advancePaid: false,
             remainingAmount: requestedPrice || originalPrice || 0,
             remainingPaid: false,
           },
-
-          // Timestamps
-          createdAt: nativeFirestore.FieldValue.serverTimestamp(),
-          requestedAt: nativeFirestore.FieldValue.serverTimestamp(),
-          confirmedAt: nativeFirestore.FieldValue.serverTimestamp(),
-          updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
+          createdAt: webServerTimestamp(),
+          requestedAt: webServerTimestamp(),
+          confirmedAt: webServerTimestamp(),
+          updatedAt: webServerTimestamp(),
         };
 
-        const newBookingRef = bookingsRef.doc();
+        const newBookingRef = doc(collection(db, "bookings"));
         transaction.set(newBookingRef, bookingData);
-
-        // 3. Update the negotiation card status
-        const messageRef = nativeFirestore()
-          .collection("chats")
-          .doc(chatId)
-          .collection("messages")
-          .doc(messageId);
-
-        transaction.update(messageRef, {
-          "negotiationCard.status": "accepted",
-          "negotiationCard.respondedBy": respondedBy,
-          "negotiationCard.respondedByName": respondedByName,
-          "negotiationCard.respondedAt": nativeFirestore.FieldValue.serverTimestamp(),
-          "negotiationCard.bookingId": newBookingRef.id,
-        });
-
-        // 4. Update chat metadata
-        const chatRef = nativeFirestore().collection("chats").doc(chatId);
-        transaction.update(chatRef, {
-          "lastMessage.text": "Booking confirmed!",
-          hasActiveNegotiation: false,
-          updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
-        });
-
-        return { success: true, bookingId: newBookingRef.id };
-      });
-    }
-
-    // Web SDK transaction
-    return await webRunTransaction(db, async (transaction) => {
-      // 1. Check for conflicting bookings
-      const bookingsRef = collection(db, "bookings");
-      const q = query(
-        bookingsRef,
-        where("turfId", "==", turfId),
-        where("date", "==", date),
-        where("status", "in", ["pending", "confirmed", "in_progress"])
-      );
-
-      const conflictingBookings = await getDocs(q);
-
-      const hasConflict = conflictingBookings.docs.some((docSnap) => {
-        const booking = docSnap.data();
-        if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) return false;
-        return booking.startTime < endTime && booking.endTime > startTime;
-      });
-
-      if (hasConflict) {
-        return {
-          success: false,
-          message: "This time slot is no longer available. Someone else booked it.",
-        };
+        bookingId = newBookingRef.id;
       }
-
-      // 2. Create the booking
-      const bookingData = {
-        userId: userId,
-        userName: userName,
-        userPhone: userPhone,
-        userEmail: userEmail,
-        companyId: bookingCompanyId,
-        turfId,
-        turfName: turfName || "Unknown Turf",
-        groundId,
-        groundName: groundName || "Unknown Ground",
-        bookingType: "regular",
-        sport: sport || "Unknown",
-        date,
-        startTime,
-        endTime,
-        timeSlots: [{
-          startTime,
-          endTime,
-          duration: bookingDuration,
-          hourlyRate: originalPrice ? originalPrice / bookingDuration : 0,
-          amount: requestedPrice || originalPrice || 0,
-        }],
-        totalDuration: bookingDuration,
-        baseAmount: originalPrice || 0,
-        totalAmount: requestedPrice || originalPrice || 0,
-        totalPrice: requestedPrice || originalPrice || 0,
-        status: "confirmed",
-        statusHistory: [
-          {
-            status: "pending",
-            timestamp: new Date(),
-            changedBy: userId,
-            changedByRole: "user",
-            reason: "Booking request created via negotiation",
-          },
-          {
-            status: "confirmed",
-            timestamp: new Date(),
-            changedBy: respondedBy,
-            changedByRole: "manager",
-            reason: "Accepted via negotiation",
-          },
-        ],
-        negotiation: {
-          isNegotiated: true,
-          requestedPrice: requestedPrice || originalPrice || 0,
-          finalPrice: requestedPrice || originalPrice || 0,
-          chatId,
-          negotiationCardId: messageId,
-        },
-        payment: {
-          advanceAmount: 0,
-          advancePaid: false,
-          remainingAmount: requestedPrice || originalPrice || 0,
-          remainingPaid: false,
-        },
-        createdAt: webServerTimestamp(),
-        requestedAt: webServerTimestamp(),
-        confirmedAt: webServerTimestamp(),
-        updatedAt: webServerTimestamp(),
-      };
-
-      const newBookingRef = doc(collection(db, "bookings"));
-      transaction.set(newBookingRef, bookingData);
 
       // 3. Update the negotiation card status
       const messageRef = doc(db, "chats", chatId, "messages", messageId);
@@ -405,7 +459,7 @@ export const createBookingFromNegotiation = async (
         "negotiationCard.respondedBy": respondedBy,
         "negotiationCard.respondedByName": respondedByName,
         "negotiationCard.respondedAt": webServerTimestamp(),
-        "negotiationCard.bookingId": newBookingRef.id,
+        "negotiationCard.bookingId": bookingId,
       });
 
       // 4. Update chat metadata
@@ -416,7 +470,7 @@ export const createBookingFromNegotiation = async (
         updatedAt: webServerTimestamp(),
       });
 
-      return { success: true, bookingId: newBookingRef.id };
+      return { success: true, bookingId };
     });
   } catch (error) {
     console.error("Error creating booking from negotiation:", error);

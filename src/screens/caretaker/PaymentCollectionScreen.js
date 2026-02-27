@@ -62,21 +62,23 @@ export default function PaymentCollectionScreen({ route, navigation }) {
         )
     : 0;
 
-  const totalAmountRaw = normalizeAmount(booking.totalAmount);
-  const baseFromTotal = booking.totalAmount != null
+  const totalAmountRaw = normalizeAmount(booking.totalAmount || booking.payment?.slotAmount);
+  const baseFromTotal = (booking.totalAmount != null || booking.payment?.slotAmount != null)
     ? totalAmountRaw - extensionAmount
     : 0;
 
   const baseAmount = hasNegotiation
     ? normalizeAmount(
-        negotiationFinalPrice || baseFromSlots || baseFromTotal || booking.totalAmount || booking.baseAmount
+        negotiationFinalPrice || baseFromSlots || baseFromTotal || booking.totalAmount || booking.payment?.slotAmount || booking.baseAmount
       )
     : normalizeAmount(
-        booking.baseAmount || baseFromSlots || baseFromTotal || booking.totalAmount
+        booking.baseAmount || baseFromSlots || baseFromTotal || booking.totalAmount || booking.payment?.slotAmount
       );
 
   const totalAmount = baseAmount + extensionAmount;
-  const advancePaid = normalizeAmount(booking.payment?.advanceAmount) || 0;
+  const advancePaid = booking.payment?.advance?.status === "verified"
+    ? normalizeAmount(booking.payment?.advanceAmount) || 0
+    : 0;
   const remainingAmount = booking.payment?.remainingAmount;
   const remainingPaid = booking.payment?.remainingPaid;
   const isPaymentComplete = Boolean(remainingPaid) || booking.status === "completed";

@@ -6,6 +6,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from "react-native";
 import {
   Text,
@@ -239,15 +240,15 @@ export default function LoginScreen({ navigation }) {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo Placeholder */}
+          {/* Play Grid Logo */}
           <View style={styles.logoContainer}>
-            <Surface style={styles.logoPlaceholder} elevation={2}>
-              <Text variant="headlineLarge" style={styles.logoText}>
-                T
-              </Text>
-            </Surface>
+            <Image
+              source={require("../../../assets/PlayGrid_Logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text variant="headlineMedium" style={styles.appName}>
-              Turf Booking
+              Play Grid
             </Text>
             <Text variant="bodyMedium" style={styles.tagline}>
               Book your favorite sports turf
@@ -272,7 +273,8 @@ export default function LoginScreen({ navigation }) {
               <TextInput
                 mode="outlined"
                 label="Phone Number"
-                placeholder="9876543210"
+                placeholder="9999999999"
+                placeholderTextColor="#BDBDBD"
                 value={phoneNumber}
                 onChangeText={handlePhoneChange}
                 keyboardType="phone-pad"
@@ -337,26 +339,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 40,
   },
-  logoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#4CAF50",
-    justifyContent: "center",
-    alignItems: "center",
+  logo: {
+    width: 120,
+    height: 120,
     marginBottom: 16,
   },
-  logoText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
   appName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    color: "#2E7D32",
+    marginBottom: 8,
   },
   tagline: {
+    fontFamily: "Ubuntu-Regular",
     color: "#666",
-    marginTop: 4,
+    textAlign: "center",
   },
   formContainer: {
     padding: 24,

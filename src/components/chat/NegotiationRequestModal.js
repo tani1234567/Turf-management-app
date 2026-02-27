@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -18,11 +18,19 @@ import {
   ActivityIndicator,
   HelperText,
   Checkbox,
+  Snackbar,
 } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../constants/theme";
-import { queryDocuments } from "../../services/firebase/firestore";
+import { subscribeToCollection } from "../../services/firebase/firestore";
 import { calculateBookingPrice } from "../../utils/priceUtils";
+import {
+  computeAllSlotStatuses,
+  getActiveLegendItems,
+  SLOT_MESSAGES,
+} from "../../utils/slotColorUtils";
+import TimeSlotGrid from "../booking/TimeSlotGrid";
+import SlotColorLegend from "../booking/SlotColorLegend";
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -158,11 +166,39 @@ const NegotiationRequestModal = ({
   const [turfs, setTurfs] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [blockedSlots, setBlockedSlots] = useState([]);
+  const [academySessions, setAcademySessions] = useState([]);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
 
+  // Snackbar state for validation toasts
+  const [snackbar, setSnackbar] = useState({ visible: false, message: "" });
+
+  // Loading state for slot status computation
+  const [slotStatusLoading, setSlotStatusLoading] = useState(false);
+
+  // Subscription refs for cleanup
+  const bookingsUnsubRef = useRef(null);
+  const academyUnsubRef = useRef(null);
+  const blockedUnsubRef = useRef(null);
+
   // Memoized values
   const dates = useMemo(() => getNext14Days(), []);
+
+  // Cleanup subscriptions helper
+  const cleanupSubscriptions = useCallback(() => {
+    if (bookingsUnsubRef.current) {
+      bookingsUnsubRef.current();
+      bookingsUnsubRef.current = null;
+    }
+    if (academyUnsubRef.current) {
+      academyUnsubRef.current();
+      academyUnsubRef.current = null;
+    }
+    if (blockedUnsubRef.current) {
+      blockedUnsubRef.current();
+      blockedUnsubRef.current = null;
+    }
+  }, []);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -179,13 +215,18 @@ const NegotiationRequestModal = ({
       setMessage("");
       setBookings([]);
       setBlockedSlots([]);
+      setAcademySessions([]);
       setAvailabilityLoaded(false);
+      setSnackbar({ visible: false, message: "" });
 
       if (companyData?.turfs) {
         setTurfs(companyData.turfs);
       }
+    } else {
+      // Cleanup subscriptions when modal closes
+      cleanupSubscriptions();
     }
-  }, [visible, companyData]);
+  }, [visible, companyData, cleanupSubscriptions]);
 
   // Auto-select turf if only one
   useEffect(() => {
@@ -194,55 +235,115 @@ const NegotiationRequestModal = ({
     }
   }, [turfs, selectedTurf]);
 
-  // Fetch bookings and blocked slots when date and turf are selected
+  // Real-time subscription: bookings for selected date (expanded statuses)
   useEffect(() => {
-    const fetchAvailability = async () => {
-      if (!selectedTurf || !selectedDate) return;
+    if (bookingsUnsubRef.current) {
+      bookingsUnsubRef.current();
+      bookingsUnsubRef.current = null;
+    }
 
-      setLoadingAvailability(true);
-      setAvailabilityLoaded(false);
+    const turfId = selectedTurf?.turfId || selectedTurf?.id;
+    if (!turfId || !selectedDate) {
+      setBookings([]);
+      return;
+    }
 
-      const turfId = selectedTurf.turfId || selectedTurf.id;
-      const dateStr = selectedDate.date;
+    setSlotStatusLoading(true);
+    setLoadingAvailability(true);
+    setAvailabilityLoaded(false);
 
-      console.log("Fetching availability for turf:", turfId, "date:", dateStr);
-
-      try {
-        // Fetch bookings for selected date and turf
-        const bookingsData = await queryDocuments("bookings", [
-          { field: "turfId", operator: "==", value: turfId },
-          { field: "date", operator: "==", value: dateStr },
-        ]);
-
+    const unsub = subscribeToCollection(
+      "bookings",
+      (bookingsData) => {
         const activeBookings = (bookingsData || []).filter((b) =>
-          ["pending", "confirmed", "in_progress"].includes(b.status)
+          ["pending", "confirmed", "in_progress", "pending_payment", "payment_submitted", "awaiting_payment"].includes(b.status)
         );
-
-        console.log("Found bookings:", activeBookings.length, activeBookings.map(b => ({
-          groundId: b.groundId,
-          startTime: b.startTime,
-          endTime: b.endTime,
-          status: b.status
-        })));
-
         setBookings(activeBookings);
-
-        // Fetch blocked slots for turf
-        const blockedData = await queryDocuments("blocked_slots", [
-          { field: "turfId", operator: "==", value: turfId },
-        ]);
-        setBlockedSlots(blockedData || []);
-        setAvailabilityLoaded(true);
-      } catch (error) {
-        console.error("Error fetching availability:", error);
-        setAvailabilityLoaded(true); // Mark as loaded even on error to prevent infinite loading
-      } finally {
+        setSlotStatusLoading(false);
         setLoadingAvailability(false);
+        setAvailabilityLoaded(true);
+      },
+      [
+        { field: "turfId", operator: "==", value: turfId },
+        { field: "date", operator: "==", value: selectedDate.date },
+      ]
+    );
+
+    bookingsUnsubRef.current = unsub;
+    return () => {
+      if (bookingsUnsubRef.current) {
+        bookingsUnsubRef.current();
+        bookingsUnsubRef.current = null;
       }
     };
-
-    fetchAvailability();
   }, [selectedTurf, selectedDate]);
+
+  // Real-time subscription: academy sessions for selected date
+  useEffect(() => {
+    if (academyUnsubRef.current) {
+      academyUnsubRef.current();
+      academyUnsubRef.current = null;
+    }
+
+    const turfId = selectedTurf?.turfId || selectedTurf?.id;
+    if (!turfId || !selectedDate) {
+      setAcademySessions([]);
+      return;
+    }
+
+    const unsub = subscribeToCollection(
+      "academy_sessions",
+      (sessions) => {
+        setAcademySessions(
+          (sessions || []).filter(
+            (s) => s.status === "scheduled" && s.availableForBooking !== true
+          )
+        );
+      },
+      [
+        { field: "turfId", operator: "==", value: turfId },
+        { field: "date", operator: "==", value: selectedDate.date },
+      ]
+    );
+
+    academyUnsubRef.current = unsub;
+    return () => {
+      if (academyUnsubRef.current) {
+        academyUnsubRef.current();
+        academyUnsubRef.current = null;
+      }
+    };
+  }, [selectedTurf, selectedDate]);
+
+  // Real-time subscription: blocked slots for turf
+  useEffect(() => {
+    if (blockedUnsubRef.current) {
+      blockedUnsubRef.current();
+      blockedUnsubRef.current = null;
+    }
+
+    const turfId = selectedTurf?.turfId || selectedTurf?.id;
+    if (!turfId) {
+      setBlockedSlots([]);
+      return;
+    }
+
+    const unsub = subscribeToCollection(
+      "blocked_slots",
+      (blockedData) => {
+        setBlockedSlots(blockedData || []);
+      },
+      [{ field: "turfId", operator: "==", value: turfId }]
+    );
+
+    blockedUnsubRef.current = unsub;
+    return () => {
+      if (blockedUnsubRef.current) {
+        blockedUnsubRef.current();
+        blockedUnsubRef.current = null;
+      }
+    };
+  }, [selectedTurf]);
 
   // Get available sports from selected turf
   const availableSports = useMemo(() => {
@@ -253,30 +354,48 @@ const NegotiationRequestModal = ({
     return allSports;
   }, [selectedTurf]);
 
-  // Get grounds that support selected sport (with normalized IDs to match booking format)
+  // Get grounds that support selected sport (same ID strategy as BookingScreen)
   const filteredGrounds = useMemo(() => {
     if (!selectedTurf || !selectedSport) return [];
 
-    // Normalize grounds to ensure they have proper IDs matching booking format
-    const normalizedGrounds = (selectedTurf.grounds || []).map((g, index) => {
-      // Ensure groundId matches the format used in bookings (ground_0, ground_1, etc.)
-      const groundId = g.groundId || g.id || `ground_${index}`;
-      // If the id is just a number, convert to ground_N format
-      const normalizedId = typeof groundId === 'number' || /^\d+$/.test(groundId)
-        ? `ground_${groundId}`
-        : groundId;
+    const groundsWithIds = (selectedTurf.grounds || []).map((g, index) => ({
+      ...g,
+      id: g.id || `ground_${index}`,
+    }));
 
-      return {
-        ...g,
-        groundId: normalizedId,
-        id: normalizedId,
-      };
-    });
-
-    return normalizedGrounds.filter((g) =>
+    return groundsWithIds.filter((g) =>
       (g.sports || []).some((s) => s.toLowerCase() === selectedSport.toLowerCase())
     );
   }, [selectedTurf, selectedSport]);
+
+  // Compute slot statuses for the time grid (aggregate across all grounds for selected sport)
+  const slotStatusMap = useMemo(
+    () => {
+      // Build a selectedDate-like object matching what slotColorUtils expects
+      const dateObj = selectedDate
+        ? {
+            dateString: selectedDate.date,
+            date: selectedDate.fullDate,
+            isToday: selectedDate.isToday,
+          }
+        : null;
+
+      return computeAllSlotStatuses(TIME_SLOTS, filteredGrounds, {
+        selectedDate: dateObj,
+        bookings,
+        academySessions,
+        blockedSlots,
+        advancePaymentRequired: false,
+      });
+    },
+    [selectedDate, filteredGrounds, bookings, academySessions, blockedSlots]
+  );
+
+  // Legend items for the current slot status map
+  const legendItems = useMemo(
+    () => getActiveLegendItems(slotStatusMap),
+    [slotStatusMap]
+  );
 
   // Normalize time to HH:MM format for consistent comparison
   const normalizeTime = (time) => {
@@ -371,16 +490,60 @@ const NegotiationRequestModal = ({
     [blockedSlots, startTime, endTime, selectedDate]
   );
 
-  // Check if time slot is in past
-  const isSlotPast = useCallback(
-    (slot) => {
-      if (!selectedDate?.isToday) return false;
-      const now = new Date();
-      const slotTime = new Date();
-      slotTime.setHours(slot.hour, slot.minute, 0, 0);
-      return slotTime <= now;
+  // Check if a ground matches an academy session (multi-strategy, same as isSlotBooked)
+  const matchesSessionGround = useCallback(
+    (session, groundId, groundName) => {
+      const normalizedGid = normalizeGroundId(groundId);
+      const sessionGid = normalizeGroundId(session.groundId);
+      const normalizedGroundName = groundName?.toLowerCase().replace(/[\s-_]/g, "") || "";
+      const sessionGroundName = session.groundName?.toLowerCase().replace(/[\s-_]/g, "") || "";
+
+      // Direct ID match
+      if (session.groundId === groundId) return true;
+      // Normalized ID match (strips - and _)
+      if (sessionGid === normalizedGid) return true;
+      // Name match
+      if (normalizedGroundName && sessionGroundName &&
+        (normalizedGroundName === sessionGroundName ||
+         normalizedGroundName.includes(sessionGroundName) ||
+         sessionGroundName.includes(normalizedGroundName))) return true;
+      // Index-based match (ground_0 matches ground-0, "0", ground0, etc.)
+      const sessionIndex = session.groundId?.match(/ground[_-]?(\d+)/i)?.[1] ??
+        (/^\d+$/.test(session.groundId) ? session.groundId : undefined);
+      const groundIndex = groundId?.match(/ground[_-]?(\d+)/i)?.[1] ??
+        (/^\d+$/.test(groundId) ? groundId : undefined);
+      if (sessionIndex !== undefined && groundIndex !== undefined && sessionIndex === groundIndex) return true;
+
+      return false;
     },
-    [selectedDate]
+    []
+  );
+
+  // Check if a ground is blocked by an academy session for the selected time range
+  const isGroundAcademyBlocked = useCallback(
+    (groundId, groundName) => {
+      if (!startTime || !endTime || !selectedDate) return false;
+      return academySessions.some((session) => {
+        if (!matchesSessionGround(session, groundId, groundName)) return false;
+        return session.startTime < endTime.time && session.endTime > startTime.time;
+      });
+    },
+    [academySessions, startTime, endTime, selectedDate, matchesSessionGround]
+  );
+
+  // Get academy info for a blocked ground (for display)
+  const getAcademyBlockingInfo = useCallback(
+    (groundId, groundName) => {
+      if (!startTime || !endTime) return null;
+      const blocking = academySessions.find((session) => {
+        if (!matchesSessionGround(session, groundId, groundName)) return false;
+        return session.startTime < endTime.time && session.endTime > startTime.time;
+      });
+      return blocking
+        ? { academyName: blocking.academyName, startTime: blocking.startTime, endTime: blocking.endTime }
+        : null;
+    },
+    [academySessions, startTime, endTime, matchesSessionGround]
   );
 
   // Check ground availability for selected time range
@@ -391,7 +554,7 @@ const NegotiationRequestModal = ({
 
       if (!startTime || !endTime) return true;
 
-      const groundId = ground.groundId || ground.id;
+      const groundId = ground.id;
       const groundName = ground.name || ground.groundName;
 
       console.log(`Checking availability for ground: ${groundId} (${groundName}), time: ${startTime.time}-${endTime.time}, bookings count: ${bookings.length}`);
@@ -400,6 +563,12 @@ const NegotiationRequestModal = ({
       // Check if blocked
       if (isGroundBlocked(groundId)) {
         console.log(`Ground ${groundId} is blocked`);
+        return false;
+      }
+
+      // Check if blocked by academy session
+      if (isGroundAcademyBlocked(groundId, groundName)) {
+        console.log(`Ground ${groundId} is blocked by academy session`);
         return false;
       }
 
@@ -417,7 +586,7 @@ const NegotiationRequestModal = ({
       console.log(`Ground ${groundId} (${groundName}) is available`);
       return true;
     },
-    [startTime, endTime, isSlotBooked, isGroundBlocked, availabilityLoaded, bookings]
+    [startTime, endTime, isSlotBooked, isGroundBlocked, isGroundAcademyBlocked, availabilityLoaded, bookings]
   );
 
   // Calculate price using priceUtils
@@ -435,10 +604,8 @@ const NegotiationRequestModal = ({
     return result.total;
   }, [selectedGround, selectedSport, selectedDate, startTime, endTime]);
 
-  // Handle time slot selection
+  // Handle time slot selection — all slots are tappable regardless of status
   const handleTimeSlotPress = (slot) => {
-    if (isSlotPast(slot)) return;
-
     if (!startTime || (startTime && endTime)) {
       // Start new selection
       setStartTime(slot);
@@ -453,31 +620,36 @@ const NegotiationRequestModal = ({
         setEndTime(null);
         setSelectedGround(null);
       } else {
-        // Ensure minimum 1 hour (2 slots)
-        if (slotIndex - startIndex >= 2) {
-          setEndTime(slot);
-          setSelectedGround(null);
-        } else {
-          const minEndIndex = startIndex + 2;
-          if (minEndIndex < TIME_SLOTS.length) {
-            setEndTime(TIME_SLOTS[minEndIndex]);
-            setSelectedGround(null);
+        // Determine the actual end index (minimum 1 hour = 2 slots)
+        let targetEndIndex = slotIndex;
+        if (slotIndex - startIndex < 2) {
+          targetEndIndex = startIndex + 2;
+          if (targetEndIndex >= TIME_SLOTS.length) {
+            targetEndIndex = TIME_SLOTS.length - 1;
           }
         }
+
+        setEndTime(TIME_SLOTS[targetEndIndex]);
+        setSelectedGround(null);
       }
     }
   };
 
-  // Check if slot is in selected range
-  const isSlotInRange = (slot) => {
-    if (!startTime) return false;
-    if (!endTime) return slot.time === startTime.time;
+  // Validate selected time range — checks slots from start to end-1 (the actual booked slots)
+  const validateTimeRange = () => {
+    if (!startTime || !endTime) return null;
 
-    const slotIndex = TIME_SLOTS.findIndex((s) => s.time === slot.time);
     const startIndex = TIME_SLOTS.findIndex((s) => s.time === startTime.time);
     const endIndex = TIME_SLOTS.findIndex((s) => s.time === endTime.time);
 
-    return slotIndex >= startIndex && slotIndex < endIndex;
+    for (let i = startIndex; i < endIndex; i++) {
+      const info = slotStatusMap[TIME_SLOTS[i].time];
+      if (info && !info.selectable) {
+        const msg = SLOT_MESSAGES[info.status] || "One or more slots in your selected range are not available";
+        return `${TIME_SLOTS[i].displayTime}: ${msg}`;
+      }
+    }
+    return null;
   };
 
   // Navigation handlers
@@ -485,6 +657,12 @@ const NegotiationRequestModal = ({
     if (step === 1 && selectedTurf && selectedSport) {
       setStep(2);
     } else if (step === 2 && selectedDate && startTime && endTime) {
+      // Validate the selected time range before proceeding to ground selection
+      const issue = validateTimeRange();
+      if (issue) {
+        setSnackbar({ visible: true, message: issue });
+        return;
+      }
       setStep(3);
     } else if (step === 3 && selectedGround) {
       setStep(4);
@@ -506,7 +684,7 @@ const NegotiationRequestModal = ({
     const negotiationData = {
       turfId: selectedTurf.turfId || selectedTurf.id,
       turfName: selectedTurf.name,
-      groundId: selectedGround.groundId || selectedGround.id,
+      groundId: selectedGround.id,
       groundName: selectedGround.name,
       sport: selectedSport,
       date: selectedDate.date,
@@ -731,38 +909,18 @@ const NegotiationRequestModal = ({
             </Surface>
           )}
 
-          {/* Time slots grid */}
-          <View style={styles.timeSlotsGrid}>
-            {TIME_SLOTS.map((slot) => {
-              const isPast = isSlotPast(slot);
-              const isInRange = isSlotInRange(slot);
-              const isStart = startTime?.time === slot.time;
+          {/* Color-coded time slots grid */}
+          <TimeSlotGrid
+            timeSlots={TIME_SLOTS.map((s) => ({ ...s, label: s.displayTime }))}
+            slotStatusMap={slotStatusMap}
+            startTime={startTime}
+            endTime={endTime}
+            onSlotPress={handleTimeSlotPress}
+            loading={slotStatusLoading}
+          />
 
-              return (
-                <TouchableOpacity
-                  key={slot.time}
-                  style={[
-                    styles.timeSlot,
-                    isPast && styles.timeSlotPast,
-                    isInRange && styles.timeSlotSelected,
-                    isStart && styles.timeSlotStart,
-                  ]}
-                  onPress={() => handleTimeSlotPress(slot)}
-                  disabled={isPast}
-                >
-                  <Text
-                    style={[
-                      styles.timeSlotText,
-                      isPast && styles.timeSlotTextPast,
-                      isInRange && styles.timeSlotTextSelected,
-                    ]}
-                  >
-                    {slot.displayTime}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* Legend strip */}
+          <SlotColorLegend items={legendItems} />
         </>
       )}
     </ScrollView>
@@ -823,10 +981,13 @@ const NegotiationRequestModal = ({
         </View>
       ) : (
         filteredGrounds.map((ground) => {
-          const groundId = ground.groundId || ground.id;
+          const groundId = ground.id;
+          const groundName = ground.name || ground.groundName || "";
           const isAvailable = isGroundAvailable(ground);
           const isBlocked = isGroundBlocked(groundId);
-          const isSelected = (selectedGround?.groundId || selectedGround?.id) === groundId;
+          const isAcademyBlocked = isGroundAcademyBlocked(groundId, groundName);
+          const academyInfo = getAcademyBlockingInfo(groundId, groundName);
+          const isSelected = selectedGround?.id === groundId;
 
           // Calculate price for this ground
           const price = calculateBookingPrice(
@@ -843,6 +1004,7 @@ const NegotiationRequestModal = ({
               style={[
                 styles.groundCard,
                 !isAvailable && styles.groundCardUnavailable,
+                isAcademyBlocked && styles.groundCardAcademy,
                 isBlocked && styles.groundCardBlocked,
                 isSelected && styles.groundCardSelected,
               ]}
@@ -874,6 +1036,16 @@ const NegotiationRequestModal = ({
                 </View>
               </View>
 
+              {/* Academy blocked banner */}
+              {isAcademyBlocked && academyInfo && (
+                <View style={styles.academyBlockedBanner}>
+                  <MaterialCommunityIcons name="school" size={16} color="#E65100" />
+                  <Text style={styles.academyBlockedText}>
+                    Reserved for {academyInfo.academyName}
+                  </Text>
+                </View>
+              )}
+
               {/* Availability status */}
               <View style={styles.availabilityRow}>
                 <View
@@ -881,27 +1053,31 @@ const NegotiationRequestModal = ({
                     styles.availabilityBadge,
                     isAvailable
                       ? styles.badgeAvailable
+                      : isAcademyBlocked
+                      ? styles.badgeAcademy
                       : isBlocked
                       ? styles.badgeBlocked
                       : styles.badgeUnavailable,
                   ]}
                 >
                   <MaterialCommunityIcons
-                    name={isAvailable ? "check-circle" : isBlocked ? "lock" : "close-circle"}
+                    name={isAvailable ? "check-circle" : isAcademyBlocked ? "school" : isBlocked ? "lock" : "close-circle"}
                     size={14}
-                    color={isAvailable ? COLORS.primary : isBlocked ? "#FF9800" : "#F44336"}
+                    color={isAvailable ? COLORS.primary : isAcademyBlocked ? "#E65100" : isBlocked ? "#FF9800" : "#F44336"}
                   />
                   <Text
                     style={[
                       styles.availabilityText,
                       isAvailable
                         ? styles.textAvailable
+                        : isAcademyBlocked
+                        ? styles.textAcademy
                         : isBlocked
                         ? styles.textBlocked
                         : styles.textUnavailableRed,
                     ]}
                   >
-                    {isAvailable ? "Available" : isBlocked ? "Blocked" : "Booked"}
+                    {isAvailable ? "Available" : isAcademyBlocked ? "Academy" : isBlocked ? "Blocked" : "Booked"}
                   </Text>
                 </View>
                 {isSelected && (
@@ -1127,6 +1303,16 @@ const NegotiationRequestModal = ({
             )}
           </View>
         </Surface>
+
+        {/* Toast for validation feedback */}
+        <Snackbar
+          visible={snackbar.visible}
+          onDismiss={() => setSnackbar({ visible: false, message: "" })}
+          duration={2500}
+          style={styles.snackbar}
+        >
+          {snackbar.message}
+        </Snackbar>
       </View>
     </Modal>
   );
@@ -1353,8 +1539,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#333",
   },
+  timeSlotAcademy: {
+    backgroundColor: "#FFF3E0",
+    borderWidth: 1,
+    borderColor: "#FFB74D",
+  },
   timeSlotTextPast: {
     color: "#999",
+  },
+  timeSlotTextAcademy: {
+    color: "#E65100",
+    fontSize: 10,
   },
   timeSlotTextSelected: {
     color: "#fff",
@@ -1409,6 +1604,27 @@ const styles = StyleSheet.create({
     borderColor: "#FFE082",
     opacity: 0.8,
   },
+  groundCardAcademy: {
+    backgroundColor: "#FFF3E0",
+    borderColor: "#FFB74D",
+    opacity: 0.8,
+  },
+  academyBlockedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFF3E0",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  academyBlockedText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#E65100",
+    flex: 1,
+  },
   groundCardSelected: {
     borderColor: COLORS.primary,
     backgroundColor: COLORS.primary + "10",
@@ -1461,6 +1677,9 @@ const styles = StyleSheet.create({
   badgeBlocked: {
     backgroundColor: "#FFF3E0",
   },
+  badgeAcademy: {
+    backgroundColor: "#FFF3E0",
+  },
   availabilityText: {
     marginLeft: 4,
     fontSize: 12,
@@ -1477,6 +1696,9 @@ const styles = StyleSheet.create({
   },
   textBlocked: {
     color: "#FF9800",
+  },
+  textAcademy: {
+    color: "#E65100",
   },
 
   // Price Section (Step 4)
@@ -1596,6 +1818,9 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: COLORS.primary,
+  },
+  snackbar: {
+    marginBottom: 80,
   },
 });
 

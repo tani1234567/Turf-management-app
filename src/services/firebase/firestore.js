@@ -540,10 +540,23 @@ export const checkGroundAvailability = async (turfId, groundId, date, startTime,
       return blockStart < endTime && blockEnd > startTime;
     });
 
+    // Check for academy session conflicts (non-cancelled, non-available sessions)
+    const academySessions = await queryDocuments("academy_sessions", [
+      { field: "turfId", operator: "==", value: turfId },
+      { field: "date", operator: "==", value: date },
+    ]);
+
+    const conflictingSessions = academySessions.filter((session) => {
+      if (session.status === "cancelled" || session.availableForBooking === true) return false;
+      if (groundId !== "all" && normalizeGroundId(session.groundId) !== normalizedGroundId) return false;
+      return session.startTime < endTime && session.endTime > startTime;
+    });
+
     return {
-      available: conflictingBookings.length === 0 && activeBlocks.length === 0,
+      available: conflictingBookings.length === 0 && activeBlocks.length === 0 && conflictingSessions.length === 0,
       conflicts: conflictingBookings,
       blocks: activeBlocks,
+      academySessions: conflictingSessions,
     };
   } catch (error) {
     console.error("Error checking ground availability:", error);
@@ -646,19 +659,30 @@ export const createBookingWithTransaction = async (bookingData) => {
         const conflictingBookings = await bookingsRef
           .where("turfId", "==", turfId)
           .where("date", "==", date)
-          .where("status", "in", ["pending", "confirmed", "in_progress"])
+          .where("status", "in", [
+            "pending", "confirmed", "in_progress",
+            "pending_payment", "payment_submitted", "awaiting_payment",
+          ])
           .get();
 
         // Check for time overlap with normalized ground ID comparison
         const hasBookingConflict = conflictingBookings.docs.some((doc) => {
           const booking = doc.data();
-          // Use normalized comparison to handle legacy data with different ID formats
-          // (e.g., "ground-0" vs "ground_0")
           if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) {
             return false;
           }
+
+          // For soft-locked bookings (pending_payment), check if lock is still active
+          if (booking.status === "pending_payment" && booking.slotLock?.lockExpiry) {
+            const lockExpiry = booking.slotLock.lockExpiry?.toDate
+              ? booking.slotLock.lockExpiry.toDate()
+              : new Date(booking.slotLock.lockExpiry);
+            if (lockExpiry <= new Date()) {
+              return false; // Lock expired, slot is available
+            }
+          }
+
           // Check if time ranges overlap
-          // Conflict exists if: existingStart < newEnd AND existingEnd > newStart
           return booking.startTime < endTime && booking.endTime > startTime;
         });
 
@@ -675,6 +699,25 @@ export const createBookingWithTransaction = async (bookingData) => {
         const blockedSlots = blockedSlotsSnapshot.docs.map((doc) => doc.data());
         if (isSlotBlocked(blockedSlots, groundId, date, startTime, endTime)) {
           return { success: false, message: "This time slot is blocked for maintenance or private event" };
+        }
+
+        // Check for academy session conflicts
+        const academySessionsRef = nativeFirestore().collection("academy_sessions");
+        const academySessionsSnapshot = await academySessionsRef
+          .where("turfId", "==", turfId)
+          .where("date", "==", date)
+          .where("status", "==", "scheduled")
+          .get();
+
+        const hasAcademyConflict = academySessionsSnapshot.docs.some((doc) => {
+          const session = doc.data();
+          if (session.availableForBooking === true) return false;
+          if (normalizeGroundId(session.groundId) !== normalizedNewGroundId) return false;
+          return session.startTime < endTime && session.endTime > startTime;
+        });
+
+        if (hasAcademyConflict) {
+          return { success: false, message: "This time slot is reserved for an academy session" };
         }
 
         // Create the booking
@@ -700,7 +743,10 @@ export const createBookingWithTransaction = async (bookingData) => {
         bookingsRef,
         where("turfId", "==", turfId),
         where("date", "==", date),
-        where("status", "in", ["pending", "confirmed", "in_progress"])
+        where("status", "in", [
+          "pending", "confirmed", "in_progress",
+          "pending_payment", "payment_submitted", "awaiting_payment",
+        ])
       );
 
       const conflictingBookings = await getDocs(q);
@@ -708,11 +754,20 @@ export const createBookingWithTransaction = async (bookingData) => {
       // Check for time overlap with normalized ground ID comparison
       const hasBookingConflict = conflictingBookings.docs.some((docSnap) => {
         const booking = docSnap.data();
-        // Use normalized comparison to handle legacy data with different ID formats
-        // (e.g., "ground-0" vs "ground_0")
         if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) {
           return false;
         }
+
+        // For soft-locked bookings (pending_payment), check if lock is still active
+        if (booking.status === "pending_payment" && booking.slotLock?.lockExpiry) {
+          const lockExpiry = booking.slotLock.lockExpiry?.toDate
+            ? booking.slotLock.lockExpiry.toDate()
+            : new Date(booking.slotLock.lockExpiry);
+          if (lockExpiry <= new Date()) {
+            return false; // Lock expired, slot is available
+          }
+        }
+
         // Check if time ranges overlap
         return booking.startTime < endTime && booking.endTime > startTime;
       });
@@ -729,6 +784,27 @@ export const createBookingWithTransaction = async (bookingData) => {
       const blockedSlots = blockedSlotsSnapshot.docs.map((docSnap) => docSnap.data());
       if (isSlotBlocked(blockedSlots, groundId, date, startTime, endTime)) {
         return { success: false, message: "This time slot is blocked for maintenance or private event" };
+      }
+
+      // Check for academy session conflicts
+      const academySessionsRef = collection(db, "academy_sessions");
+      const academyQ = query(
+        academySessionsRef,
+        where("turfId", "==", turfId),
+        where("date", "==", date),
+        where("status", "==", "scheduled")
+      );
+      const academySessionsSnapshot = await getDocs(academyQ);
+
+      const hasAcademyConflict = academySessionsSnapshot.docs.some((docSnap) => {
+        const session = docSnap.data();
+        if (session.availableForBooking === true) return false;
+        if (normalizeGroundId(session.groundId) !== normalizedNewGroundId) return false;
+        return session.startTime < endTime && session.endTime > startTime;
+      });
+
+      if (hasAcademyConflict) {
+        return { success: false, message: "This time slot is reserved for an academy session" };
       }
 
       // Create the booking
@@ -771,7 +847,7 @@ export const getTodayBookingsForCaretaker = async (turfId) => {
 
     // Get today's date in YYYY-MM-DD format
     const today = new Date();
-    const todayString = today.toISOString().split("T")[0];
+    const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     console.log("getTodayBookingsForCaretaker - Today's date:", todayString);
 
     if (hasNativeFirestore) {
@@ -923,6 +999,56 @@ export const getBookingsForDateByCaretaker = async (turfId, date) => {
 };
 
 /**
+ * Get academy sessions for a specific date (for caretaker calendar)
+ * @param {string} turfId - Turf ID
+ * @param {string} date - Date in YYYY-MM-DD format
+ * @returns {Promise<{success: boolean, sessions?: array, message?: string}>}
+ */
+export const getAcademySessionsForDate = async (turfId, date) => {
+  try {
+    if (!turfId || !date) {
+      return { success: false, message: "Turf ID and date are required", sessions: [] };
+    }
+
+    if (hasNativeFirestore) {
+      const snapshot = await nativeFirestore()
+        .collection("academy_sessions")
+        .where("turfId", "==", turfId)
+        .where("date", "==", date)
+        .where("status", "==", "scheduled")
+        .get();
+
+      const sessions = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      return { success: true, sessions };
+    }
+
+    // Web SDK
+    const sessionsRef = collection(db, "academy_sessions");
+    const q = query(
+      sessionsRef,
+      where("turfId", "==", turfId),
+      where("date", "==", date),
+      where("status", "==", "scheduled")
+    );
+
+    const snapshot = await getDocs(q);
+    const sessions = snapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    }));
+
+    return { success: true, sessions };
+  } catch (error) {
+    console.error("Error fetching academy sessions for date:", error);
+    return { success: false, message: "Failed to fetch academy sessions.", sessions: [] };
+  }
+};
+
+/**
  * Collect payment for a booking
  * @param {string} bookingId - Booking ID
  * @param {object} paymentData - Payment details
@@ -973,18 +1099,40 @@ export const collectPayment = async (bookingId, paymentData) => {
         paymentMethod = "online";
       }
 
+      // Calculate correct remaining amount
+      const currentRemaining = booking.payment?.remainingAmount || (booking.totalAmount || booking.payment?.slotAmount || 0);
+      const newRemaining = isFullPayment ? 0 : currentRemaining - totalAmount;
+
+      // Calculate total paid so far (advance + on-ground collections)
+      const advancePaid = booking.payment?.advance?.status === "verified" ? (booking.payment?.advanceAmount || 0) : 0;
+      const previousOnGroundPaid = booking.payment?.onGround?.totalCollected || 0;
+      const newTotalPaid = advancePaid + previousOnGroundPaid + totalAmount;
+      const slotAmount = booking.totalAmount || booking.payment?.slotAmount || 0;
+
       // Update booking with payment details
       await bookingRef.update({
         "payment.remainingPaid": isFullPayment,
-        "payment.remainingAmount": isFullPayment ? 0 : (booking.payment?.remainingAmount || 0) - totalAmount,
+        "payment.remainingAmount": Math.max(0, newRemaining),
         "payment.paymentMethod": paymentMethod,
-        "payment.cashAmount": cashAmount,
-        "payment.onlineAmount": onlineAmount,
+        "payment.cashAmount": (booking.payment?.cashAmount || 0) + cashAmount,
+        "payment.onlineAmount": (booking.payment?.onlineAmount || 0) + onlineAmount,
         "payment.paidAt": nativeFirestore.FieldValue.serverTimestamp(),
         "payment.collectedBy": collectedBy,
         "payment.collectedByName": collectedByName,
         "payment.isPartialPayment": isPartialPayment,
         "payment.partialPaymentNotes": partialPaymentNotes,
+        // Update V2.1 onGround payment fields
+        "payment.onGround.status": isFullPayment ? "collected" : "partial",
+        "payment.onGround.cashAmount": (booking.payment?.onGround?.cashAmount || 0) + cashAmount,
+        "payment.onGround.onlineAmount": (booking.payment?.onGround?.onlineAmount || 0) + onlineAmount,
+        "payment.onGround.totalCollected": previousOnGroundPaid + totalAmount,
+        "payment.onGround.collectedBy": collectedBy,
+        "payment.onGround.collectedAt": new Date().toISOString(),
+        "payment.onGround.notes": partialPaymentNotes,
+        // Update V2.1 aggregate payment fields
+        "payment.totalPaid": newTotalPaid,
+        "payment.totalPending": Math.max(0, slotAmount - newTotalPaid),
+        "payment.isFullyPaid": isFullPayment || newTotalPaid >= slotAmount,
         status: isFullPayment ? "completed" : booking.status,
         statusHistory: [
           ...(booking.statusHistory || []),
@@ -1029,18 +1177,40 @@ export const collectPayment = async (bookingId, paymentData) => {
       paymentMethod = "online";
     }
 
+    // Calculate correct remaining amount
+    const currentRemaining = booking.payment?.remainingAmount || (booking.totalAmount || booking.payment?.slotAmount || 0);
+    const newRemaining = isFullPayment ? 0 : currentRemaining - totalAmount;
+
+    // Calculate total paid so far (advance + on-ground collections)
+    const advancePaid = booking.payment?.advance?.status === "verified" ? (booking.payment?.advanceAmount || 0) : 0;
+    const previousOnGroundPaid = booking.payment?.onGround?.totalCollected || 0;
+    const newTotalPaid = advancePaid + previousOnGroundPaid + totalAmount;
+    const slotAmount = booking.totalAmount || booking.payment?.slotAmount || 0;
+
     // Update booking with payment details
     await updateDoc(bookingRef, {
       "payment.remainingPaid": isFullPayment,
-      "payment.remainingAmount": isFullPayment ? 0 : (booking.payment?.remainingAmount || 0) - totalAmount,
+      "payment.remainingAmount": Math.max(0, newRemaining),
       "payment.paymentMethod": paymentMethod,
-      "payment.cashAmount": cashAmount,
-      "payment.onlineAmount": onlineAmount,
+      "payment.cashAmount": (booking.payment?.cashAmount || 0) + cashAmount,
+      "payment.onlineAmount": (booking.payment?.onlineAmount || 0) + onlineAmount,
       "payment.paidAt": webServerTimestamp(),
       "payment.collectedBy": collectedBy,
       "payment.collectedByName": collectedByName,
       "payment.isPartialPayment": isPartialPayment,
       "payment.partialPaymentNotes": partialPaymentNotes,
+      // Update V2.1 onGround payment fields
+      "payment.onGround.status": isFullPayment ? "collected" : "partial",
+      "payment.onGround.cashAmount": (booking.payment?.onGround?.cashAmount || 0) + cashAmount,
+      "payment.onGround.onlineAmount": (booking.payment?.onGround?.onlineAmount || 0) + onlineAmount,
+      "payment.onGround.totalCollected": previousOnGroundPaid + totalAmount,
+      "payment.onGround.collectedBy": collectedBy,
+      "payment.onGround.collectedAt": new Date().toISOString(),
+      "payment.onGround.notes": partialPaymentNotes,
+      // Update V2.1 aggregate payment fields
+      "payment.totalPaid": newTotalPaid,
+      "payment.totalPending": Math.max(0, slotAmount - newTotalPaid),
+      "payment.isFullyPaid": isFullPayment || newTotalPaid >= slotAmount,
       status: isFullPayment ? "completed" : booking.status,
       statusHistory: [
         ...(booking.statusHistory || []),
@@ -1226,7 +1396,7 @@ export const extendBookingTime = async (bookingId, extensionData) => {
       // Calculate new total amount
       const currentExtensionAmount = booking.extensionAmount || 0;
       const newExtensionAmount = currentExtensionAmount + extensionCharge;
-      const currentTotalAmount = booking.totalAmount || booking.baseAmount || 0;
+      const currentTotalAmount = booking.totalAmount || booking.baseAmount || booking.payment?.slotAmount || 0;
       const newTotalAmount = currentTotalAmount + extensionCharge;
 
       // Add extension time slot
@@ -1252,7 +1422,9 @@ export const extendBookingTime = async (bookingId, extensionData) => {
         extensionAmount: newExtensionAmount,
         totalAmount: newTotalAmount,
         timeSlots: [...(booking.timeSlots || []), extensionTimeSlot],
+        "payment.slotAmount": newTotalAmount,
         "payment.remainingAmount": newRemainingAmount,
+        "payment.totalPending": newRemainingAmount,
         extensionHistory: [
           ...(booking.extensionHistory || []),
           {

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Turf-1701",
-    "slug": "Turf-1701",
+    "name": "Play Grid",
+    "slug": "PlayGrid",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -30,12 +30,14 @@
     },
     "plugins": [
       "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      "@react-native-firebase/auth",
+      "expo-font"
     ],
     "extra": {
       "eas": {
-        "projectId": "2b5f225d-6416-497f-aa1c-8b85075ff47b"
+        "projectId": "ec328dec-2c39-49b5-88ec-9be2c9350cae"
       }
-    }
+    },
+    "owner": "tanmaydevil"
   }
 }
