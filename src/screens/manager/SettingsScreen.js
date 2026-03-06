@@ -7,6 +7,7 @@ import {
   Modal,
   Alert,
   Linking,
+  Image,
 } from "react-native";
 import {
   Text,
@@ -52,7 +53,9 @@ const SETTINGS_SECTIONS = [
   },
 ];
 
-const MANAGER_ACCENT = "#2196F3";
+const MANAGER_ACCENT = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const NAVY_BLUE = "#1E40AF";
 
 // ──────────────────────────────────────────────
 // Edit Profile Modal
@@ -146,10 +149,14 @@ const AboutModal = ({ visible, onDismiss }) => (
       <Surface style={styles.aboutDialog} elevation={8}>
         <View style={styles.aboutHeader}>
           <View style={styles.aboutIconContainer}>
-            <MaterialCommunityIcons name="soccer-field" size={48} color={MANAGER_ACCENT} />
+            <Image
+              source={require("../../../assets/SS_Logo.png")}
+              style={styles.aboutLogo}
+              resizeMode="cover"
+            />
           </View>
           <Text variant="headlineSmall" style={styles.aboutAppName}>
-            Play Grid
+            SportSwift
           </Text>
           <Text variant="bodyMedium" style={styles.aboutVersion}>
             Version 1.0.0
@@ -314,17 +321,17 @@ export default function SettingsScreen() {
   };
 
   const MenuItem = ({ item }) => (
-    <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuPress(item.id)}>
-      <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}15` }]}>
-        <MaterialCommunityIcons name={item.icon} size={22} color={item.color} />
+    <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuPress(item.id)} activeOpacity={0.7}>
+      <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}18` }]}>
+        <MaterialCommunityIcons name={item.icon} size={20} color={item.color} />
       </View>
-      <Text variant="bodyLarge" style={styles.menuLabel}>
-        {item.label}
-      </Text>
+      <Text style={styles.menuLabel}>{item.label}</Text>
       {item.id === "caretakers" && unassignedCount > 0 && (
-        <Badge style={styles.badge}>{unassignedCount}</Badge>
+        <View style={styles.menuBadge}>
+          <Text style={styles.menuBadgeText}>{unassignedCount}</Text>
+        </View>
       )}
-      <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+      <MaterialCommunityIcons name="chevron-right" size={18} color="#D1D5DB" />
     </TouchableOpacity>
   );
 
@@ -333,34 +340,44 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Settings
-          </Text>
+          <Text style={styles.title}>Settings</Text>
         </View>
 
         {/* Profile Card */}
-        <Surface style={styles.profileCard} elevation={1}>
-          <View style={styles.avatarContainer}>
-            <MaterialCommunityIcons name="account-tie" size={32} color="#2196F3" />
+        <Surface style={styles.profileCard} elevation={2}>
+          <View style={styles.profileBanner}>
+            <View style={styles.avatarContainer}>
+              <MaterialCommunityIcons name="account-tie" size={32} color={MANAGER_ACCENT} />
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.userName}>{user?.name || "Manager"}</Text>
+              <View style={styles.rolePill}>
+                <Text style={styles.rolePillText}>Business Manager</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.editProfileBtn}
+              onPress={() => setShowEditProfile(true)}
+            >
+              <MaterialCommunityIcons name="pencil-outline" size={18} color={MANAGER_ACCENT} />
+            </TouchableOpacity>
           </View>
-          <View style={styles.profileInfo}>
-            <Text variant="titleMedium" style={styles.userName}>
-              {user?.name || "Manager"}
-            </Text>
-            <Text variant="bodySmall" style={styles.userRole}>
-              Business Manager
-            </Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
+          {user?.phone && (
+            <View style={styles.profilePhoneRow}>
+              <MaterialCommunityIcons name="phone-outline" size={14} color="#9CA3AF" />
+              <Text style={styles.profilePhone}>{user.phone}</Text>
+            </View>
+          )}
         </Surface>
 
         {/* Settings Sections */}
         {SETTINGS_SECTIONS.map((section) => (
           <View key={section.title}>
-            <Text variant="titleSmall" style={styles.sectionTitle}>
-              {section.title}
-            </Text>
-            <Surface style={styles.menuCard} elevation={1}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleAccent} />
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+            </View>
+            <Surface style={styles.menuCard} elevation={2}>
               {section.items.map((item, index) => (
                 <React.Fragment key={item.id}>
                   <MenuItem item={item} />
@@ -374,20 +391,13 @@ export default function SettingsScreen() {
         ))}
 
         {/* Logout Button */}
-        <Button
-          mode="outlined"
-          onPress={logout}
-          style={styles.logoutButton}
-          icon="logout"
-          textColor="#F44336"
-        >
-          Logout
-        </Button>
+        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+          <MaterialCommunityIcons name="logout" size={18} color="#EF4444" />
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
 
         {/* Version */}
-        <Text variant="bodySmall" style={styles.version}>
-          Version 1.0.0
-        </Text>
+        <Text style={styles.version}>Version 1.0.0</Text>
       </ScrollView>
 
       {/* Modals */}
@@ -412,92 +422,181 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 32,
   },
   header: {
     marginBottom: 16,
+    paddingTop: 4,
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 26,
+    color: NAVY_BLUE,
+    letterSpacing: -0.3,
   },
+
+  // Profile Card
   profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    marginBottom: 24,
-  },
-  avatarContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#E3F2FD",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  profileInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontWeight: "bold",
-    color: "#333",
-  },
-  userRole: {
-    color: "#666",
-    marginTop: 2,
-  },
-  sectionTitle: {
-    color: "#666",
-    marginBottom: 8,
-    marginLeft: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  menuCard: {
     borderRadius: 16,
     backgroundColor: "#fff",
     marginBottom: 24,
     overflow: "hidden",
   },
-  menuItem: {
+  profileBanner: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
+    paddingBottom: 14,
+    backgroundColor: PALE_BLUE,
+    gap: 12,
   },
-  menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  avatarContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    borderWidth: 2,
+    borderColor: MANAGER_ACCENT + "40",
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: NAVY_BLUE,
+  },
+  rolePill: {
+    marginTop: 4,
+    backgroundColor: MANAGER_ACCENT + "20",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  rolePillText: {
+    fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
+    color: MANAGER_ACCENT,
+  },
+  editProfileBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profilePhoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  profilePhone: {
+    fontSize: 13,
+    color: "#6B7280",
+    fontFamily: "Ubuntu-Regular",
+  },
+
+  // Sections
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    marginLeft: 2,
+    gap: 8,
+  },
+  sectionTitleAccent: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: MANAGER_ACCENT,
+  },
+  sectionTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 12,
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  menuCard: {
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    marginBottom: 20,
+    overflow: "hidden",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  menuIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
   menuLabel: {
     flex: 1,
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#111827",
   },
   divider: {
-    marginLeft: 68,
+    marginLeft: 66,
+    backgroundColor: "#F3F4F6",
   },
-  badge: {
-    backgroundColor: "#FF9800",
-    marginRight: 8,
+  menuBadge: {
+    backgroundColor: "#F59E0B",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 5,
+    marginRight: 6,
+  },
+  menuBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Ubuntu-Bold",
   },
   logoutButton: {
-    borderRadius: 8,
-    borderColor: "#F44336",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  logoutText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#EF4444",
   },
   version: {
     textAlign: "center",
-    color: "#999",
-    marginTop: 24,
-    marginBottom: 16,
+    color: "#9CA3AF",
+    marginTop: 16,
+    marginBottom: 8,
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
   },
 
   // ─── Modal Common ───
@@ -556,11 +655,14 @@ const styles = StyleSheet.create({
   aboutIconContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: "#E3F2FD",
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: 20,
+    overflow: "hidden",
     marginBottom: 12,
+  },
+  aboutLogo: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
   },
   aboutAppName: {
     fontWeight: "bold",

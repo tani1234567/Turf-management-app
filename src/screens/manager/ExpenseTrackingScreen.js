@@ -982,7 +982,7 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   header: {
     flexDirection: "row",

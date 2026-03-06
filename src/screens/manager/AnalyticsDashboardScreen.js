@@ -26,7 +26,11 @@ import { useAppSelector } from "../../hooks";
 import { queryDocuments } from "../../services/firebase/firestore";
 import { selectUser, selectAssignedTurfIds } from "../../store/slices/authSlice";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - 64;
 const CHART_HEIGHT = 180;
@@ -882,7 +886,7 @@ export default function AnalyticsDashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   scrollContent: {
     paddingBottom: 16,

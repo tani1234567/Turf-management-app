@@ -36,7 +36,11 @@ import {
   isWeekend,
 } from "../../utils/priceUtils";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 
 // Booking types
 const BOOKING_TYPES = [
@@ -1391,7 +1395,7 @@ export default function CreateBookingScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
 
   // Header
@@ -1399,21 +1403,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 4,
-    paddingVertical: 8,
+    paddingVertical: 10,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#E5E7EB",
   },
   headerCenter: {
     flex: 1,
     alignItems: "center",
   },
   headerTitle: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#111827",
   },
   headerSubtitle: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
   },
 
   // Step indicator
@@ -1421,18 +1428,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: 14,
     backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   stepItem: {
     alignItems: "center",
     flex: 1,
   },
   stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#E0E0E0",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1440,24 +1449,25 @@ const styles = StyleSheet.create({
     backgroundColor: MANAGER_BLUE,
   },
   stepCircleComplete: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: SUCCESS_GREEN,
   },
   stepNumber: {
     fontSize: 12,
-    fontWeight: "bold",
-    color: "#999",
+    fontFamily: "Ubuntu-Bold",
+    color: "#9CA3AF",
   },
   stepNumberActive: {
     color: "#fff",
   },
   stepLabel: {
     fontSize: 11,
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     marginTop: 4,
   },
   stepLabelActive: {
+    fontFamily: "Ubuntu-Medium",
     color: MANAGER_BLUE,
-    fontWeight: "500",
   },
 
   // Scroll view
@@ -1474,8 +1484,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sectionTitle: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#374151",
     marginBottom: 12,
     marginTop: 8,
   },
@@ -1491,16 +1502,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#E8F5E9",
+    borderRadius: 10,
+    backgroundColor: "#DCFCE7",
     marginBottom: 12,
   },
   newCustomer: {
     flexDirection: "row",
     alignItems: "center",
     padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#FFF3E0",
+    borderRadius: 10,
+    backgroundColor: "#FEF3C7",
     marginBottom: 12,
   },
   customerFoundInfo: {
@@ -1508,16 +1519,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   customerFoundTitle: {
-    color: "#4CAF50",
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
   },
   newCustomerTitle: {
-    color: "#FF9800",
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    color: WARN_ORANGE,
   },
   customerFoundText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     marginTop: 2,
+    fontSize: 12,
   },
 
   // Booking types
@@ -1529,24 +1542,25 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     borderWidth: 2,
-    borderColor: "#E0E0E0",
+    borderColor: "#E5E7EB",
   },
   bookingTypeCardActive: {
     borderColor: MANAGER_BLUE,
-    backgroundColor: "#E3F2FD",
+    backgroundColor: PALE_BLUE,
   },
   bookingTypeText: {
     fontSize: 11,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     marginTop: 6,
     textAlign: "center",
   },
   bookingTypeTextActive: {
+    fontFamily: "Ubuntu-Bold",
     color: MANAGER_BLUE,
-    fontWeight: "600",
   },
 
   // Date scroll
@@ -1558,14 +1572,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   dateCard: {
-    width: 56,
-    height: 70,
-    borderRadius: 10,
+    width: 58,
+    height: 72,
+    borderRadius: 12,
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
   },
   dateCardSelected: {
     backgroundColor: MANAGER_BLUE,
@@ -1577,15 +1591,17 @@ const styles = StyleSheet.create({
   },
   dateDay: {
     fontSize: 11,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
   },
   dateDaySelected: {
     color: "#fff",
+    fontFamily: "Ubuntu-Medium",
   },
   dateNum: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
     marginTop: 2,
   },
   dateNumSelected: {
@@ -1595,13 +1611,15 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#FF9800",
+    backgroundColor: WARN_ORANGE,
     marginTop: 4,
   },
   selectedDateText: {
+    fontFamily: "Ubuntu-Regular",
     textAlign: "center",
-    color: "#666",
+    color: "#6B7280",
     marginBottom: 16,
+    fontSize: 13,
   },
 
   // Time range display
@@ -1610,38 +1628,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   timeRangeItem: {
     alignItems: "center",
   },
   timeRangeLabel: {
     fontSize: 11,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
   },
   timeRangeValue: {
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 17,
+    fontFamily: "Ubuntu-Bold",
     color: MANAGER_BLUE,
     marginTop: 2,
   },
   durationBadge: {
-    backgroundColor: "#4CAF50",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: SUCCESS_GREEN,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 12,
   },
   durationText: {
     color: "#fff",
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
     fontSize: 12,
   },
   timeHint: {
+    fontFamily: "Ubuntu-Regular",
     textAlign: "center",
-    color: "#999",
+    color: "#9CA3AF",
     marginBottom: 12,
+    fontSize: 12,
   },
 
   // Time slots grid
@@ -1661,41 +1684,41 @@ const styles = StyleSheet.create({
   slotAvailable: {
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "#E5E7EB",
   },
   slotPast: {
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "#E5E7EB",
   },
   slotSelected: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: SUCCESS_GREEN,
     borderWidth: 1,
-    borderColor: "#4CAF50",
+    borderColor: SUCCESS_GREEN,
   },
   slotInRange: {
-    backgroundColor: "#C8E6C9",
+    backgroundColor: "#DCFCE7",
     borderWidth: 1,
-    borderColor: "#A5D6A7",
+    borderColor: "#86EFAC",
   },
   timeSlotText: {
     fontSize: 11,
-    color: "#333",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
   },
   timeSlotTextDisabled: {
-    color: "#999",
+    color: "#9CA3AF",
   },
   timeSlotTextSelected: {
     color: "#fff",
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
   },
 
   // Selected time summary
   selectedTimeSummary: {
-    padding: 16,
-    borderRadius: 10,
-    backgroundColor: "#E3F2FD",
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: PALE_BLUE,
     marginBottom: 16,
   },
   summaryTimeRow: {
@@ -1706,8 +1729,8 @@ const styles = StyleSheet.create({
   },
   summaryTimeText: {
     fontSize: 14,
-    fontWeight: "500",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
   },
 
   // Sports scroll
@@ -1721,20 +1744,20 @@ const styles = StyleSheet.create({
   // Ground card
   groundCard: {
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: "#E0E0E0",
+    borderColor: "#E5E7EB",
     position: "relative",
   },
   groundCardSelected: {
     borderColor: MANAGER_BLUE,
-    backgroundColor: "#E3F2FD",
+    backgroundColor: PALE_BLUE,
   },
   groundCardUnavailable: {
-    backgroundColor: "#FAFAFA",
-    borderColor: "#E0E0E0",
+    backgroundColor: "#F9FAFB",
+    borderColor: "#E5E7EB",
   },
   groundHeader: {
     flexDirection: "row",
@@ -1745,14 +1768,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   groundName: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#111827",
   },
   groundNameUnavailable: {
-    color: "#999",
+    color: "#9CA3AF",
   },
   groundMeta: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginTop: 2,
   },
   groundStatusContainer: {
@@ -1761,7 +1787,7 @@ const styles = StyleSheet.create({
   availableBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#DCFCE7",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1769,13 +1795,13 @@ const styles = StyleSheet.create({
   },
   availableText: {
     fontSize: 11,
-    color: "#4CAF50",
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
   },
   bookedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFEBEE",
+    backgroundColor: "#FEE2E2",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1783,13 +1809,13 @@ const styles = StyleSheet.create({
   },
   bookedText: {
     fontSize: 11,
-    color: "#F44336",
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    color: DANGER_RED,
   },
   blockedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF3E0",
+    backgroundColor: "#FEF3C7",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1797,45 +1823,47 @@ const styles = StyleSheet.create({
   },
   blockedText: {
     fontSize: 11,
-    color: "#FF9800",
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    color: WARN_ORANGE,
   },
   groundCardBlocked: {
-    backgroundColor: "#FFF8E1",
-    borderColor: "#FFE082",
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FCD34D",
   },
   blockInfo: {
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#FFE082",
+    borderTopColor: "#FCD34D",
   },
   blockTitle: {
     fontSize: 12,
-    color: "#FF9800",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: WARN_ORANGE,
     marginBottom: 4,
   },
   blockDetail: {
     fontSize: 11,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     marginLeft: 8,
   },
   conflictInfo: {
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#FFCDD2",
+    borderTopColor: "#FECACA",
   },
   conflictTitle: {
     fontSize: 12,
-    color: "#F44336",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: DANGER_RED,
     marginBottom: 4,
   },
   conflictDetail: {
     fontSize: 11,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     marginLeft: 8,
   },
   groundSports: {
@@ -1851,12 +1879,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
+    borderTopColor: "#E5E7EB",
   },
   pricingPreviewText: {
     fontSize: 13,
-    color: "#4CAF50",
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
   },
   selectedCheck: {
     position: "absolute",
@@ -1871,32 +1899,38 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
+    fontSize: 13,
   },
 
   // No grounds
   noGroundsCard: {
     padding: 32,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     alignItems: "center",
   },
   noGroundsText: {
     marginTop: 12,
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "center",
   },
 
   // Price breakdown
   priceBreakdown: {
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   priceTitle: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#374151",
     marginBottom: 12,
   },
   priceRow: {
@@ -1905,24 +1939,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   priceLabel: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     fontSize: 14,
   },
   priceValue: {
-    color: "#333",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
   },
   priceDivider: {
     marginVertical: 8,
+    backgroundColor: "#E5E7EB",
   },
   priceTotalLabel: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
     fontSize: 15,
   },
   priceTotalValue: {
-    fontWeight: "bold",
-    color: "#4CAF50",
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
     fontSize: 16,
   },
 
@@ -1937,32 +1973,35 @@ const styles = StyleSheet.create({
     width: "30%",
     alignItems: "center",
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     borderWidth: 2,
-    borderColor: "#E0E0E0",
+    borderColor: "#E5E7EB",
   },
   paymentMethodCardActive: {
     borderColor: MANAGER_BLUE,
-    backgroundColor: "#E3F2FD",
+    backgroundColor: PALE_BLUE,
   },
   paymentMethodText: {
     fontSize: 10,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     marginTop: 4,
     textAlign: "center",
   },
   paymentMethodTextActive: {
+    fontFamily: "Ubuntu-Bold",
     color: MANAGER_BLUE,
-    fontWeight: "600",
   },
 
   // Advance section
   advanceSection: {
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   advanceHeader: {
     flexDirection: "row",
@@ -1975,24 +2014,27 @@ const styles = StyleSheet.create({
   },
   balanceText: {
     marginTop: 8,
-    color: "#FF9800",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: WARN_ORANGE,
   },
 
   // Total card
   totalCard: {
     padding: 20,
-    borderRadius: 10,
-    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    backgroundColor: PALE_BLUE,
     alignItems: "center",
     marginBottom: 16,
   },
   totalLabel: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#374151",
+    fontSize: 13,
   },
   totalAmount: {
+    fontFamily: "Ubuntu-Bold",
     color: MANAGER_BLUE,
-    fontWeight: "bold",
+    fontSize: 26,
     marginTop: 4,
   },
 
@@ -2005,12 +2047,15 @@ const styles = StyleSheet.create({
   // Summary
   summaryCard: {
     padding: 16,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   summaryTitle: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#374151",
     marginBottom: 12,
   },
   summaryRow: {
@@ -2019,25 +2064,27 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryLabel: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     fontSize: 13,
   },
   summaryValue: {
-    color: "#333",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
     fontSize: 13,
   },
   summaryDivider: {
     marginVertical: 8,
+    backgroundColor: "#E5E7EB",
   },
   summaryTotalLabel: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
     fontSize: 15,
   },
   summaryTotalValue: {
-    fontWeight: "bold",
-    color: "#4CAF50",
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
     fontSize: 16,
   },
   statusBadge: {
@@ -2048,8 +2095,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusText: {
-    color: "#4CAF50",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: SUCCESS_GREEN,
     fontSize: 13,
   },
 
@@ -2059,7 +2106,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#eee",
+    borderTopColor: "#E5E7EB",
     gap: 12,
   },
   backButton: {
@@ -2076,19 +2123,27 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyCard: {
-    padding: 32,
+    padding: 36,
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   emptyTitle: {
     marginTop: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#111827",
   },
   emptyText: {
     marginTop: 8,
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "center",
+    lineHeight: 20,
   },
 });

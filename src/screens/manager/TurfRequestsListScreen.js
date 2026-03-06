@@ -24,7 +24,11 @@ import { useSelector } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
 import { queryDocuments } from "../../services/firebase/firestore";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 
 const STATUS_CONFIG = {
   pending: {
@@ -354,7 +358,7 @@ export default function TurfRequestsListScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   headerBar: {
     flexDirection: "row",

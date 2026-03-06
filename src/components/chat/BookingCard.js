@@ -305,6 +305,9 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 11,
     fontWeight: "600",
+    lineHeight: 14,
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
   infoSection: {
     marginBottom: 10,

@@ -448,7 +448,7 @@ export default function ManagerManagementScreen({ navigation }) {
     try {
       const link = generateInviteLink(code);
       await Share.share({
-        message: `Join ${company?.name || "our company"} as a manager on Play Grid!\n\nUse invite code: ${formatCodeForDisplay(code)}\n\nOr tap this link: ${link}`,
+        message: `Join ${company?.name || "our company"} as a manager on SportSwift!\n\nUse invite code: ${formatCodeForDisplay(code)}\n\nOr tap this link: ${link}`,
         title: "Join Our Team",
       });
     } catch (error) {
@@ -959,7 +959,7 @@ export default function ManagerManagementScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     backgroundColor: "#fff",
@@ -992,7 +992,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   segmentedButtons: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   searchContainer: {
     paddingHorizontal: 16,
@@ -1000,7 +1000,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   searchbar: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     borderRadius: 12,
     elevation: 0,
   },
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     padding: 16,
     borderRadius: 12,
     marginRight: 8,

@@ -711,7 +711,7 @@ export default function SubscriptionPaymentScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     flexDirection: "row",
@@ -1049,7 +1049,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     marginVertical: 16,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   refLabel: {
     fontSize: 12,

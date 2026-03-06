@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Animated,
+  Pressable,
   Modal,
   ScrollView,
   Alert,
   RefreshControl,
   Linking,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -32,8 +35,12 @@ import {
   queryDocuments,
 } from "../../services/firebase/firestore";
 import { formatPrice, formatDuration } from "../../utils/priceUtils";
+import { FONTS } from "../../constants/theme";
+import SkeletonBookingList from "../../components/user/SkeletonLoader";
 
 const USER_COLOR = "#4CAF50";
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const TAB_ORDER = ["upcoming", "completed", "cancelled"];
 
 // ──────────────────────────────────────────────
 // Status config
@@ -160,8 +167,10 @@ const StatusBadge = ({ status }) => {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   return (
     <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-      <MaterialCommunityIcons name={cfg.icon} size={14} color={cfg.color} />
-      <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+      <MaterialCommunityIcons name={cfg.icon} size={13} color={cfg.color} />
+      <Text style={[styles.statusText, { color: cfg.color, fontFamily: FONTS.medium }]}>
+        {cfg.label}
+      </Text>
     </View>
   );
 };
@@ -170,9 +179,16 @@ const StatusBadge = ({ status }) => {
 // BookingCard
 // ──────────────────────────────────────────────
 const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPayment }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const pressIn = () =>
+    Animated.spring(scale, { toValue: 0.975, speed: 20, bounciness: 4, useNativeDriver: true }).start();
+  const pressOut = () =>
+    Animated.spring(scale, { toValue: 1, speed: 20, bounciness: 4, useNativeDriver: true }).start();
+
   const upcoming = isUpcoming(booking);
   const isCompleted = booking.status === "completed";
   const isCancelled = booking.status === "cancelled";
+  const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending;
   const needsPayment =
     booking.status === "awaiting_payment" ||
     booking.status === "pending_payment" ||
@@ -189,16 +205,21 @@ const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPaymen
   };
 
   return (
-    <TouchableOpacity
+    <Pressable
       style={styles.card}
       onPress={() => onPress(booking)}
-      activeOpacity={0.7}
+      onPressIn={pressIn}
+      onPressOut={pressOut}
     >
+      <Animated.View style={{ transform: [{ scale }] }}>
       <Surface style={styles.cardSurface} elevation={1}>
+        {/* Left status accent strip */}
+        <View style={[styles.accentStrip, { backgroundColor: statusCfg.color }]} />
+
         {/* Top row: venue + status */}
         <View style={styles.cardHeader}>
           <View style={styles.cardVenue}>
-            <Text variant="titleSmall" style={styles.cardVenueName} numberOfLines={1}>
+            <Text style={styles.cardVenueName} numberOfLines={1}>
               {booking.turfName || "Turf"}
             </Text>
             <Text variant="bodySmall" style={styles.cardGround} numberOfLines={1}>
@@ -326,7 +347,8 @@ const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPaymen
           </>
         )}
       </Surface>
-    </TouchableOpacity>
+      </Animated.View>
+    </Pressable>
   );
 };
 
@@ -752,6 +774,8 @@ export default function BookingsScreen({ navigation }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const scrollRef = useRef(null);
+  const currentPageRef = useRef(0);
 
   // Modal state
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -779,34 +803,29 @@ export default function BookingsScreen({ navigation }) {
     return () => unsubscribe();
   }, [userId]);
 
-  // Sort & filter
-  const filteredBookings = useMemo(() => {
-    let filtered;
-    switch (selectedTab) {
-      case "upcoming":
-        filtered = bookings.filter(isUpcoming);
-        // Sort by date ascending (soonest first)
-        filtered.sort((a, b) => {
-          const diff = a.date.localeCompare(b.date);
-          return diff !== 0 ? diff : (a.startTime || "").localeCompare(b.startTime || "");
-        });
-        break;
-      case "completed":
-        filtered = bookings.filter((b) => b.status === "completed");
-        // Sort by date descending (most recent first)
-        filtered.sort((a, b) => b.date.localeCompare(a.date));
-        break;
-      case "cancelled":
-        filtered = bookings.filter(
-          (b) => b.status === "cancelled" || b.status === "rejected" || b.status === "expired"
-        );
-        filtered.sort((a, b) => b.date.localeCompare(a.date));
-        break;
-      default:
-        filtered = [];
-    }
+  // Per-tab sorted lists (all computed together so swipe pages are ready)
+  const upcomingBookings = useMemo(() => {
+    const filtered = bookings.filter(isUpcoming);
+    filtered.sort((a, b) => {
+      const diff = a.date.localeCompare(b.date);
+      return diff !== 0 ? diff : (a.startTime || "").localeCompare(b.startTime || "");
+    });
     return filtered;
-  }, [bookings, selectedTab]);
+  }, [bookings]);
+
+  const completedBookings = useMemo(() => {
+    const filtered = bookings.filter((b) => b.status === "completed");
+    filtered.sort((a, b) => b.date.localeCompare(a.date));
+    return filtered;
+  }, [bookings]);
+
+  const cancelledBookings = useMemo(() => {
+    const filtered = bookings.filter(
+      (b) => b.status === "cancelled" || b.status === "rejected" || b.status === "expired"
+    );
+    filtered.sort((a, b) => b.date.localeCompare(a.date));
+    return filtered;
+  }, [bookings]);
 
   // Actions
   const handlePress = (booking) => {
@@ -945,6 +964,23 @@ export default function BookingsScreen({ navigation }) {
     setTimeout(() => setRefreshing(false), 3000); // Safety timeout
   };
 
+  // Pager handlers
+  const handleTabPress = (tabValue) => {
+    const index = TAB_ORDER.indexOf(tabValue);
+    currentPageRef.current = index;
+    scrollRef.current?.scrollTo({ x: index * SCREEN_WIDTH, animated: true });
+    setSelectedTab(tabValue);
+  };
+
+  const handleScroll = (event) => {
+    const x = event.nativeEvent.contentOffset.x;
+    const index = Math.round(x / SCREEN_WIDTH);
+    if (index >= 0 && index < TAB_ORDER.length && index !== currentPageRef.current) {
+      currentPageRef.current = index;
+      setSelectedTab(TAB_ORDER[index]);
+    }
+  };
+
   // Count badges
   const upcomingCount = useMemo(() => bookings.filter(isUpcoming).length, [bookings]);
   const completedCount = useMemo(
@@ -978,8 +1014,8 @@ export default function BookingsScreen({ navigation }) {
     },
   };
 
-  const renderEmpty = () => {
-    const cfg = emptyConfig[selectedTab];
+  const renderEmpty = (tab) => {
+    const cfg = emptyConfig[tab];
     return (
       <View style={styles.emptyContainer}>
         <Surface style={styles.emptyCard} elevation={1}>
@@ -1018,79 +1054,99 @@ export default function BookingsScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={USER_COLOR} />
-        <Text variant="bodyMedium" style={styles.loadingText}>
-          Loading your bookings...
-        </Text>
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.headerWrapper}>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.title}>My Bookings</Text>
+          </View>
+        </View>
+        <SkeletonBookingList count={4} />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          My Bookings
-        </Text>
-        <Text variant="bodySmall" style={styles.headerCount}>
-          {bookings.length} total
-        </Text>
-      </View>
+      {/* Header + Tabs unified */}
+      <View style={styles.headerWrapper}>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>My Bookings</Text>
+          {bookings.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{bookings.length}</Text>
+            </View>
+          )}
+        </View>
 
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        {[
-          { value: "upcoming", label: "Upcoming", count: upcomingCount },
-          { value: "completed", label: "Completed", count: completedCount },
-          { value: "cancelled", label: "Cancelled", count: cancelledCount },
-        ].map((tab) => {
-          const isActive = selectedTab === tab.value;
-          return (
-            <TouchableOpacity
-              key={tab.value}
-              style={[styles.tab, isActive && styles.tabActive]}
-              onPress={() => setSelectedTab(tab.value)}
-            >
-              <Text
-                style={[styles.tabText, isActive && styles.tabTextActive]}
+        <View style={styles.tabContainer}>
+          {[
+            { value: "upcoming", label: "Upcoming", count: upcomingCount },
+            { value: "completed", label: "Completed", count: completedCount },
+            { value: "cancelled", label: "Cancelled", count: cancelledCount },
+          ].map((tab) => {
+            const isActive = selectedTab === tab.value;
+            return (
+              <TouchableOpacity
+                key={tab.value}
+                style={[styles.tab, isActive && styles.tabActive]}
+                onPress={() => handleTabPress(tab.value)}
               >
-                {tab.label}
-              </Text>
-              {tab.count > 0 && (
-                <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
-                  <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
-                    {tab.count}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
+                {tab.count > 0 && (
+                  <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
+                    <Text style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
+                      {tab.count}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
-      {/* List */}
-      {filteredBookings.length === 0 ? (
-        renderEmpty()
-      ) : (
-        <FlatList
-          data={filteredBookings}
-          keyExtractor={(item) => item.id}
-          renderItem={renderBookingCard}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[USER_COLOR]}
-              tintColor={USER_COLOR}
-            />
-          }
-        />
-      )}
+      {/* Swipeable pages */}
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={50}
+        style={styles.pager}
+      >
+        {[
+          { key: "upcoming", data: upcomingBookings },
+          { key: "completed", data: completedBookings },
+          { key: "cancelled", data: cancelledBookings },
+        ].map(({ key, data }) => (
+          <View key={key} style={styles.pagerPage}>
+            {data.length === 0 ? (
+              renderEmpty(key)
+            ) : (
+              <FlatList
+                data={data}
+                keyExtractor={(item) => item.id}
+                renderItem={renderBookingCard}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    colors={[USER_COLOR]}
+                    tintColor={USER_COLOR}
+                  />
+                }
+              />
+            )}
+          </View>
+        ))}
+      </ScrollView>
 
       {/* Modals */}
       <BookingDetailsModal
@@ -1130,29 +1186,48 @@ const styles = StyleSheet.create({
   },
 
 
-  // Header
-  header: {
+  // Header + Tabs unified block
+  headerWrapper: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ebebeb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  headerTitleRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "baseline",
-    padding: 16,
-    paddingBottom: 8,
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: FONTS.bold,
+    fontSize: 22,
+    color: "#111",
+    letterSpacing: -0.3,
   },
-  headerCount: {
-    color: "#999",
+  countBadge: {
+    backgroundColor: USER_COLOR + "18",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  countBadgeText: {
+    fontFamily: FONTS.bold,
+    fontSize: 12,
+    color: USER_COLOR,
   },
 
-  // Tabs
+  // Tabs (inside header)
   tabContainer: {
     flexDirection: "row",
-    marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 12,
-    backgroundColor: "#e8e8e8",
+    backgroundColor: "#f0f0f0",
     borderRadius: 12,
     padding: 3,
   },
@@ -1174,12 +1249,12 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 13,
-    fontWeight: "500",
+    fontFamily: FONTS.medium,
     color: "#888",
   },
   tabTextActive: {
-    color: "#333",
-    fontWeight: "600",
+    color: USER_COLOR,
+    fontFamily: FONTS.bold,
   },
   tabBadge: {
     marginLeft: 6,
@@ -1203,9 +1278,19 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
+  // Pager
+  pager: {
+    flex: 1,
+  },
+  pagerPage: {
+    width: SCREEN_WIDTH,
+    flex: 1,
+  },
+
   // List
   listContent: {
     paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 24,
   },
 
@@ -1217,12 +1302,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#fff",
     overflow: "hidden",
+    // Softer shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  accentStrip: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     padding: 14,
+    paddingLeft: 18,   // indent past accent strip
     paddingBottom: 10,
   },
   cardVenue: {
@@ -1230,29 +1331,35 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   cardVenueName: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: FONTS.bold,
+    fontSize: 14,
+    color: "#1a1a1a",
   },
   cardGround: {
-    color: "#666",
+    fontFamily: FONTS.regular,
+    color: "#777",
     marginTop: 2,
+    fontSize: 12,
   },
   cardDivider: {
     backgroundColor: "#f0f0f0",
   },
   cardBody: {
     padding: 14,
+    paddingLeft: 18,    // indent past accent strip
     paddingTop: 10,
     paddingBottom: 10,
   },
   cardInfoRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 5,
   },
   cardInfoText: {
-    marginLeft: 10,
+    marginLeft: 8,
     color: "#555",
+    fontFamily: FONTS.regular,
+    fontSize: 13,
   },
   cardActions: {
     flexDirection: "row",
@@ -1294,14 +1401,14 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 14,
+    gap: 4,
   },
   statusText: {
-    marginLeft: 4,
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontFamily: FONTS.medium,
   },
 
   // Empty State

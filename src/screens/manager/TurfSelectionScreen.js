@@ -18,7 +18,10 @@ import { useSelectedTurf } from "../../hooks/useSelectedTurf";
 import { queryDocuments } from "../../services/firebase/firestore";
 import { isRemoteImageUri } from "../../services/firebase/turfImages";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
 
 // Helper: today's date string
 const getTodayString = () => {
@@ -114,108 +117,70 @@ export default function TurfSelectionScreen({ navigation, route }) {
 
     return (
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.85}
         onPress={() => handleSelect(turf.id)}
+        style={[styles.turfCard, isSelected && styles.turfCardSelected]}
       >
-        <Surface
-          style={[
-            styles.turfCard,
-            isSelected && styles.turfCardSelected,
-          ]}
-          elevation={isSelected ? 3 : 1}
-        >
-          {/* Turf Image */}
-          <View style={styles.imageContainer}>
-            {turfImageUri ? (
-              <Image
-                source={{ uri: turfImageUri }}
-                style={styles.turfImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.placeholderImage}>
-                <MaterialCommunityIcons
-                  name="soccer-field"
-                  size={48}
-                  color="#bbb"
-                />
-              </View>
-            )}
-            {isSelected && (
-              <View style={styles.selectedBadge}>
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={24}
-                  color="#fff"
-                />
-              </View>
-            )}
-          </View>
+        {/* Turf Image */}
+        <View style={styles.imageContainer}>
+          {turfImageUri ? (
+            <Image
+              source={{ uri: turfImageUri }}
+              style={styles.turfImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <MaterialCommunityIcons name="soccer-field" size={48} color="#9CA3AF" />
+            </View>
+          )}
+          {isSelected && (
+            <View style={styles.selectedBadge}>
+              <MaterialCommunityIcons name="check-circle" size={22} color="#fff" />
+              <Text style={styles.selectedBadgeText}>Active</Text>
+            </View>
+          )}
+          {/* Gradient overlay for text readability */}
+          <View style={styles.imageOverlay} />
+        </View>
 
-          {/* Turf Info */}
-          <View style={styles.turfInfo}>
-            <Text variant="titleMedium" style={styles.turfName}>
-              {turf.name}
-            </Text>
+        {/* Turf Info */}
+        <View style={styles.turfInfo}>
+          <Text style={styles.turfName} numberOfLines={1}>{turf.name}</Text>
 
-            {(turf.location || turf.address) && (
-              <View style={styles.locationRow}>
-                <MaterialCommunityIcons
-                  name="map-marker-outline"
-                  size={14}
-                  color="#666"
-                />
-                <Text
-                  variant="bodySmall"
-                  style={styles.locationText}
-                  numberOfLines={1}
-                >
-                  {typeof turf.location === "object"
-                    ? turf.location.address || `${turf.location.city || ""}, ${turf.location.state || ""}`.trim().replace(/^,\s*|,\s*$/g, "")
-                    : turf.location || turf.address}
-                </Text>
-              </View>
-            )}
+          {(turf.location || turf.address) && (
+            <View style={styles.locationRow}>
+              <MaterialCommunityIcons name="map-marker-outline" size={13} color="#6B7280" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {typeof turf.location === "object"
+                  ? turf.location.address || `${turf.location.city || ""}, ${turf.location.state || ""}`.trim().replace(/^,\s*|,\s*$/g, "")
+                  : turf.location || turf.address}
+              </Text>
+            </View>
+          )}
 
-            {/* Today's Stats */}
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons
-                  name="calendar-check"
-                  size={16}
-                  color="#4CAF50"
-                />
-                <Text variant="labelSmall" style={styles.statText}>
-                  {statsLoading ? "..." : stats.todayBookings || 0} bookings
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons
-                  name="clock-alert-outline"
-                  size={16}
-                  color="#FF9800"
-                />
-                <Text variant="labelSmall" style={styles.statText}>
-                  {statsLoading ? "..." : stats.pendingRequests || 0} pending
-                </Text>
-              </View>
-
-              <View style={styles.statItem}>
-                <MaterialCommunityIcons
-                  name="currency-inr"
-                  size={16}
-                  color="#2196F3"
-                />
-                <Text variant="labelSmall" style={styles.statText}>
-                  {statsLoading
-                    ? "..."
-                    : `₹${stats.todayRevenue || 0}`}
-                </Text>
-              </View>
+          {/* Today's Stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statPill}>
+              <MaterialCommunityIcons name="calendar-check" size={14} color={SUCCESS_GREEN} />
+              <Text style={[styles.statText, { color: SUCCESS_GREEN }]}>
+                {statsLoading ? "—" : stats.todayBookings || 0} booked
+              </Text>
+            </View>
+            <View style={styles.statPill}>
+              <MaterialCommunityIcons name="clock-alert-outline" size={14} color={WARN_ORANGE} />
+              <Text style={[styles.statText, { color: WARN_ORANGE }]}>
+                {statsLoading ? "—" : stats.pendingRequests || 0} pending
+              </Text>
+            </View>
+            <View style={styles.statPill}>
+              <MaterialCommunityIcons name="currency-inr" size={14} color={MANAGER_BLUE} />
+              <Text style={[styles.statText, { color: MANAGER_BLUE }]}>
+                {statsLoading ? "—" : `₹${stats.todayRevenue || 0}`}
+              </Text>
             </View>
           </View>
-        </Surface>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -225,9 +190,7 @@ export default function TurfSelectionScreen({ navigation, route }) {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={MANAGER_BLUE} />
-          <Text variant="bodyMedium" style={styles.loadingText}>
-            Loading turfs...
-          </Text>
+          <Text style={styles.loadingText}>Loading turfs...</Text>
         </View>
       </SafeAreaView>
     );
@@ -237,22 +200,21 @@ export default function TurfSelectionScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <IconHeader navigation={navigation} title="Select Turf" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#374151" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Select Turf</Text>
         </View>
         <View style={styles.emptyContainer}>
-          <Surface style={styles.emptyCard} elevation={1}>
-            <MaterialCommunityIcons
-              name="soccer-field"
-              size={64}
-              color="#ccc"
-            />
-            <Text variant="titleMedium" style={styles.emptyTitle}>
-              No Turfs Assigned
-            </Text>
-            <Text variant="bodyMedium" style={styles.emptySubtext}>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="soccer-field" size={40} color={MANAGER_BLUE} />
+            </View>
+            <Text style={styles.emptyTitle}>No Turfs Assigned</Text>
+            <Text style={styles.emptySubtext}>
               Contact your owner to get turfs assigned to your account.
             </Text>
-          </Surface>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -262,19 +224,12 @@ export default function TurfSelectionScreen({ navigation, route }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={24} color="#333" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <MaterialCommunityIcons name="arrow-left" size={22} color="#374151" />
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Select Turf
-          </Text>
-          <Text variant="bodySmall" style={styles.subtitle}>
-            Choose which turf to manage
-          </Text>
+          <Text style={styles.title}>Select Turf</Text>
+          <Text style={styles.subtitle}>Choose which turf to manage</Text>
         </View>
       </View>
 
@@ -294,7 +249,7 @@ export default function TurfSelectionScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   loadingContainer: {
     flex: 1,
@@ -303,50 +258,64 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: "#6B7280",
   },
 
   // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+    gap: 12,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: "#fff",
+    borderRadius: 10,
+    backgroundColor: "#F3F4F6",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
   },
   headerTextContainer: {
     flex: 1,
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 18,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
   },
   subtitle: {
-    color: "#666",
-    marginTop: 2,
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
+    marginTop: 1,
   },
 
   // List
   listContent: {
     padding: 16,
-    paddingTop: 8,
+    paddingTop: 12,
   },
 
   // Turf Card
   turfCard: {
     backgroundColor: "#fff",
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "transparent",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
   turfCardSelected: {
     borderColor: MANAGER_BLUE,
@@ -354,7 +323,7 @@ const styles = StyleSheet.create({
 
   // Image
   imageContainer: {
-    height: 140,
+    height: 150,
     width: "100%",
     position: "relative",
   },
@@ -365,20 +334,34 @@ const styles = StyleSheet.create({
   placeholderImage: {
     width: "100%",
     height: "100%",
-    backgroundColor: "#E8E8E8",
+    backgroundColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
+  },
+  imageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 40,
+    backgroundColor: "rgba(0,0,0,0.1)",
   },
   selectedBadge: {
     position: "absolute",
     top: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: MANAGER_BLUE,
-    justifyContent: "center",
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: MANAGER_BLUE,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  selectedBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Ubuntu-Bold",
   },
 
   // Info
@@ -386,17 +369,20 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   turfName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 16,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
   },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 4,
+    gap: 4,
   },
   locationText: {
-    color: "#666",
-    marginLeft: 4,
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     flex: 1,
   },
 
@@ -404,15 +390,20 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     marginTop: 12,
-    gap: 16,
+    gap: 8,
   },
-  statItem: {
+  statPill: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
     gap: 4,
   },
   statText: {
-    color: "#555",
+    fontSize: 12,
+    fontFamily: "Ubuntu-Medium",
   },
 
   // Empty
@@ -422,19 +413,36 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyCard: {
-    padding: 32,
+    padding: 36,
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: PALE_BLUE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
-    marginTop: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 16,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
+    marginBottom: 6,
   },
   emptySubtext: {
-    marginTop: 8,
-    color: "#999",
+    fontSize: 13,
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "center",
+    lineHeight: 20,
   },
 });

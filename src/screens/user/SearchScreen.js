@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { queryDocuments } from "../../services/firebase/firestore";
+import { FONTS } from "../../constants/theme";
 
 const USER_COLOR = "#4CAF50";
 
@@ -259,23 +260,20 @@ export default function SearchScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Find a Turf
-        </Text>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={styles.headerWrapper}>
+        <Text style={styles.title}>Find a Turf</Text>
+        <Text style={styles.subtitle}>Discover & book sports grounds near you</Text>
+        <Searchbar
+          placeholder="Search by name or location..."
+          value={searchQuery}
+          onChangeText={handleSearchChange}
+          onSubmitEditing={handleSearchSubmit}
+          style={styles.searchbar}
+          inputStyle={styles.searchInput}
+          icon="magnify"
+        />
       </View>
-
-      {/* Search Bar */}
-      <Searchbar
-        placeholder="Search by name or location..."
-        value={searchQuery}
-        onChangeText={handleSearchChange}
-        onSubmitEditing={handleSearchSubmit}
-        style={styles.searchbar}
-        inputStyle={styles.searchInput}
-        icon="magnify"
-      />
 
       {/* Sport Filters */}
       <ScrollView
@@ -347,26 +345,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f5f5f5",
   },
-  header: {
-    padding: 16,
-    paddingBottom: 8,
+  headerWrapper: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ebebeb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 4,
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: FONTS.bold,
+    fontSize: 22,
+    color: "#111",
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontFamily: FONTS.regular,
+    fontSize: 13,
+    color: "#888",
+    marginTop: 2,
   },
   searchbar: {
-    marginHorizontal: 16,
+    marginTop: 12,
     borderRadius: 12,
-    elevation: 2,
-    backgroundColor: "#fff",
+    elevation: 0,
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
+    maxHeight: 40,
+    alignContent: "center",
+    alignItems: "center",
+    
   },
   searchInput: {
     fontSize: 14,
+    fontFamily: FONTS.regular,
+    paddingVertical: 0,
+    textAlignVertical: "center",
+    alignSelf: "center",
   },
   filtersContainer: {
-    marginTop: 12,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 0,
     maxHeight: 44,
   },
   filtersList: {
@@ -376,7 +401,7 @@ const styles = StyleSheet.create({
   filterChip: {
     marginRight: 8,
     backgroundColor: "#fff",
-    height: 36,
+    height: 32,
   },
   filterChipSelected: {
     backgroundColor: USER_COLOR,
@@ -411,9 +436,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardSurface: {
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: "#fff",
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#efefef",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 5,
   },
   cardRow: {
     flexDirection: "row",
@@ -437,62 +468,69 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   turfName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: FONTS.bold,
+    fontSize: 14,
+    color: "#1a1a1a",
   },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 3,
   },
   locationText: {
-    color: "#666",
-    marginLeft: 4,
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    color: "#888",
+    marginLeft: 3,
     flex: 1,
   },
   sportsList: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 4,
+    marginTop: 5,
     gap: 4,
   },
   sportTag: {
-    backgroundColor: USER_COLOR + "18",
-    paddingHorizontal: 6,
+    backgroundColor: "#10B98114",
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 5,
   },
   sportTagText: {
-    color: USER_COLOR,
+    color: "#10B981",
+    fontFamily: FONTS.medium,
     fontSize: 10,
-    fontWeight: "600",
     textTransform: "capitalize",
   },
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 6,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 3,
   },
   ratingText: {
-    color: "#666",
+    fontFamily: FONTS.medium,
+    fontSize: 12,
+    color: "#555",
   },
   priceRow: {
     flexDirection: "row",
     alignItems: "baseline",
+    gap: 1,
   },
   priceText: {
-    fontWeight: "bold",
-    color: USER_COLOR,
+    fontFamily: FONTS.bold,
+    fontSize: 14,
+    color: "#10B981",
   },
   perHourText: {
-    color: "#666",
-    marginLeft: 1,
+    fontFamily: FONTS.regular,
+    color: "#999",
     fontSize: 11,
   },
   emptyContainer: {

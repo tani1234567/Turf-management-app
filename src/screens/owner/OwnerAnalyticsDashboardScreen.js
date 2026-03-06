@@ -1078,7 +1078,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   scrollContent: {
     paddingBottom: 16,

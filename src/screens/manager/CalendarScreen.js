@@ -27,7 +27,11 @@ import {
 } from "../../services/firebase/firestore";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 
 // Calendar view types
 const VIEW_TYPES = {
@@ -38,14 +42,14 @@ const VIEW_TYPES = {
 
 // Status colors for bookings
 const STATUS_COLORS = {
-  pending: { bg: "#FFF3E0", color: "#FF9800", label: "Pending" },
-  confirmed: { bg: "#E3F2FD", color: "#2196F3", label: "Confirmed" },
-  in_progress: { bg: "#E8F5E9", color: "#4CAF50", label: "In Progress" },
-  completed: { bg: "#F5F5F5", color: "#9E9E9E", label: "Completed" },
-  academy: { bg: "#FFF3E0", color: "#FF5722", label: "Academy" },
-  blocked: { bg: "#EEEEEE", color: "#757575", label: "Blocked" },
-  cancelled: { bg: "#FFEBEE", color: "#F44336", label: "Cancelled" },
-  rejected: { bg: "#FFEBEE", color: "#F44336", label: "Rejected" },
+  pending: { bg: "#FEF3C7", color: "#F59E0B", label: "Pending" },
+  confirmed: { bg: "#DBEAFE", color: "#3B82F6", label: "Confirmed" },
+  in_progress: { bg: "#DCFCE7", color: "#22C55E", label: "In Progress" },
+  completed: { bg: "#F3F4F6", color: "#9CA3AF", label: "Completed" },
+  academy: { bg: "#FEF3C7", color: "#F97316", label: "Academy" },
+  blocked: { bg: "#E5E7EB", color: "#6B7280", label: "Blocked" },
+  cancelled: { bg: "#FEE2E2", color: "#EF4444", label: "Cancelled" },
+  rejected: { bg: "#FEE2E2", color: "#EF4444", label: "Rejected" },
 };
 
 // Time slots for day view (6 AM to 11 PM)
@@ -936,7 +940,7 @@ export default function CalendarScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
 
   // Header
@@ -945,8 +949,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   headerLeft: {
     flex: 1,
@@ -955,39 +962,47 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 18,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
   },
   turfName: {
-    color: "#666",
-    marginTop: 2,
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
+    marginTop: 1,
   },
 
   // View type selector
   viewSelector: {
     flexDirection: "row",
     marginHorizontal: 16,
-    marginVertical: 8,
-    backgroundColor: "#E3E3E3",
-    borderRadius: 8,
+    marginVertical: 10,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 10,
     padding: 4,
   },
   viewTypeButton: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: "center",
   },
   viewTypeButtonActive: {
     backgroundColor: "#fff",
     elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   viewTypeText: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#666",
+    fontFamily: "Ubuntu-Medium",
+    color: "#6B7280",
   },
   viewTypeTextActive: {
+    fontFamily: "Ubuntu-Bold",
     color: MANAGER_BLUE,
   },
 
@@ -1004,11 +1019,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dateText: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#111827",
   },
   goTodayText: {
     fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
     color: MANAGER_BLUE,
     marginTop: 2,
   },
@@ -1053,13 +1070,14 @@ const styles = StyleSheet.create({
     left: -52,
     width: 48,
     fontSize: 11,
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "right",
   },
   timeSlotLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E0E0E0",
+    backgroundColor: "#E5E7EB",
     marginTop: 8,
   },
   eventsContainer: {
@@ -1080,12 +1098,13 @@ const styles = StyleSheet.create({
   },
   noEventsText: {
     marginTop: 12,
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
   },
 
   // Booking block
   bookingBlock: {
-    borderRadius: 6,
+    borderRadius: 8,
     borderLeftWidth: 4,
     padding: 8,
     marginVertical: 1,
@@ -1101,17 +1120,18 @@ const styles = StyleSheet.create({
   },
   bookingTime: {
     fontSize: 11,
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
   },
   bookingName: {
     fontSize: 12,
-    fontWeight: "500",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
     marginTop: 2,
   },
   bookingGround: {
     fontSize: 10,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     marginTop: 1,
   },
   blockedBlock: {
@@ -1130,7 +1150,7 @@ const styles = StyleSheet.create({
   stripe: {
     width: 10,
     height: "100%",
-    backgroundColor: "#999",
+    backgroundColor: "#9CA3AF",
     marginRight: 10,
     transform: [{ skewX: "-15deg" }],
   },
@@ -1148,10 +1168,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   weekDayHeaderToday: {
-    backgroundColor: "#E3F2FD",
+    backgroundColor: PALE_BLUE,
   },
   weekDayHeaderSelected: {
     borderWidth: 2,
@@ -1159,16 +1179,17 @@ const styles = StyleSheet.create({
   },
   weekDayName: {
     fontSize: 11,
-    color: "#666",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: "#6B7280",
   },
   weekDayNameToday: {
     color: MANAGER_BLUE,
+    fontFamily: "Ubuntu-Bold",
   },
   weekDayDate: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
     marginTop: 2,
   },
   weekDayDateToday: {
@@ -1189,12 +1210,13 @@ const styles = StyleSheet.create({
   },
   moreEventsText: {
     fontSize: 10,
+    fontFamily: "Ubuntu-Medium",
     color: MANAGER_BLUE,
-    fontWeight: "500",
   },
   noEventsWeek: {
     textAlign: "center",
-    color: "#ccc",
+    fontFamily: "Ubuntu-Regular",
+    color: "#D1D5DB",
     fontSize: 12,
     paddingVertical: 20,
   },
@@ -1212,8 +1234,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
     fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
+    fontFamily: "Ubuntu-Bold",
+    color: "#6B7280",
   },
   monthGrid: {
     flexDirection: "row",
@@ -1225,13 +1247,13 @@ const styles = StyleSheet.create({
     height: 50,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
+    borderRadius: 8,
   },
   monthDayOther: {
     opacity: 0.4,
   },
   monthDayToday: {
-    backgroundColor: "#E3F2FD",
+    backgroundColor: PALE_BLUE,
   },
   monthDaySelected: {
     borderWidth: 2,
@@ -1239,15 +1261,15 @@ const styles = StyleSheet.create({
   },
   monthDayText: {
     fontSize: 14,
-    fontWeight: "500",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
   },
   monthDayTextOther: {
-    color: "#999",
+    color: "#9CA3AF",
   },
   monthDayTextToday: {
+    fontFamily: "Ubuntu-Bold",
     color: MANAGER_BLUE,
-    fontWeight: "bold",
   },
   statusDots: {
     flexDirection: "row",
@@ -1274,7 +1296,8 @@ const styles = StyleSheet.create({
   },
   legendLabel: {
     fontSize: 14,
-    color: "#333",
+    fontFamily: "Ubuntu-Regular",
+    color: "#374151",
   },
 
   // Details dialog
@@ -1286,14 +1309,15 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 13,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     width: 70,
   },
   detailValue: {
     flex: 1,
     fontSize: 14,
-    color: "#333",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    color: "#111827",
   },
 
   // Empty state
@@ -1307,16 +1331,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
   emptyTitle: {
     marginTop: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#111827",
   },
   emptyText: {
     marginTop: 8,
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "center",
+    lineHeight: 20,
   },
 
   // FAB

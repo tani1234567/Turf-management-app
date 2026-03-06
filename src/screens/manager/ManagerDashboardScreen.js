@@ -32,7 +32,12 @@ import { selectUser, selectAssignedTurfIds } from "../../store/slices/authSlice"
 import { updateUserProfile } from "../../store/slices/authSlice";
 import { COLORS } from "../../constants/theme";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const MANAGER_DARK = "#2563EB";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 
 // Helper: get today's date string (YYYY-MM-DD)
 const getTodayString = () => {
@@ -402,28 +407,28 @@ export default function ManagerDashboardScreen({ navigation }) {
       label: "Pending Requests",
       value: String(pendingCount),
       icon: "clock-alert-outline",
-      color: "#FF9800",
+      color: WARN_ORANGE,
     },
     {
       id: "revenue",
       label: "Today's Revenue",
       value: formatCurrency(todayRevenue),
       icon: "currency-inr",
-      color: "#2196F3",
+      color: MANAGER_BLUE,
     },
     {
       id: "weekBookings",
       label: "Week's Bookings",
       value: String(weekBookings),
       icon: "calendar-check",
-      color: "#4CAF50",
+      color: SUCCESS_GREEN,
     },
     {
       id: "utilization",
       label: "Utilization",
       value: `${utilization}%`,
       icon: "chart-arc",
-      color: "#9C27B0",
+      color: "#8B5CF6",
     },
   ];
 
@@ -456,9 +461,7 @@ export default function ManagerDashboardScreen({ navigation }) {
       label: "Block Slots",
       icon: "block-helper",
       color: "#F44336",
-      onPress: () => {
-        Alert.alert("Coming Soon", "Slot blocking will be available soon.");
-      },
+      onPress: () => navigation.navigate("BlockSlots"),
     },
     {
       id: "analytics",
@@ -528,41 +531,31 @@ export default function ManagerDashboardScreen({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text variant="bodyMedium" style={styles.greeting}>
-              Manager Dashboard
-            </Text>
-            <Text variant="headlineSmall" style={styles.userName}>
+            <Text style={styles.greeting}>Good day,</Text>
+            <Text style={styles.userName}>
               {user?.name || "Manager"}
             </Text>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <TouchableOpacity
               onPress={() => navigation.navigate("Notifications")}
-              style={{ position: "relative" }}
+              style={styles.iconBtn}
             >
-              <MaterialCommunityIcons name="bell-outline" size={26} color="#666" />
+              <MaterialCommunityIcons name="bell-outline" size={22} color="#374151" />
               {unreadCount > 0 && (
-                <Badge
-                  size={18}
-                  style={{
-                    position: "absolute",
-                    top: -4,
-                    right: -6,
-                    backgroundColor: "#F44336",
-                  }}
-                >
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </Badge>
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={logout}>
-              <Surface style={styles.avatarContainer} elevation={2}>
-                <MaterialCommunityIcons
-                  name="account-tie"
-                  size={28}
-                  color={MANAGER_BLUE}
-                />
-              </Surface>
+            <TouchableOpacity onPress={logout} style={styles.avatarBtn}>
+              <MaterialCommunityIcons
+                name="account-tie"
+                size={22}
+                color={MANAGER_BLUE}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -737,28 +730,17 @@ export default function ManagerDashboardScreen({ navigation }) {
             {/* KPI Cards */}
             <View style={styles.kpiGrid}>
               {kpiCards.map((kpi) => (
-                <Surface key={kpi.id} style={styles.kpiCard} elevation={1}>
-                  <View
-                    style={[
-                      styles.kpiIconContainer,
-                      { backgroundColor: `${kpi.color}15` },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name={kpi.icon}
-                      size={22}
-                      color={kpi.color}
-                    />
+                <Surface key={kpi.id} style={styles.kpiCard} elevation={2}>
+                  <View style={[styles.kpiAccentBar, { backgroundColor: kpi.color }]} />
+                  <View style={styles.kpiBody}>
+                    <View style={[styles.kpiIconContainer, { backgroundColor: `${kpi.color}18` }]}>
+                      <MaterialCommunityIcons name={kpi.icon} size={20} color={kpi.color} />
+                    </View>
+                    <Text style={[styles.kpiValue, { color: kpi.color }]}>
+                      {kpi.value}
+                    </Text>
+                    <Text style={styles.kpiLabel}>{kpi.label}</Text>
                   </View>
-                  <Text
-                    variant="headlineSmall"
-                    style={[styles.kpiValue, { color: kpi.color }]}
-                  >
-                    {kpi.value}
-                  </Text>
-                  <Text variant="labelSmall" style={styles.kpiLabel}>
-                    {kpi.label}
-                  </Text>
                 </Surface>
               ))}
             </View>
@@ -821,7 +803,7 @@ export default function ManagerDashboardScreen({ navigation }) {
                 <Surface
                   key={booking.id}
                   style={styles.pendingCard}
-                  elevation={1}
+                  elevation={2}
                 >
                   <View style={styles.pendingTop}>
                     <View style={styles.pendingInfo}>
@@ -866,18 +848,20 @@ export default function ManagerDashboardScreen({ navigation }) {
                     <Button
                       mode="outlined"
                       compact
-                      textColor="#F44336"
+                      textColor={DANGER_RED}
                       style={styles.rejectButton}
                       onPress={() => handleRejectBooking(booking)}
+                      icon="close"
                     >
                       Reject
                     </Button>
                     <Button
                       mode="contained"
                       compact
-                      buttonColor="#4CAF50"
+                      buttonColor={SUCCESS_GREEN}
                       style={styles.approveButton}
                       onPress={() => handleApproveBooking(booking)}
+                      icon="check"
                     >
                       Approve
                     </Button>
@@ -968,19 +952,21 @@ export default function ManagerDashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 32,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    gap: 12,
   },
   loadingText: {
-    marginTop: 12,
-    color: "#666",
+    color: "#6B7280",
+    fontSize: 14,
   },
 
   // Header
@@ -989,22 +975,67 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+    paddingVertical: 4,
   },
   headerLeft: {
     flex: 1,
   },
   greeting: {
-    color: "#666",
+    fontSize: 13,
+    color: "#6B7280",
+    fontFamily: "Ubuntu-Regular",
   },
   userName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 22,
+    fontFamily: "Ubuntu-Bold",
+    color: "#1E40AF",
+    letterSpacing: -0.3,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notifBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: DANGER_RED,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notifBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PALE_BLUE,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: MANAGER_BLUE + "40",
   },
   avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#E3F2FD",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PALE_BLUE,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1024,36 +1055,42 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderWidth: 1.5,
+    borderColor: MANAGER_BLUE + "30",
+    shadowColor: MANAGER_BLUE,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   menuStyle: {
     marginTop: 50,
   },
   expandButton: {
     marginLeft: 8,
-    backgroundColor: "#E3F2FD",
+    backgroundColor: PALE_BLUE,
   },
   turfSelectorText: {
     flex: 1,
     marginLeft: 10,
-    color: "#333",
-    fontWeight: "600",
+    color: "#1E40AF",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
   },
   menuContent: {
     backgroundColor: "#fff",
   },
   selectedMenuItem: {
     color: MANAGER_BLUE,
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
   },
 
   // Empty state
   emptyCard: {
-    padding: 32,
+    padding: 36,
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
@@ -1061,102 +1098,123 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     marginTop: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    color: "#374151",
+    fontSize: 16,
   },
   emptySubtext: {
     marginTop: 8,
-    color: "#999",
+    color: "#9CA3AF",
     textAlign: "center",
+    fontSize: 13,
+    lineHeight: 20,
   },
 
   // Today's Overview
   overviewCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: MANAGER_BLUE,
   },
   overviewHeader: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 12,
+    gap: 8,
   },
   overviewTitle: {
-    marginLeft: 8,
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#374151",
   },
   overviewBooking: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
   },
   overviewBadge: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#D1FAE5",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 12,
+    borderRadius: 8,
   },
   overviewBadgeText: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#4CAF50",
+    fontSize: 10,
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
   },
   overviewDetails: {
     flex: 1,
   },
   overviewName: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    color: "#111827",
+    fontSize: 14,
   },
   overviewTime: {
-    color: "#666",
+    color: "#6B7280",
     marginTop: 2,
+    fontSize: 12,
   },
   overviewEmpty: {
-    color: "#999",
+    color: "#9CA3AF",
     fontStyle: "italic",
+    fontSize: 13,
   },
 
   // KPI Cards
   kpiGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginHorizontal: -4,
+    gap: 10,
     marginBottom: 24,
   },
   kpiCard: {
-    width: "48%",
-    padding: 14,
-    borderRadius: 12,
+    width: "47.5%",
+    borderRadius: 14,
     backgroundColor: "#fff",
-    margin: "1%",
+    overflow: "hidden",
+  },
+  kpiAccentBar: {
+    height: 4,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+  kpiBody: {
+    padding: 14,
     alignItems: "center",
   },
   kpiIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
   kpiValue: {
-    fontWeight: "bold",
-    fontSize: 22,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 24,
+    letterSpacing: -0.5,
   },
   kpiLabel: {
-    color: "#666",
+    color: "#6B7280",
     marginTop: 4,
     textAlign: "center",
+    fontSize: 11,
+    fontFamily: "Ubuntu-Regular",
   },
 
   // Section
   sectionTitle: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
     marginBottom: 12,
-    color: "#333",
+    color: "#1E3A5F",
+    letterSpacing: 0.1,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -1174,43 +1232,54 @@ const styles = StyleSheet.create({
   actionItem: {
     width: "33.33%",
     alignItems: "center",
-    marginBottom: 16,
+    paddingVertical: 10,
   },
   actionIconContainer: {
-    width: 56,
-    height: 56,
+    width: 54,
+    height: 54,
     borderRadius: 16,
     backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   actionIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 13,
     justifyContent: "center",
     alignItems: "center",
   },
   actionBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
-    backgroundColor: "#F44336",
-    fontSize: 10,
+    top: -5,
+    right: -5,
+    backgroundColor: DANGER_RED,
+    fontSize: 9,
+    minWidth: 18,
+    height: 18,
   },
   actionLabel: {
     marginTop: 6,
-    color: "#555",
+    color: "#374151",
     textAlign: "center",
+    fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
   },
 
   // Pending Bookings
   pendingCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: WARN_ORANGE,
   },
   pendingTop: {
     flexDirection: "row",
@@ -1220,70 +1289,77 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pendingName: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+    color: "#111827",
+    fontSize: 14,
   },
   pendingDetails: {
-    color: "#666",
+    color: "#6B7280",
     marginTop: 2,
+    fontSize: 12,
   },
   pendingChips: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 6,
+    marginTop: 8,
     flexWrap: "wrap",
     gap: 6,
   },
   chip: {
     height: 26,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: PALE_BLUE,
   },
   chipText: {
     fontSize: 11,
+    color: MANAGER_BLUE,
   },
   pendingAmount: {
-    color: "#4CAF50",
-    fontWeight: "600",
+    color: SUCCESS_GREEN,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 13,
   },
   pendingDivider: {
     marginVertical: 10,
+    backgroundColor: "#F3F4F6",
   },
   pendingActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 10,
+    gap: 8,
   },
   rejectButton: {
-    borderColor: "#F44336",
-    borderRadius: 8,
+    borderColor: DANGER_RED,
+    borderRadius: 10,
   },
   approveButton: {
-    borderRadius: 8,
+    borderRadius: 10,
   },
 
   // Empty small card
   emptySmallCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 24,
+    borderRadius: 14,
+    padding: 28,
     alignItems: "center",
     marginBottom: 10,
+    gap: 8,
   },
   emptySmallText: {
-    color: "#999",
-    marginTop: 8,
+    color: "#9CA3AF",
+    fontSize: 13,
   },
 
   // Activity Feed
   activityCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
   },
   activityItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 8,
+    gap: 12,
   },
   activityIcon: {
     width: 36,
@@ -1291,19 +1367,23 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
   },
   activityContent: {
     flex: 1,
   },
   activityText: {
-    color: "#333",
+    color: "#374151",
+    fontSize: 13,
+    lineHeight: 18,
   },
   activityTime: {
-    color: "#999",
-    marginTop: 2,
+    color: MANAGER_BLUE,
+    marginTop: 3,
+    fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
   },
   activityDivider: {
     marginLeft: 48,
+    backgroundColor: "#F3F4F6",
   },
 });

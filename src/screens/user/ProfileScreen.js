@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Animated,
+  Pressable,
   Modal,
   Alert,
   Image,
@@ -23,6 +25,7 @@ import { useAuth } from "../../hooks";
 import { useDispatch } from "react-redux";
 import { updateUserProfile } from "../../store/slices/authSlice";
 import { updateDocument } from "../../services/firebase/firestore";
+import { FONTS } from "../../constants/theme";
 
 const USER_COLOR = "#4CAF50";
 
@@ -126,10 +129,14 @@ const AboutModal = ({ visible, onDismiss }) => (
       <Surface style={styles.aboutDialog} elevation={8}>
         <View style={styles.aboutHeader}>
           <View style={styles.aboutIconContainer}>
-            <MaterialCommunityIcons name="soccer-field" size={48} color={USER_COLOR} />
+            <Image
+              source={require("../../../assets/SS_Logo.png")}
+              style={styles.aboutLogo}
+              resizeMode="cover"
+            />
           </View>
           <Text variant="headlineSmall" style={styles.aboutAppName}>
-            Play Grid
+            SportSwift
           </Text>
           <Text variant="bodyMedium" style={styles.aboutVersion}>
             Version 1.0.0
@@ -279,41 +286,52 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  const MenuItem = ({ item }) => (
-    <TouchableOpacity style={styles.menuItem} onPress={() => handleMenuPress(item.id)}>
-      <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}15` }]}>
-        <MaterialCommunityIcons name={item.icon} size={22} color={item.color} />
-      </View>
-      <Text variant="bodyLarge" style={styles.menuLabel}>
-        {item.label}
-      </Text>
-      <MaterialCommunityIcons name="chevron-right" size={24} color="#ccc" />
-    </TouchableOpacity>
-  );
+  const MenuItem = ({ item }) => {
+    const scale = useRef(new Animated.Value(1)).current;
+    const pressIn = () =>
+      Animated.spring(scale, { toValue: 0.975, speed: 22, bounciness: 3, useNativeDriver: true }).start();
+    const pressOut = () =>
+      Animated.spring(scale, { toValue: 1, speed: 22, bounciness: 3, useNativeDriver: true }).start();
+    return (
+      <Pressable
+        onPress={() => handleMenuPress(item.id)}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+      >
+        <Animated.View style={[styles.menuItem, { transform: [{ scale }] }]}>
+          <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}18` }]}>
+            <MaterialCommunityIcons name={item.icon} size={21} color={item.color} />
+          </View>
+          <Text style={styles.menuLabel}>{item.label}</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#d0d0d0" />
+        </Animated.View>
+      </Pressable>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Profile Header */}
         <Surface style={styles.profileCard} elevation={1}>
-          <View style={styles.avatarContainer}>
-            {user?.profilePicture ? (
-              <Image source={{ uri: user.profilePicture }} style={styles.avatar} />
-            ) : (
-              <MaterialCommunityIcons name="account" size={40} color="#4CAF50" />
-            )}
-          </View>
-          <View style={styles.profileInfo}>
-            <Text variant="titleLarge" style={styles.userName}>
-              {user?.name || "User"}
-            </Text>
-            <Text variant="bodyMedium" style={styles.userPhone}>
-              {user?.phone || "Phone not set"}
-            </Text>
-            <View style={styles.roleChip}>
-              <Text variant="bodySmall" style={styles.roleText}>
-                {(user?.role || "user").toUpperCase()}
-              </Text>
+          {/* Green accent strip at top */}
+          <View style={styles.profileAccentStrip} />
+          <View style={styles.profileCardInner}>
+            <View style={styles.avatarContainer}>
+              {user?.profilePicture ? (
+                <Image source={{ uri: user.profilePicture }} style={styles.avatar} />
+              ) : (
+                <MaterialCommunityIcons name="account" size={40} color={USER_COLOR} />
+              )}
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.userName}>{user?.name || "User"}</Text>
+              <Text style={styles.userPhone}>{user?.phone || "Phone not set"}</Text>
+              <View style={styles.roleChip}>
+                <Text style={styles.roleText}>
+                  {(user?.role || "user").toUpperCase()}
+                </Text>
+              </View>
             </View>
           </View>
         </Surface>
@@ -373,12 +391,21 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   profileCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 20,
     borderRadius: 16,
     backgroundColor: "#fff",
     marginBottom: 16,
+    overflow: "hidden",
+  },
+  profileAccentStrip: {
+    height: 4,
+    backgroundColor: USER_COLOR,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  profileCardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 20,
   },
   avatarContainer: {
     width: 72,
@@ -388,21 +415,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
+    borderWidth: 2,
+    borderColor: USER_COLOR,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
   },
   profileInfo: {
     flex: 1,
   },
   userName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: FONTS.bold,
+    fontSize: 18,
+    color: "#1a1a1a",
   },
   userPhone: {
+    fontFamily: FONTS.regular,
     color: "#666",
+    fontSize: 13,
     marginTop: 2,
   },
   roleChip: {
@@ -414,20 +446,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   roleText: {
-    color: "#4CAF50",
-    fontWeight: "600",
+    fontFamily: FONTS.bold,
+    color: USER_COLOR,
     fontSize: 10,
+    letterSpacing: 0.5,
   },
   menuCard: {
     borderRadius: 16,
     backgroundColor: "#fff",
     marginBottom: 16,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
   menuIconContainer: {
     width: 40,
@@ -435,18 +474,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 14,
   },
   menuLabel: {
     flex: 1,
-    color: "#333",
+    fontFamily: FONTS.medium,
+    fontSize: 15,
+    color: "#222",
   },
   divider: {
-    marginLeft: 68,
+    marginLeft: 70,
+    backgroundColor: "#f2f2f2",
   },
   logoutButton: {
-    borderRadius: 8,
+    borderRadius: 12,
     borderColor: "#F44336",
+    marginBottom: 4,
   },
   version: {
     textAlign: "center",
@@ -511,11 +554,14 @@ const styles = StyleSheet.create({
   aboutIconContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: "#E8F5E9",
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: 20,
+    overflow: "hidden",
     marginBottom: 12,
+  },
+  aboutLogo: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
   },
   aboutAppName: {
     fontWeight: "bold",

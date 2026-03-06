@@ -1219,13 +1219,13 @@ export default function EditTurfScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   loadingText: {
     marginTop: 16,
@@ -1510,7 +1510,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 8,
@@ -1566,7 +1566,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   areaSearchbar: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     elevation: 0,
   },
   zoneFilterContainer: {
@@ -1577,7 +1577,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   zoneChip: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   selectedZoneChip: {
     backgroundColor: "#4CAF50",

@@ -35,6 +35,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { selectUser } from "../../store/slices/authSlice";
 import { queryDocuments } from "../../services/firebase/firestore";
 import { useNotifications } from "../../hooks";
+import { FONTS } from "../../constants/theme";
 import {
   MUMBAI_AREAS,
   getAreasByZone,
@@ -113,22 +114,14 @@ const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation }) => 
     }).start();
   };
 
-  // Get first ground for quick stats
-  const firstGround = item.grounds && item.grounds.length > 0 ? item.grounds[0] : null;
-  const groundSize = firstGround?.size || "Standard";
-  const surfaceType = firstGround?.surfaceType || "Grass";
-
-  // Check if turf is currently available (simplified logic)
-  const isAvailableNow = true; // You can add real-time slot checking logic here
-  const openTime = "6:00 AM"; // You can extract from actual turf data
-
-  // Format price range
-  const priceDisplay =
-    item.priceRange?.min && item.priceRange?.max
-      ? item.priceRange.min === item.priceRange.max
-        ? `₹${item.priceRange.min}`
-        : `₹${item.priceRange.min}-₹${item.priceRange.max}`
-      : `₹${item.pricePerHour}`;
+  // Single morning-slot price (clearest signal for the user)
+  const firstGround = item.grounds?.[0];
+  const morningPrice =
+    firstGround?.pricing?.weekday?.morning?.rate ||
+    firstGround?.pricing?.allDayRate ||
+    item.pricePerHour ||
+    0;
+  const priceDisplay = morningPrice ? `₹${morningPrice}` : `₹${item.pricePerHour || 0}`;
 
   return (
     <Animated.View
@@ -143,26 +136,30 @@ const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation }) => 
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
       >
-        <Surface style={[styles.cardSurface, isGrid && styles.gridCardSurface]} elevation={3}>
-          {/* Image Section with Gradient Overlay */}
+        <Surface style={styles.cardSurface} elevation={2}>
+          {/* ── Image ─────────────────────────────── */}
           <View style={[styles.cardImageContainer, isGrid && styles.gridImageContainer]}>
             {item.imageUrl ? (
               <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
             ) : (
               <View style={[styles.cardImage, styles.placeholderImage]}>
-                <MaterialCommunityIcons name="soccer-field" size={isGrid ? 40 : 60} color="#ccc" />
+                <MaterialCommunityIcons
+                  name="soccer-field"
+                  size={isGrid ? 36 : 52}
+                  color="#ccc"
+                />
               </View>
             )}
 
-            {/* Gradient Overlay */}
+            {/* Bottom-up gradient so sport chips are legible */}
             <LinearGradient
-              colors={["rgba(0,0,0,0.6)", "rgba(0,0,0,0.3)", "rgba(0,0,0,0)"]}
+              colors={["transparent", "rgba(0,0,0,0.45)"]}
               style={styles.gradientOverlay}
               start={{ x: 0, y: 0 }}
               end={{ x: 0, y: 1 }}
             />
 
-            {/* Favorite Button */}
+            {/* Favourite */}
             <Pressable
               style={styles.favoriteButton}
               onPress={() => toggleFavorite(item.id)}
@@ -170,107 +167,50 @@ const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation }) => 
             >
               <MaterialCommunityIcons
                 name={isFavorite ? "heart" : "heart-outline"}
-                size={24}
+                size={20}
                 color={isFavorite ? "#FF4444" : "#fff"}
               />
             </Pressable>
 
-            {/* Sport Chips */}
-            <View style={styles.sportChipsContainer}>
-              {(item.sports || []).slice(0, 3).map((sport, idx) => (
-                <View key={idx} style={styles.modernSportChip}>
-                  <Text style={styles.modernSportChipText}>{sport}</Text>
-                </View>
-              ))}
-            </View>
+            {/* Sport chips — bottom-left over gradient */}
+            {(item.sports || []).length > 0 && (
+              <View style={styles.sportChipsContainer}>
+                {(item.sports || []).slice(0, isGrid ? 1 : 2).map((sport, idx) => (
+                  <View key={idx} style={styles.cardSportChip}>
+                    <Text style={styles.cardSportChipText}>{sport}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
-          {/* Content Section */}
-          <View style={styles.modernCardContent}>
-            {/* Turf Name */}
-            <Text style={styles.modernTurfName} numberOfLines={1}>
+          {/* ── Content ───────────────────────────── */}
+          <View style={styles.cardContent}>
+            {/* Name */}
+            <Text style={styles.cardTurfName} numberOfLines={1}>
               {item.name}
             </Text>
 
             {/* Location */}
-            <View style={styles.modernLocationRow}>
-              <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
-              <Text style={styles.modernLocationText} numberOfLines={1}>
+            <View style={styles.cardLocationRow}>
+              <MaterialCommunityIcons name="map-marker-outline" size={13} color="#999" />
+              <Text style={styles.cardLocationText} numberOfLines={1}>
                 {item.locationText || "Location not specified"}
               </Text>
             </View>
 
-            {/* Rating & Reviews */}
-            <View style={styles.modernRatingRow}>
-              <View style={styles.modernRatingContainer}>
-                <MaterialCommunityIcons name="star" size={16} color="#FFD700" />
-                <Text style={styles.modernRatingText}>{item.rating.toFixed(1)}</Text>
-                <Text style={styles.modernReviewCount}>({item.reviewCount})</Text>
+            {/* Rating ←→ Price — one compact row, no blank space */}
+            <View style={styles.cardStatsRow}>
+              <View style={styles.cardRatingGroup}>
+                <MaterialCommunityIcons name="star" size={13} color="#F59E0B" />
+                <Text style={styles.cardRatingText}>{item.rating.toFixed(1)}</Text>
+                <Text style={styles.cardReviewCount}>({item.reviewCount})</Text>
               </View>
-              {item.distance != null && (
-                <View style={styles.modernDistanceContainer}>
-                  <MaterialCommunityIcons name="map-marker-distance" size={14} color={USER_COLOR} />
-                  <Text style={styles.modernDistanceText}>{item.distance} km</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Quick Stats */}
-            {!isGrid && (
-              <View style={styles.quickStatsRow}>
-                <View style={styles.quickStatItem}>
-                  <MaterialCommunityIcons name="resize" size={16} color="#666" />
-                  <Text style={styles.quickStatText}>{groundSize}</Text>
-                </View>
-                <View style={styles.quickStatDivider} />
-                <View style={styles.quickStatItem}>
-                  <MaterialCommunityIcons name="grass" size={16} color="#666" />
-                  <Text style={styles.quickStatText}>{surfaceType}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Price & Availability */}
-            <View style={styles.modernPriceSection}>
-              <View style={styles.modernPriceContainer}>
-                <Text style={styles.modernPriceText}>{priceDisplay}</Text>
-                <Text style={styles.modernPerHourText}>/hour</Text>
-              </View>
-              <View
-                style={[
-                  styles.availabilityBadge,
-                  isAvailableNow ? styles.availableBadge : styles.unavailableBadge,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.availabilityDot,
-                    { backgroundColor: isAvailableNow ? "#4CAF50" : "#FF9800" },
-                  ]}
-                />
-                <Text style={styles.availabilityText}>
-                  {isAvailableNow ? "Available" : `Opens ${openTime}`}
-                </Text>
+              <View style={styles.cardPriceGroup}>
+                <Text style={styles.cardPriceText}>{priceDisplay}</Text>
+                <Text style={styles.cardPerHour}>/hr</Text>
               </View>
             </View>
-
-            {/* Quick Book Button */}
-            {!isGrid && (
-              <Pressable
-                style={styles.quickBookButton}
-                onPress={() => navigation.navigate("TurfDetails", { turfId: item.id })}
-              >
-                <LinearGradient
-                  colors={["#4CAF50", "#45A049"]}
-                  style={styles.quickBookGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <Text style={styles.quickBookText}>Quick Book</Text>
-                  <MaterialCommunityIcons name="arrow-right" size={18} color="#fff" />
-                </LinearGradient>
-              </Pressable>
-            )}
           </View>
         </Surface>
       </Pressable>
@@ -813,45 +753,36 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  // Render header
-  const renderHeader = () => (
-    <>
-      {/* Header */}
-      <View style={styles.header}>
+  // Sticky header (greeting + search + filter — all unified)
+  const renderStickyHeader = () => (
+    <View style={styles.headerWrapper}>
+      {/* Greeting row */}
+      <View style={styles.headerTopRow}>
         <View style={styles.headerLeft}>
-          <Text variant="bodyMedium" style={styles.greeting}>
-            Welcome back,
-          </Text>
-          <Text variant="headlineSmall" style={styles.userName}>
-            {user?.name || "User"}
-          </Text>
+          <Text style={styles.greeting}>Welcome back,</Text>
+          <Text style={styles.userName}>{user?.name || "User"}</Text>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity style={styles.locationButton} onPress={() => setLocationModalVisible(true)}>
-            <MaterialCommunityIcons name="map-marker" size={16} color={USER_COLOR} />
-            <Text variant="bodySmall" style={styles.locationButtonText} numberOfLines={1}>
+            <MaterialCommunityIcons name="map-marker" size={15} color={USER_COLOR} />
+            <Text style={styles.locationButtonText} numberOfLines={1}>
               {selectedAreas.length === 0
                 ? "All Areas"
                 : selectedAreas.length === 1
                 ? MUMBAI_AREAS.find(a => a.id === selectedAreas[0])?.name || "1 Area"
                 : `${selectedAreas.length} Areas`}
             </Text>
-            <MaterialCommunityIcons name="chevron-down" size={16} color="#666" />
+            <MaterialCommunityIcons name="chevron-down" size={14} color="#666" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate("Notifications")}
-            style={{ position: "relative", padding: 8 }}
+            style={styles.bellBtn}
           >
-            <MaterialCommunityIcons name="bell-outline" size={24} color="#666" />
+            <MaterialCommunityIcons name="bell-outline" size={22} color="#444" />
             {unreadCount > 0 && (
               <Badge
-                size={18}
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 2,
-                  backgroundColor: "#F44336",
-                }}
+                size={16}
+                style={{ position: "absolute", top: 0, right: 0, backgroundColor: "#F44336" }}
               >
                 {unreadCount > 99 ? "99+" : unreadCount}
               </Badge>
@@ -860,7 +791,7 @@ export default function HomeScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Search Bar */}
+      {/* Search + filter row */}
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search turfs, sports, locations..."
@@ -877,14 +808,14 @@ export default function HomeScreen({ navigation }) {
           style={styles.filterButton}
           onPress={() => setFilterModalVisible(true)}
         >
-          <MaterialCommunityIcons name="tune-variant" size={24} color="#fff" />
+          <MaterialCommunityIcons name="tune-variant" size={20} color="#fff" />
           {activeFiltersCount > 0 && (
             <Badge style={styles.filterBadge}>{activeFiltersCount}</Badge>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Recent Searches Dropdown */}
+      {/* Recent searches dropdown */}
       {showRecentSearches && recentSearches.length > 0 && (
         <Surface style={styles.recentSearchesContainer} elevation={3}>
           <Text variant="labelMedium" style={styles.recentSearchesTitle}>
@@ -909,6 +840,12 @@ export default function HomeScreen({ navigation }) {
           ))}
         </Surface>
       )}
+    </View>
+  );
+
+  // Render scrollable header content (sport filters, sort, results count)
+  const renderHeader = () => (
+    <>
 
       {/* Sport Filter Chips */}
       <ScrollView
@@ -975,7 +912,8 @@ export default function HomeScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      {renderStickyHeader()}
       {loading && page === 1 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={USER_COLOR} />
@@ -1405,27 +1343,44 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 16,
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  headerWrapper: {
+    backgroundColor: "#fff",
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ebebeb",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 4,
+    marginBottom: 8,
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
   headerLeft: {
     flex: 1,
   },
   greeting: {
-    color: "#666",
+    fontFamily: FONTS.regular,
+    fontSize: 13,
+    color: "#888",
   },
   userName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: FONTS.bold,
+    fontSize: 22,
+    color: "#111",
+    letterSpacing: -0.3,
   },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
   locationButton: {
     flexDirection: "row",
@@ -1437,28 +1392,43 @@ const styles = StyleSheet.create({
     maxWidth: 150,
   },
   locationButtonText: {
+    fontFamily: FONTS.medium,
+    fontSize: 12,
     color: "#333",
     marginHorizontal: 4,
     flex: 1,
   },
+  bellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   searchContainer: {
     flexDirection: "row",
-    paddingHorizontal: 16,
-    marginBottom: 12,
     alignItems: "center",
   },
   searchbar: {
     flex: 1,
     borderRadius: 12,
-    backgroundColor: "#fff",
-    elevation: 2,
+    backgroundColor: "#f5f5f5",
+    elevation: 0,
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
+    maxHeight: 40,
   },
   searchInput: {
     fontSize: 14,
+    fontFamily: FONTS.regular,
+    paddingVertical: 0,
+    textAlignVertical: "center",
+    alignSelf: "center",
   },
   filterButton: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: USER_COLOR,
     justifyContent: "center",
@@ -1473,11 +1443,12 @@ const styles = StyleSheet.create({
     size: 18,
   },
   recentSearchesContainer: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginTop: 10,
     padding: 12,
     borderRadius: 12,
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e8e8e8",
   },
   recentSearchesTitle: {
     color: "#666",
@@ -1493,7 +1464,7 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   sportsFilterContainer: {
-    marginBottom: 12,
+    marginBottom: 8,
   },
   sportsFilterContent: {
     paddingHorizontal: 16,
@@ -1516,7 +1487,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 5,
+    marginLeft: 4,
   },
   resultsCount: {
     color: "#666",
@@ -1534,9 +1506,10 @@ const styles = StyleSheet.create({
   activeViewButton: {
     backgroundColor: "#E8F5E9",
   },
+  // ── Turf Card ──────────────────────────────────
   turfCard: {
     marginHorizontal: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   gridCard: {
     width: GRID_CARD_WIDTH,
@@ -1546,24 +1519,26 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   cardSurface: {
-    borderRadius: 16,
+    borderRadius: 10,
     backgroundColor: "#fff",
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#efefef",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  gridCardSurface: {
-    // Height will be auto-calculated based on content
-  },
+
+  // Image
   cardImageContainer: {
-    height: 180,
+    height: 170,
     position: "relative",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#e8e8e8",
   },
   gridImageContainer: {
-    height: 140,
+    height: 120,
   },
   cardImage: {
     width: "100%",
@@ -1571,193 +1546,107 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   placeholderImage: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#ececec",
     justifyContent: "center",
     alignItems: "center",
   },
+  // Bottom-up gradient — keeps sport chips legible
   gradientOverlay: {
     position: "absolute",
-    top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    height: "60%",
+    height: "55%",
   },
   favoriteButton: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    top: 10,
+    right: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.32)",
     justifyContent: "center",
     alignItems: "center",
   },
+  // Sport chips sit over the gradient at the bottom-left
   sportChipsContainer: {
     position: "absolute",
-    top: 12,
-    left: 12,
+    bottom: 8,
+    left: 10,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
+    gap: 5,
   },
-  modernSportChip: {
-    backgroundColor: "rgba(76, 175, 80, 0.9)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backdropFilter: "blur(10px)",
+  cardSportChip: {
+    backgroundColor: "rgba(16,185,129,0.88)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  modernSportChipText: {
+  cardSportChipText: {
     color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 10,
+    fontFamily: FONTS.medium,
     textTransform: "capitalize",
   },
-  modernCardContent: {
-    padding: 16,
+
+  // Content
+  cardContent: {
+    padding: 12,
   },
-  modernTurfName: {
-    fontSize: 18,
-    fontWeight: "700",
+  cardTurfName: {
+    fontFamily: FONTS.bold,
+    fontSize: 15,
     color: "#1a1a1a",
-    marginBottom: 6,
-    fontFamily: "Ubuntu-Bold",
+    marginBottom: 4,
   },
-  modernLocationRow: {
+  cardLocationRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
   },
-  modernLocationText: {
-    fontSize: 13,
-    color: "#666",
-    marginLeft: 4,
+  cardLocationText: {
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    color: "#888",
+    marginLeft: 3,
     flex: 1,
   },
-  modernRatingRow: {
+  // Single row: rating left, price right — no blank space
+  cardStatsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
   },
-  modernRatingContainer: {
+  cardRatingGroup: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 3,
   },
-  modernRatingText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginLeft: 4,
-  },
-  modernReviewCount: {
+  cardRatingText: {
+    fontFamily: FONTS.medium,
     fontSize: 13,
-    color: "#999",
-    marginLeft: 4,
+    color: "#333",
   },
-  modernDistanceContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#E8F5E9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  modernDistanceText: {
+  cardReviewCount: {
+    fontFamily: FONTS.regular,
     fontSize: 12,
-    color: USER_COLOR,
-    marginLeft: 4,
-    fontWeight: "600",
+    color: "#aaa",
   },
-  quickStatsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8f8f8",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 12,
-  },
-  quickStatItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  quickStatText: {
-    fontSize: 12,
-    color: "#666",
-    marginLeft: 6,
-    fontWeight: "500",
-  },
-  quickStatDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: "#ddd",
-    marginHorizontal: 8,
-  },
-  modernPriceSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  modernPriceContainer: {
+  cardPriceGroup: {
     flexDirection: "row",
     alignItems: "baseline",
+    gap: 1,
   },
-  modernPriceText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: USER_COLOR,
-    fontFamily: "Ubuntu-Bold",
-  },
-  modernPerHourText: {
-    fontSize: 13,
-    color: "#666",
-    marginLeft: 3,
-  },
-  availabilityBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  availableBadge: {
-    backgroundColor: "#E8F5E9",
-  },
-  unavailableBadge: {
-    backgroundColor: "#FFF3E0",
-  },
-  availabilityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 5,
-  },
-  availabilityText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#666",
-  },
-  quickBookButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginTop: 4,
-  },
-  quickBookGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  quickBookText: {
+  cardPriceText: {
+    fontFamily: FONTS.bold,
     fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
-    marginRight: 6,
+    color: "#10B981",
+  },
+  cardPerHour: {
+    fontFamily: FONTS.regular,
+    fontSize: 11,
+    color: "#999",
   },
   emptyContainer: {
     flex: 1,

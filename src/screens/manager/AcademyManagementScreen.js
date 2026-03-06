@@ -36,7 +36,11 @@ import {
   subscribeToCollection,
 } from "../../services/firebase/firestore";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 
 const DAYS_OF_WEEK = [
   { key: "monday", label: "Mon" },
@@ -1911,7 +1915,7 @@ export default function AcademyManagementScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
 
   // Header
@@ -2116,7 +2120,7 @@ const styles = StyleSheet.create({
   // Modal
   modalContainer: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   modalHeader: {
     flexDirection: "row",

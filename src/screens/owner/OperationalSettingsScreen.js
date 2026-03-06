@@ -473,7 +473,7 @@ export default function OperationalSettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     flexDirection: "row",
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 8,

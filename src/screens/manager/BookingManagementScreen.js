@@ -36,21 +36,26 @@ import {
   getDocument,
 } from "../../services/firebase/firestore";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
+const NAVY_BLUE = "#1E40AF";
 
 // Status colors
 const STATUS_COLORS = {
-  pending: "#FF9800",
-  pending_payment: "#9C27B0",
-  payment_submitted: "#673AB7",
-  awaiting_payment: "#FF5722",
-  payment_rejected: "#F44336",
-  expired: "#9E9E9E",
-  confirmed: "#2196F3",
-  in_progress: "#00BCD4",
-  completed: "#4CAF50",
-  cancelled: "#9E9E9E",
-  rejected: "#F44336",
+  pending: "#F59E0B",
+  pending_payment: "#8B5CF6",
+  payment_submitted: "#6D28D9",
+  awaiting_payment: "#F97316",
+  payment_rejected: "#EF4444",
+  expired: "#9CA3AF",
+  confirmed: "#3B82F6",
+  in_progress: "#06B6D4",
+  completed: "#22C55E",
+  cancelled: "#9CA3AF",
+  rejected: "#EF4444",
 };
 
 // Rejection reasons
@@ -491,15 +496,11 @@ export default function BookingManagementScreen({ navigation }) {
         {label}
       </Text>
       {count > 0 && (
-        <Badge
-          size={18}
-          style={[
-            styles.tabBadge,
-            activeTab === value && styles.tabBadgeActive,
-          ]}
-        >
-          {count}
-        </Badge>
+        <View style={[styles.tabBadge, activeTab === value && styles.tabBadgeActive]}>
+          <Text style={[styles.tabBadgeText, activeTab === value && styles.tabBadgeTextActive]}>
+            {count}
+          </Text>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -508,9 +509,16 @@ export default function BookingManagementScreen({ navigation }) {
   const BookingCard = ({ booking }) => {
     const hasConflict = conflictWarnings[booking.id];
     const isLoading = actionLoading === booking.id;
+    const statusColor = STATUS_COLORS[booking.status] || "#9CA3AF";
+
+    // Determine left border color by tab
+    const borderColor =
+      activeTab === "pending" ? WARN_ORANGE :
+      activeTab === "confirmed" ? MANAGER_BLUE :
+      activeTab === "completed" ? SUCCESS_GREEN : "#9CA3AF";
 
     return (
-      <Surface style={styles.bookingCard} elevation={1}>
+      <View style={[styles.bookingCard, { borderLeftColor: borderColor }]}>
         {/* Conflict warning */}
         {hasConflict && activeTab === "pending" && (
           <View style={styles.conflictBanner}>
@@ -524,49 +532,47 @@ export default function BookingManagementScreen({ navigation }) {
         {/* Card header */}
         <View style={styles.cardHeader}>
           <View style={styles.customerInfo}>
-            <Text variant="titleMedium" style={styles.customerName}>
+            <Text style={styles.customerName}>
               {booking.userName || booking.customerName || "Customer"}
             </Text>
             <View style={styles.phoneRow}>
-              <MaterialCommunityIcons name="phone" size={14} color="#666" />
-              <Text variant="bodySmall" style={styles.phoneText}>
+              <MaterialCommunityIcons name="phone" size={14} color="#6B7280" />
+              <Text style={styles.phoneText}>
                 {booking.userPhone || booking.customerPhone || "N/A"}
               </Text>
             </View>
           </View>
-          <Chip
-            mode="flat"
-            textStyle={{ fontSize: 11, color: STATUS_COLORS[booking.status] }}
-            style={[styles.statusChip, { backgroundColor: `${STATUS_COLORS[booking.status]}15` }]}
-          >
-            {booking.status.toUpperCase()}
-          </Chip>
+          <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+            <Text style={[styles.statusPillText, { color: statusColor }]}>
+              {booking.status.replace(/_/g, " ").toUpperCase()}
+            </Text>
+          </View>
         </View>
 
         {/* Booking details */}
         <View style={styles.detailsGrid}>
           <View style={styles.detailItem}>
-            <MaterialCommunityIcons name="calendar" size={16} color="#666" />
-            <Text variant="bodySmall" style={styles.detailText}>
+            <MaterialCommunityIcons name="calendar" size={15} color={MANAGER_BLUE} />
+            <Text style={styles.detailText}>
               {formatDate(booking.date)}
             </Text>
           </View>
           <View style={styles.detailItem}>
-            <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
-            <Text variant="bodySmall" style={styles.detailText}>
-              {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
+            <MaterialCommunityIcons name="clock-outline" size={15} color={MANAGER_BLUE} />
+            <Text style={styles.detailText}>
+              {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
             </Text>
           </View>
           <View style={styles.detailItem}>
-            <MaterialCommunityIcons name="soccer-field" size={16} color="#666" />
-            <Text variant="bodySmall" style={styles.detailText}>
+            <MaterialCommunityIcons name="soccer-field" size={15} color={MANAGER_BLUE} />
+            <Text style={styles.detailText}>
               {booking.groundName || getGroundName(booking.groundId)}
             </Text>
           </View>
           {booking.sport && (
             <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="basketball" size={16} color="#666" />
-              <Text variant="bodySmall" style={styles.detailText}>
+              <MaterialCommunityIcons name="basketball" size={15} color={MANAGER_BLUE} />
+              <Text style={styles.detailText}>
                 {booking.sport}
               </Text>
             </View>
@@ -575,25 +581,25 @@ export default function BookingManagementScreen({ navigation }) {
 
         {/* Amount */}
         <View style={styles.amountRow}>
-          <Text variant="bodyMedium" style={styles.amountLabel}>Total</Text>
-          <Text variant="titleMedium" style={styles.amountValue}>
+          <Text style={styles.amountLabel}>Total Amount</Text>
+          <Text style={styles.amountValue}>
             ₹{booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || booking.amount || 0}
           </Text>
         </View>
         {booking.payment?.advanceAmount > 0 && (
           <View style={styles.amountRow}>
-            <Text variant="bodySmall" style={styles.amountLabel}>
+            <Text style={[styles.amountLabel, { fontSize: 12 }]}>
               Advance ({booking.payment?.advanceConfig?.percentage || 0}%)
             </Text>
-            <Text variant="bodyMedium" style={{ color: booking.payment?.advance?.status === "verified" ? "#4CAF50" : "#FF9800", fontWeight: "500" }}>
+            <Text style={{ color: booking.payment?.advance?.status === "verified" ? SUCCESS_GREEN : WARN_ORANGE, fontWeight: "600", fontSize: 13 }}>
               ₹{booking.payment.advanceAmount} {booking.payment?.advance?.status === "verified" ? "✓" : ""}
             </Text>
           </View>
         )}
         {booking.payment?.remainingAmount > 0 && (
           <View style={styles.amountRow}>
-            <Text variant="bodySmall" style={styles.amountLabel}>Remaining</Text>
-            <Text variant="bodyMedium" style={{ color: "#FF9800", fontWeight: "500" }}>
+            <Text style={[styles.amountLabel, { fontSize: 12 }]}>Remaining</Text>
+            <Text style={{ color: WARN_ORANGE, fontWeight: "600", fontSize: 13 }}>
               ₹{booking.payment.remainingAmount}
             </Text>
           </View>
@@ -602,8 +608,8 @@ export default function BookingManagementScreen({ navigation }) {
         {/* Rejection reason for cancelled */}
         {(booking.status === "rejected" || booking.status === "cancelled") && booking.rejectionNote && (
           <View style={styles.rejectionRow}>
-            <MaterialCommunityIcons name="information" size={14} color="#F44336" />
-            <Text variant="bodySmall" style={styles.rejectionText}>
+            <MaterialCommunityIcons name="information" size={14} color={DANGER_RED} />
+            <Text style={styles.rejectionText}>
               {booking.rejectionNote}
             </Text>
           </View>
@@ -613,23 +619,20 @@ export default function BookingManagementScreen({ navigation }) {
         {activeTab === "pending" && booking.status === "payment_submitted" && (
           <>
             <Divider style={styles.divider} />
-            <View style={styles.paymentPendingBanner}>
-              <MaterialCommunityIcons name="cash-clock" size={16} color="#673AB7" />
-              <Text variant="bodySmall" style={styles.paymentPendingText}>
-                Payment proof submitted - verification required
+            <View style={[styles.paymentPendingBanner, { backgroundColor: "#EDE9FE" }]}>
+              <MaterialCommunityIcons name="cash-clock" size={16} color="#6D28D9" />
+              <Text style={[styles.paymentPendingText, { color: "#6D28D9" }]}>
+                Payment proof submitted — verification required
               </Text>
             </View>
             <View style={styles.actionRow}>
-              <Button
-                mode="contained"
-                compact
-                buttonColor="#673AB7"
-                icon="credit-card-check"
-                style={styles.verifyBtn}
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: "#6D28D9" }]}
                 onPress={() => navigation.navigate("VerifyPayment", { bookingId: booking.id, booking })}
               >
-                Verify Payment
-              </Button>
+                <MaterialCommunityIcons name="credit-card-check" size={16} color="#fff" />
+                <Text style={styles.actionBtnText}>Verify Payment</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -637,10 +640,10 @@ export default function BookingManagementScreen({ navigation }) {
         {activeTab === "pending" && booking.status === "awaiting_payment" && (
           <>
             <Divider style={styles.divider} />
-            <View style={styles.paymentPendingBanner}>
-              <MaterialCommunityIcons name="alert-circle" size={16} color="#FF5722" />
-              <Text variant="bodySmall" style={styles.paymentPendingText}>
-                Approved - waiting for user to pay advance
+            <View style={[styles.paymentPendingBanner, { backgroundColor: "#FFF7ED" }]}>
+              <MaterialCommunityIcons name="alert-circle" size={16} color="#F97316" />
+              <Text style={[styles.paymentPendingText, { color: "#F97316" }]}>
+                Approved — waiting for user to pay advance
               </Text>
             </View>
           </>
@@ -650,9 +653,9 @@ export default function BookingManagementScreen({ navigation }) {
           <>
             <Divider style={styles.divider} />
             {booking.status === "pending_payment" && (
-              <View style={styles.paymentPendingBanner}>
-                <MaterialCommunityIcons name="clock-outline" size={16} color="#9C27B0" />
-                <Text variant="bodySmall" style={styles.paymentPendingText}>
+              <View style={[styles.paymentPendingBanner, { backgroundColor: "#F5F3FF" }]}>
+                <MaterialCommunityIcons name="clock-outline" size={16} color="#8B5CF6" />
+                <Text style={[styles.paymentPendingText, { color: "#8B5CF6" }]}>
                   Waiting for user to pay advance
                 </Text>
               </View>
@@ -662,25 +665,21 @@ export default function BookingManagementScreen({ navigation }) {
                 <ActivityIndicator size="small" color={MANAGER_BLUE} />
               ) : (
                 <>
-                  <Button
-                    mode="outlined"
-                    compact
-                    textColor="#F44336"
-                    style={styles.rejectBtn}
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.rejectBtn]}
                     onPress={() => openRejectDialog(booking)}
                   >
-                    Reject
-                  </Button>
+                    <MaterialCommunityIcons name="close" size={16} color={DANGER_RED} />
+                    <Text style={[styles.actionBtnText, { color: DANGER_RED }]}>Reject</Text>
+                  </TouchableOpacity>
                   {booking.status === "pending" && (
-                    <Button
-                      mode="contained"
-                      compact
-                      buttonColor="#4CAF50"
-                      style={styles.approveBtn}
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: SUCCESS_GREEN }]}
                       onPress={() => handleApprove(booking)}
                     >
-                      Approve
-                    </Button>
+                      <MaterialCommunityIcons name="check" size={16} color="#fff" />
+                      <Text style={styles.actionBtnText}>Approve</Text>
+                    </TouchableOpacity>
                   )}
                 </>
               )}
@@ -695,44 +694,38 @@ export default function BookingManagementScreen({ navigation }) {
               {isLoading ? (
                 <ActivityIndicator size="small" color={MANAGER_BLUE} />
               ) : (
-                <Button
-                  mode="contained"
-                  compact
-                  buttonColor="#4CAF50"
-                  icon="check-all"
+                <TouchableOpacity
+                  style={[styles.actionBtn, { backgroundColor: SUCCESS_GREEN }]}
                   onPress={() => handleComplete(booking)}
                 >
-                  Mark Completed
-                </Button>
+                  <MaterialCommunityIcons name="check-all" size={16} color="#fff" />
+                  <Text style={styles.actionBtnText}>Mark Completed</Text>
+                </TouchableOpacity>
               )}
             </View>
           </>
         )}
-      </Surface>
+      </View>
     );
   };
 
   // Empty state
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Surface style={styles.emptyCard} elevation={1}>
-        <MaterialCommunityIcons
-          name={
-            activeTab === "pending"
-              ? "clock-outline"
-              : activeTab === "confirmed"
-              ? "calendar-check"
-              : activeTab === "completed"
-              ? "check-circle"
-              : "close-circle"
-          }
-          size={64}
-          color="#ccc"
-        />
-        <Text variant="titleMedium" style={styles.emptyTitle}>
-          No {activeTab} bookings
-        </Text>
-        <Text variant="bodyMedium" style={styles.emptyText}>
+      <View style={styles.emptyCard}>
+        <View style={styles.emptyIconCircle}>
+          <MaterialCommunityIcons
+            name={
+              activeTab === "pending" ? "clock-outline" :
+              activeTab === "confirmed" ? "calendar-check" :
+              activeTab === "completed" ? "check-circle" : "close-circle"
+            }
+            size={40}
+            color={MANAGER_BLUE}
+          />
+        </View>
+        <Text style={styles.emptyTitle}>No {activeTab} bookings</Text>
+        <Text style={styles.emptyText}>
           {activeTab === "pending"
             ? "New booking requests will appear here"
             : activeTab === "confirmed"
@@ -741,7 +734,7 @@ export default function BookingManagementScreen({ navigation }) {
             ? "Past bookings will appear here"
             : "Cancelled or rejected bookings will appear here"}
         </Text>
-      </Surface>
+      </View>
     </View>
   );
 
@@ -749,15 +742,13 @@ export default function BookingManagementScreen({ navigation }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
-          <Surface style={styles.emptyCard} elevation={1}>
-            <MaterialCommunityIcons name="soccer-field" size={64} color="#ccc" />
-            <Text variant="titleMedium" style={styles.emptyTitle}>
-              No Turf Selected
-            </Text>
-            <Text variant="bodyMedium" style={styles.emptyText}>
-              Please select a turf from the dashboard first.
-            </Text>
-          </Surface>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="soccer-field" size={40} color={MANAGER_BLUE} />
+            </View>
+            <Text style={styles.emptyTitle}>No Turf Selected</Text>
+            <Text style={styles.emptyText}>Please select a turf from the dashboard first.</Text>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -767,15 +758,20 @@ export default function BookingManagementScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Manage Bookings
-        </Text>
-        <IconButton
-          icon="filter-variant"
-          size={24}
-          iconColor={filterVisible || dateFilter !== "all" ? MANAGER_BLUE : "#666"}
+        <View>
+          <Text style={styles.title}>Manage Bookings</Text>
+          <Text style={styles.subtitle}>{turfData?.name || "All bookings"}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.filterBtn, (filterVisible || dateFilter !== "all") && styles.filterBtnActive]}
           onPress={() => setFilterVisible(!filterVisible)}
-        />
+        >
+          <MaterialCommunityIcons
+            name="filter-variant"
+            size={20}
+            color={filterVisible || dateFilter !== "all" ? "#fff" : MANAGER_BLUE}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Search */}
@@ -907,45 +903,77 @@ export default function BookingManagementScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
+
+  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 18,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
+  },
+  subtitle: {
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
+    marginTop: 1,
+  },
+  filterBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: PALE_BLUE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterBtnActive: {
+    backgroundColor: MANAGER_BLUE,
   },
 
   // Search
   searchBar: {
     marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 10,
-    elevation: 1,
+    marginTop: 12,
+    borderRadius: 12,
+    elevation: 0,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   searchInput: {
     fontSize: 14,
+    fontFamily: "Ubuntu-Regular",
   },
 
   // Filter panel
   filterPanel: {
     marginHorizontal: 16,
     marginTop: 8,
-    padding: 12,
-    borderRadius: 10,
+    padding: 14,
+    borderRadius: 12,
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   filterRow: {
     marginBottom: 10,
   },
   filterLabel: {
-    color: "#666",
-    marginBottom: 6,
+    color: "#6B7280",
+    fontSize: 12,
+    fontFamily: "Ubuntu-Medium",
+    marginBottom: 8,
   },
   filterChips: {
     flexDirection: "row",
@@ -962,7 +990,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 8,
+    gap: 6,
   },
   tabButton: {
     flex: 1,
@@ -971,10 +999,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 8,
     paddingHorizontal: 4,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
   },
   tabButtonActive: {
     backgroundColor: MANAGER_BLUE,
@@ -982,19 +1010,33 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#666",
+    fontFamily: "Ubuntu-Medium",
+    color: "#6B7280",
   },
   tabButtonTextActive: {
     color: "#fff",
+    fontFamily: "Ubuntu-Bold",
   },
   tabBadge: {
-    marginLeft: 4,
-    backgroundColor: "#E0E0E0",
+    marginLeft: 3,
+    backgroundColor: "#E5E7EB",
+    height: 16,
+    minWidth: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
   },
   tabBadgeActive: {
-    backgroundColor: "#fff",
-    color: MANAGER_BLUE,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  tabBadgeText: {
+    fontSize: 9,
+    fontFamily: "Ubuntu-Medium",
+    color: "#6B7280",
+  },
+  tabBadgeTextActive: {
+    color: "#fff",
   },
 
   // Loading
@@ -1013,48 +1055,64 @@ const styles = StyleSheet.create({
   // Booking card
   bookingCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 12,
     overflow: "hidden",
+    borderLeftWidth: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   conflictBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FF9800",
+    backgroundColor: WARN_ORANGE,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     gap: 6,
   },
   conflictText: {
     color: "#fff",
     fontSize: 12,
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     padding: 14,
-    paddingBottom: 0,
+    paddingBottom: 6,
   },
   customerInfo: {
     flex: 1,
   },
   customerName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 15,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
   },
   phoneRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 3,
     gap: 4,
   },
   phoneText: {
-    color: "#666",
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
   },
-  statusChip: {
-    height: 24,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontFamily: "Ubuntu-Bold",
+    letterSpacing: 0.3,
   },
 
   // Details grid
@@ -1062,16 +1120,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     paddingHorizontal: 14,
-    paddingTop: 10,
-    gap: 12,
+    paddingTop: 6,
+    gap: 10,
   },
   detailItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 5,
   },
   detailText: {
-    color: "#555",
+    fontSize: 13,
+    fontFamily: "Ubuntu-Regular",
+    color: "#374151",
   },
 
   // Amount
@@ -1081,14 +1141,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 14,
     paddingTop: 10,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   amountLabel: {
-    color: "#666",
+    fontSize: 13,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
   },
   amountValue: {
-    color: "#4CAF50",
-    fontWeight: "bold",
+    fontSize: 16,
+    fontFamily: "Ubuntu-Bold",
+    color: SUCCESS_GREEN,
   },
 
   // Rejection info
@@ -1100,40 +1163,51 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   rejectionText: {
-    color: "#F44336",
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: DANGER_RED,
     flex: 1,
   },
 
   // Actions
   divider: {
     marginHorizontal: 14,
+    backgroundColor: "#F3F4F6",
   },
   actionRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
     padding: 10,
-    gap: 10,
+    gap: 8,
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    gap: 5,
   },
   rejectBtn: {
-    borderColor: "#F44336",
-    borderRadius: 8,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
   },
-  approveBtn: {
-    borderRadius: 8,
-  },
-  verifyBtn: {
-    borderRadius: 8,
+  actionBtnText: {
+    fontSize: 13,
+    fontFamily: "Ubuntu-Medium",
+    color: "#fff",
   },
   paymentPendingBanner: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: "#F3E5F5",
     gap: 8,
   },
   paymentPendingText: {
-    color: "#673AB7",
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
     flex: 1,
   },
 
@@ -1144,26 +1218,44 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   emptyCard: {
-    padding: 32,
+    padding: 36,
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: PALE_BLUE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
-    marginTop: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 16,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
+    marginBottom: 6,
+    textTransform: "capitalize",
   },
   emptyText: {
-    marginTop: 8,
-    color: "#999",
+    fontSize: 13,
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "center",
+    lineHeight: 20,
   },
 
   // Reject dialog
   dialogSubtitle: {
     marginBottom: 12,
-    color: "#666",
+    color: "#6B7280",
   },
   radioRow: {
     flexDirection: "row",
@@ -1175,11 +1267,14 @@ const styles = StyleSheet.create({
   },
   customReasonInput: {
     borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
     padding: 10,
     marginTop: 10,
     minHeight: 80,
     textAlignVertical: "top",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: "#111827",
   },
 });

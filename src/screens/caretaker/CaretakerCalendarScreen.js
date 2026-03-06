@@ -8,7 +8,7 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
-import { Text, Surface, Card, Button, Chip, Banner } from "react-native-paper";
+import { Text, Surface, Button, Banner } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
@@ -16,15 +16,20 @@ import { selectAssignedTurfId } from "../../store/slices/authSlice";
 import { getBookingsForDateByCaretaker, getAcademySessionsForDate } from "../../services/firebase/firestore";
 import ExtensionModal from "../../components/caretaker/ExtensionModal";
 
-const CARETAKER_COLOR = "#FF9800";
+const CARETAKER_ORANGE = "#F97316";
+const PALE_ORANGE      = "#FFF7ED";
+const NAVY_ORANGE      = "#7C2D12";
+const SUCCESS_GREEN    = "#22C55E";
+const MANAGER_BLUE     = "#3B82F6";
+const DANGER_RED       = "#EF4444";
 
 // Status color mapping
 const STATUS_COLORS = {
-  confirmed: "#2196F3",
-  in_progress: "#4CAF50",
-  completed: "#9E9E9E",
-  no_show: "#F44336",
-  academy: "#FF9800",
+  confirmed:   MANAGER_BLUE,
+  in_progress: SUCCESS_GREEN,
+  completed:   "#9CA3AF",
+  no_show:     DANGER_RED,
+  academy:     CARETAKER_ORANGE,
 };
 
 export default function CaretakerCalendarScreen({ navigation }) {
@@ -164,7 +169,6 @@ export default function CaretakerCalendarScreen({ navigation }) {
         {
           text: "Present",
           onPress: () => {
-            // TODO: Implement mark attendance
             Alert.alert("Success", "Attendance marked as present");
           },
         },
@@ -172,7 +176,6 @@ export default function CaretakerCalendarScreen({ navigation }) {
           text: "No-Show",
           style: "destructive",
           onPress: () => {
-            // TODO: Implement no-show
             Alert.alert("Success", "Marked as no-show");
           },
         },
@@ -190,7 +193,6 @@ export default function CaretakerCalendarScreen({ navigation }) {
   };
 
   const handleExtensionSuccess = () => {
-    // Refresh bookings after successful extension
     fetchBookings(selectedDate);
   };
 
@@ -198,7 +200,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
     if (booking.bookingType === "academy") {
       return STATUS_COLORS.academy;
     }
-    return STATUS_COLORS[booking.status] || "#999999";
+    return STATUS_COLORS[booking.status] || "#9CA3AF";
   };
 
   const getStatusLabel = (booking) => {
@@ -206,10 +208,8 @@ export default function CaretakerCalendarScreen({ navigation }) {
       return "Academy";
     }
     switch (booking.status) {
-      case "in_progress":
-        return "In Progress";
-      case "no_show":
-        return "No Show";
+      case "in_progress": return "In Progress";
+      case "no_show":     return "No Show";
       default:
         return booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
     }
@@ -217,261 +217,192 @@ export default function CaretakerCalendarScreen({ navigation }) {
 
   const renderFullBookingCard = (booking) => {
     const isAcademy = booking.bookingType === "academy";
+    const statusColor = getStatusColor(booking);
 
     return (
-      <Card key={booking.id} style={styles.bookingCard}>
-        <Card.Content>
-          {/* Header */}
-          <View style={styles.bookingHeader}>
-            <View style={styles.timeContainer}>
-              <MaterialCommunityIcons
-                name="clock-outline"
-                size={20}
-                color={getStatusColor(booking)}
-              />
-              <Text variant="titleMedium" style={styles.timeText}>
-                {booking.startTime} - {booking.endTime}
-              </Text>
-            </View>
-            <Chip
-              style={[
-                styles.statusChip,
-                { backgroundColor: getStatusColor(booking) + "20" },
-              ]}
-              textStyle={[
-                styles.statusChipText,
-                { color: getStatusColor(booking) },
-              ]}
-            >
+      <Surface
+        key={booking.id}
+        style={[styles.bookingCard, { borderLeftColor: statusColor }]}
+        elevation={2}
+      >
+        {/* Header */}
+        <View style={styles.bookingHeader}>
+          <View style={styles.timeContainer}>
+            <MaterialCommunityIcons name="clock-outline" size={18} color={statusColor} />
+            <Text style={styles.timeText}>
+              {booking.startTime} - {booking.endTime}
+            </Text>
+          </View>
+          <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+            <Text style={[styles.statusPillText, { color: statusColor }]}>
               {getStatusLabel(booking)}
-            </Chip>
+            </Text>
           </View>
+        </View>
 
-          {/* Customer/Academy Info */}
-          {isAcademy ? (
-            <View style={styles.infoSection}>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons
-                  name="school"
-                  size={18}
-                  color="#666"
-                />
-                <Text variant="bodyLarge" style={styles.infoText}>
-                  {booking.academyName || "Academy Session"}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.infoSection}>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons
-                  name="account"
-                  size={18}
-                  color="#666"
-                />
-                <Text variant="bodyLarge" style={styles.infoText}>
-                  {booking.userName || "Unknown User"}
-                </Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons
-                  name="phone"
-                  size={18}
-                  color="#666"
-                />
-                <Text variant="bodyMedium" style={styles.infoText}>
-                  {booking.userPhone || "N/A"}
-                </Text>
-                {booking.userPhone && (
-                  <TouchableOpacity
-                    style={styles.callButton}
-                    onPress={() => handleCallCustomer(booking.userPhone)}
-                  >
-                    <MaterialCommunityIcons
-                      name="phone"
-                      size={16}
-                      color="#4CAF50"
-                    />
-                    <Text style={styles.callButtonText}>Call</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Booking Details */}
-          <View style={styles.detailsSection}>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons name="soccer" size={16} color="#666" />
-              <Text variant="bodySmall" style={styles.detailText}>
-                {booking.sport || "N/A"}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="map-marker"
-                size={16}
-                color="#666"
-              />
-              <Text variant="bodySmall" style={styles.detailText}>
-                {booking.groundName || "N/A"}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="currency-inr"
-                size={16}
-                color="#666"
-              />
-              <Text variant="bodySmall" style={styles.detailText}>
-                ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
+        {/* Customer/Academy Info */}
+        {isAcademy ? (
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="school" size={16} color="#9CA3AF" />
+              <Text style={styles.infoText}>
+                {booking.academyName || "Academy Session"}
               </Text>
             </View>
           </View>
-
-          {/* Action Buttons - Only for non-academy bookings */}
-          {!isAcademy && booking.status !== "completed" && (
-            <View style={styles.actionsSection}>
-              <Button
-                mode="outlined"
-                icon="check-circle"
-                onPress={() => handleMarkAttendance(booking)}
-                style={styles.actionButton}
-                compact
-              >
-                Attendance
-              </Button>
-              <Button
-                mode="outlined"
-                icon="cash"
-                onPress={() => handleCollectPayment(booking)}
-                style={styles.actionButton}
-                compact
-              >
-                Payment
-              </Button>
-              <Button
-                mode="outlined"
-                icon="clock-plus-outline"
-                onPress={() => handleExtendTime(booking)}
-                style={styles.actionButton}
-                compact
-              >
-                Extend
-              </Button>
+        ) : (
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="account" size={16} color="#9CA3AF" />
+              <Text style={styles.infoText}>
+                {booking.userName || "Unknown User"}
+              </Text>
             </View>
-          )}
-        </Card.Content>
-      </Card>
+
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="phone" size={16} color="#9CA3AF" />
+              <Text style={styles.infoText}>
+                {booking.userPhone || "N/A"}
+              </Text>
+              {booking.userPhone && (
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={() => handleCallCustomer(booking.userPhone)}
+                >
+                  <MaterialCommunityIcons name="phone" size={14} color={SUCCESS_GREEN} />
+                  <Text style={styles.callButtonText}>Call</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Booking Details */}
+        <View style={styles.detailsSection}>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="soccer" size={14} color="#9CA3AF" />
+            <Text style={styles.detailText}>{booking.sport || "N/A"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="map-marker" size={14} color="#9CA3AF" />
+            <Text style={styles.detailText}>{booking.groundName || "N/A"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="currency-inr" size={14} color="#9CA3AF" />
+            <Text style={styles.detailText}>
+              ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
+            </Text>
+          </View>
+        </View>
+
+        {/* Action Buttons - Only for non-academy bookings */}
+        {!isAcademy && booking.status !== "completed" && (
+          <View style={styles.actionsSection}>
+            <Button
+              mode="outlined"
+              icon="check-circle"
+              onPress={() => handleMarkAttendance(booking)}
+              style={styles.actionButton}
+              textColor={MANAGER_BLUE}
+              compact
+              labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+            >
+              Attendance
+            </Button>
+            <Button
+              mode="outlined"
+              icon="cash"
+              onPress={() => handleCollectPayment(booking)}
+              style={[styles.actionButton, { borderColor: SUCCESS_GREEN }]}
+              textColor={SUCCESS_GREEN}
+              compact
+              labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+            >
+              Payment
+            </Button>
+            <Button
+              mode="outlined"
+              icon="clock-plus-outline"
+              onPress={() => handleExtendTime(booking)}
+              style={[styles.actionButton, { borderColor: CARETAKER_ORANGE }]}
+              textColor={CARETAKER_ORANGE}
+              compact
+              labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+            >
+              Extend
+            </Button>
+          </View>
+        )}
+      </Surface>
     );
   };
 
   const renderLimitedBookingCard = (booking) => {
     const isAcademy = booking.bookingType === "academy";
+    const statusColor = getStatusColor(booking);
 
     return (
-      <Card key={booking.id} style={styles.bookingCard}>
-        <Card.Content>
-          {/* Header - Time Hidden */}
-          <View style={styles.bookingHeader}>
-            <View style={styles.timeContainer}>
-              <MaterialCommunityIcons
-                name="lock"
-                size={20}
-                color="#999"
-              />
-              <Text variant="titleMedium" style={styles.hiddenText}>
-                🔒 Hidden
-              </Text>
-            </View>
-            <Chip
-              style={[
-                styles.statusChip,
-                { backgroundColor: getStatusColor(booking) + "20" },
-              ]}
-              textStyle={[
-                styles.statusChipText,
-                { color: getStatusColor(booking) },
-              ]}
-            >
+      <Surface
+        key={booking.id}
+        style={[styles.bookingCard, { borderLeftColor: statusColor }]}
+        elevation={2}
+      >
+        {/* Header - Time Hidden */}
+        <View style={styles.bookingHeader}>
+          <View style={styles.timeContainer}>
+            <MaterialCommunityIcons name="lock" size={18} color="#9CA3AF" />
+            <Text style={styles.hiddenText}>🔒 Hidden</Text>
+          </View>
+          <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+            <Text style={[styles.statusPillText, { color: statusColor }]}>
               {getStatusLabel(booking)}
-            </Chip>
+            </Text>
           </View>
+        </View>
 
-          {/* Customer/Academy Info */}
-          {isAcademy ? (
-            <View style={styles.infoSection}>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons
-                  name="school"
-                  size={18}
-                  color="#666"
-                />
-                <Text variant="bodyLarge" style={styles.infoText}>
-                  {booking.academyName || "Academy Session"}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.infoSection}>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons
-                  name="account"
-                  size={18}
-                  color="#666"
-                />
-                <Text variant="bodyLarge" style={styles.infoText}>
-                  {booking.userName || "Unknown User"}
-                </Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons
-                  name="lock"
-                  size={18}
-                  color="#999"
-                />
-                <Text variant="bodyMedium" style={styles.hiddenText}>
-                  🔒 Hidden
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Booking Details - Only Amount Visible */}
-          <View style={styles.detailsSection}>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons name="soccer" size={16} color="#666" />
-              <Text variant="bodySmall" style={styles.detailText}>
-                {booking.sport || "N/A"}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="map-marker"
-                size={16}
-                color="#666"
-              />
-              <Text variant="bodySmall" style={styles.detailText}>
-                {booking.groundName || "N/A"}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialCommunityIcons
-                name="currency-inr"
-                size={16}
-                color="#666"
-              />
-              <Text variant="bodySmall" style={styles.detailText}>
-                ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
+        {/* Customer/Academy Info */}
+        {isAcademy ? (
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="school" size={16} color="#9CA3AF" />
+              <Text style={styles.infoText}>
+                {booking.academyName || "Academy Session"}
               </Text>
             </View>
           </View>
+        ) : (
+          <View style={styles.infoSection}>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="account" size={16} color="#9CA3AF" />
+              <Text style={styles.infoText}>
+                {booking.userName || "Unknown User"}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="lock" size={16} color="#9CA3AF" />
+              <Text style={styles.hiddenText}>🔒 Hidden</Text>
+            </View>
+          </View>
+        )}
 
-          {/* No Action Buttons for Future Dates */}
-        </Card.Content>
-      </Card>
+        {/* Booking Details */}
+        <View style={styles.detailsSection}>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="soccer" size={14} color="#9CA3AF" />
+            <Text style={styles.detailText}>{booking.sport || "N/A"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="map-marker" size={14} color="#9CA3AF" />
+            <Text style={styles.detailText}>{booking.groundName || "N/A"}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <MaterialCommunityIcons name="currency-inr" size={14} color="#9CA3AF" />
+            <Text style={styles.detailText}>
+              ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
+            </Text>
+          </View>
+        </View>
+      </Surface>
     );
   };
 
@@ -481,22 +412,14 @@ export default function CaretakerCalendarScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Schedule
-        </Text>
-        <Text variant="bodyMedium" style={styles.dateText}>
-          {formatDate(selectedDate)}
-        </Text>
+        <Text style={styles.title}>Schedule</Text>
+        <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
       </View>
 
       {/* Week Navigation */}
       <View style={styles.weekNavigation}>
         <TouchableOpacity onPress={handlePrevWeek} style={styles.navButton}>
-          <MaterialCommunityIcons
-            name="chevron-left"
-            size={24}
-            color={CARETAKER_COLOR}
-          />
+          <MaterialCommunityIcons name="chevron-left" size={24} color={CARETAKER_ORANGE} />
         </TouchableOpacity>
 
         <Surface style={styles.weekCard} elevation={1}>
@@ -511,7 +434,6 @@ export default function CaretakerCalendarScreen({ navigation }) {
                 ]}
               >
                 <Text
-                  variant="bodySmall"
                   style={[
                     styles.dayName,
                     day.isSelected && styles.dayNameActive,
@@ -520,7 +442,6 @@ export default function CaretakerCalendarScreen({ navigation }) {
                   {day.day}
                 </Text>
                 <Text
-                  variant="titleMedium"
                   style={[
                     styles.dayDate,
                     day.isSelected && styles.dayDateActive,
@@ -537,11 +458,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
         </Surface>
 
         <TouchableOpacity onPress={handleNextWeek} style={styles.navButton}>
-          <MaterialCommunityIcons
-            name="chevron-right"
-            size={24}
-            color={CARETAKER_COLOR}
-          />
+          <MaterialCommunityIcons name="chevron-right" size={24} color={CARETAKER_ORANGE} />
         </TouchableOpacity>
       </View>
 
@@ -552,7 +469,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
           icon="information"
           style={styles.infoBanner}
         >
-          <Text variant="bodySmall" style={styles.bannerText}>
+          <Text style={styles.bannerText}>
             Phone numbers and exact timings are hidden for future bookings.
             They will be visible on the booking day.
           </Text>
@@ -566,25 +483,19 @@ export default function CaretakerCalendarScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[CARETAKER_COLOR]}
+            colors={[CARETAKER_ORANGE]}
           />
         }
       >
-        <Text variant="titleMedium" style={styles.sectionTitle}>
+        <Text style={styles.sectionTitle}>
           {showTodayBookings ? "Today's Bookings" : `Bookings for ${formatDate(selectedDate)}`}
         </Text>
 
         {loading ? (
-          <Surface style={styles.emptyCard} elevation={1}>
-            <MaterialCommunityIcons
-              name="loading"
-              size={48}
-              color="#ccc"
-            />
-            <Text variant="bodyMedium" style={styles.emptyText}>
-              Loading bookings...
-            </Text>
-          </Surface>
+          <View style={styles.emptyCard}>
+            <MaterialCommunityIcons name="loading" size={48} color="#D1D5DB" />
+            <Text style={styles.emptyText}>Loading bookings...</Text>
+          </View>
         ) : bookings.length > 0 ? (
           bookings.map((booking) =>
             showTodayBookings
@@ -592,22 +503,19 @@ export default function CaretakerCalendarScreen({ navigation }) {
               : renderLimitedBookingCard(booking)
           )
         ) : (
-          <Surface style={styles.emptyCard} elevation={1}>
-            <MaterialCommunityIcons
-              name="calendar-blank"
-              size={48}
-              color="#ccc"
-            />
-            <Text variant="bodyMedium" style={styles.emptyText}>
-              No bookings scheduled
-            </Text>
-            <Text variant="bodySmall" style={styles.emptySubtext}>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="calendar-blank" size={36} color={CARETAKER_ORANGE} />
+            </View>
+            <Text style={styles.emptyTitle}>No bookings scheduled</Text>
+            <Text style={styles.emptyText}>
               {showTodayBookings
                 ? "You have no bookings for today"
                 : "No bookings found for this date"}
             </Text>
-          </Surface>
+          </View>
         )}
+        <View style={{ height: 16 }} />
       </ScrollView>
 
       {/* Extension Modal */}
@@ -624,18 +532,21 @@ export default function CaretakerCalendarScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFBEB",
   },
   header: {
     padding: 16,
     paddingBottom: 8,
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 24,
+    color: NAVY_ORANGE,
   },
   dateText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
     marginTop: 4,
   },
   weekNavigation: {
@@ -662,22 +573,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 8,
     borderRadius: 12,
-    minWidth: 44,
+    minWidth: 40,
     position: "relative",
   },
   dayItemActive: {
-    backgroundColor: CARETAKER_COLOR,
+    backgroundColor: CARETAKER_ORANGE,
   },
   dayName: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
     fontSize: 11,
   },
   dayNameActive: {
     color: "#fff",
   },
   dayDate: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#111827",
     marginTop: 4,
   },
   dayDateActive: {
@@ -689,7 +602,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: CARETAKER_COLOR,
+    backgroundColor: CARETAKER_ORANGE,
   },
   infoBanner: {
     backgroundColor: "#E3F2FD",
@@ -698,6 +611,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   bannerText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
     color: "#1565C0",
   },
   scheduleContainer: {
@@ -705,110 +620,137 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   sectionTitle: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: NAVY_ORANGE,
     marginBottom: 12,
-    color: "#333",
   },
+
+  // Booking Cards
   bookingCard: {
-    marginBottom: 12,
-    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderLeftWidth: 4,
   },
   bookingHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   timeContainer: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
   },
   timeText: {
-    fontWeight: "600",
-    color: "#333",
-    marginLeft: 8,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#111827",
   },
   hiddenText: {
-    color: "#999",
-    marginLeft: 8,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#9CA3AF",
+    marginLeft: 6,
   },
-  statusChip: {
-    height: 28,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  statusChipText: {
-    fontSize: 12,
-    fontWeight: "600",
+  statusPillText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
   },
   infoSection: {
-    marginBottom: 12,
-    paddingBottom: 12,
+    marginBottom: 10,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#F3F4F6",
+    gap: 6,
   },
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    gap: 8,
   },
   infoText: {
-    marginLeft: 8,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
     flex: 1,
-    color: "#333",
+    color: "#374151",
   },
   callButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#E8F5E9",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: "#DCFCE7",
     borderRadius: 16,
-    marginLeft: 8,
+    gap: 4,
   },
   callButtonText: {
-    color: "#4CAF50",
+    fontFamily: "Ubuntu-Medium",
+    color: SUCCESS_GREEN,
     fontSize: 12,
-    fontWeight: "600",
-    marginLeft: 4,
   },
   detailsSection: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 12,
+    marginBottom: 10,
+    gap: 10,
   },
   detailRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginRight: 16,
-    marginBottom: 4,
+    gap: 4,
   },
   detailText: {
-    color: "#666",
-    marginLeft: 4,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
   },
   actionsSection: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginTop: 8,
+    marginTop: 4,
   },
   actionButton: {
     flex: 1,
-    minWidth: 100,
+    minWidth: 90,
     borderRadius: 8,
   },
+
+  // Empty state
   emptyCard: {
     padding: 32,
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
   },
-  emptyText: {
-    marginTop: 12,
-    color: "#999",
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: PALE_ORANGE,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
   },
-  emptySubtext: {
-    marginTop: 4,
-    color: "#bbb",
+  emptyTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#374151",
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#9CA3AF",
     textAlign: "center",
   },
 });

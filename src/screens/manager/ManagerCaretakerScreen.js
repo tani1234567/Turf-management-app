@@ -10,8 +10,6 @@ import {
 import {
   Text,
   Surface,
-  Chip,
-  IconButton,
   Avatar,
   Badge,
   ActivityIndicator,
@@ -20,7 +18,6 @@ import {
   Portal,
   TextInput,
   Divider,
-  List,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -41,6 +38,8 @@ import {
 
 const MANAGER_COLOR = "#2196F3";
 const CARETAKER_COLOR = "#FF9800";
+const SUCCESS_COLOR = "#4CAF50";
+const DANGER_COLOR = "#F44336";
 
 // Helper to format relative time
 const getRelativeTime = (date) => {
@@ -59,6 +58,69 @@ const getRelativeTime = (date) => {
   if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
   return `${Math.floor(diffDays / 365)} year${Math.floor(diffDays / 365) > 1 ? "s" : ""} ago`;
 };
+
+// ── Sub-components ───────────────────────────────────────────────────────────
+
+function StatTile({ count, label, color, icon }) {
+  return (
+    <View style={styles.statTile}>
+      <View style={[styles.statIconBg, { backgroundColor: color + "18" }]}>
+        <MaterialCommunityIcons name={icon} size={18} color={color} />
+      </View>
+      <Text style={[styles.statCount, { color }]}>{count}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function SectionHeader({ title, count, icon, color, expanded, onToggle }) {
+  return (
+    <TouchableOpacity
+      style={styles.sectionHeader}
+      onPress={onToggle}
+      activeOpacity={0.8}
+    >
+      <View style={[styles.sectionIconWrap, { backgroundColor: color + "18" }]}>
+        <MaterialCommunityIcons name={icon} size={18} color={color} />
+      </View>
+      <Text style={styles.sectionHeaderTitle}>{title}</Text>
+      <View style={[styles.sectionBadge, { backgroundColor: color + "18" }]}>
+        <Text style={[styles.sectionBadgeText, { color }]}>{count}</Text>
+      </View>
+      <MaterialCommunityIcons
+        name={expanded ? "chevron-up" : "chevron-down"}
+        size={20}
+        color="#9E9E9E"
+        style={{ marginLeft: 8 }}
+      />
+    </TouchableOpacity>
+  );
+}
+
+function ActionChip({ icon, label, color, filled, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.actionChip,
+        { borderColor: color + "50" },
+        filled && { backgroundColor: color, borderColor: color },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <MaterialCommunityIcons
+        name={icon}
+        size={13}
+        color={filled ? "#fff" : color}
+      />
+      <Text style={[styles.actionChipText, { color: filled ? "#fff" : color }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ManagerCaretakerScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -85,6 +147,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
   // Collapsible sections
   const [unassignedExpanded, setUnassignedExpanded] = useState(true);
   const [assignedExpanded, setAssignedExpanded] = useState(true);
+  const [suspendedExpanded, setSuspendedExpanded] = useState(false);
   const [expandedTurfs, setExpandedTurfs] = useState({});
 
   // Modal states
@@ -117,7 +180,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
       }
 
       try {
-        // Fetch turfs for this company
         const turfsData = await queryDocuments("turfs", [
           { field: "companyId", operator: "==", value: companyId },
         ]);
@@ -128,21 +190,18 @@ export default function ManagerCaretakerScreen({ navigation }) {
         }));
         setAllTurfs(turfDocs);
 
-        // Filter to manager's assigned turfs for expanded state
         const managerTurfs = turfDocs.filter(
           (turf) =>
             assignedTurfIds.includes(turf.turfId) ||
             assignedTurfIds.includes(turf.id)
         );
 
-        // Initialize expanded turfs
         const turfIds = {};
         managerTurfs.forEach((t) => {
           turfIds[t.turfId || t.id] = true;
         });
         setExpandedTurfs(turfIds);
 
-        // Fetch caretakers
         const users = await queryDocuments("users", [
           { field: "companyId", operator: "==", value: companyId },
           { field: "role", operator: "==", value: "caretaker" },
@@ -173,22 +232,21 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
   const onRefresh = () => fetchData({ showRefresh: true });
 
-  // Split caretakers into unassigned and assigned (only for manager's turfs)
+  // Split caretakers
   const unassignedCaretakers = caretakers.filter(
     (c) => !c.isAssigned && !c.isSuspended
   );
 
-  // Only show caretakers assigned to manager's turfs
   const assignedCaretakers = caretakers.filter(
     (c) =>
       c.isAssigned &&
       !c.isSuspended &&
-      (assignedTurfIds.includes(c.assignedTurfId))
+      assignedTurfIds.includes(c.assignedTurfId)
   );
 
   const suspendedCaretakers = caretakers.filter((c) => c.isSuspended);
 
-  // Group assigned caretakers by turf (only manager's turfs)
+  // Group assigned caretakers by turf
   const caretakersByTurf = {};
   turfs.forEach((turf) => {
     const turfId = turf.turfId || turf.id;
@@ -200,13 +258,12 @@ export default function ManagerCaretakerScreen({ navigation }) {
     };
   });
 
-  // Get turf name by ID
   const getTurfName = (turfId) => {
     const turf = allTurfs.find((t) => t.turfId === turfId || t.id === turfId);
     return turf?.name || "Unknown Turf";
   };
 
-  // Handle assign button
+  // Handlers
   const handleAssign = (caretaker) => {
     setSelectedCaretaker(caretaker);
     setSelectedTurfId(null);
@@ -214,7 +271,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     setAssignModalVisible(true);
   };
 
-  // Handle reassign button
   const handleReassign = (caretaker) => {
     setSelectedCaretaker(caretaker);
     setSelectedTurfId(caretaker.assignedTurfId);
@@ -222,26 +278,22 @@ export default function ManagerCaretakerScreen({ navigation }) {
     setAssignModalVisible(true);
   };
 
-  // Handle unassign button
   const handleUnassign = (caretaker) => {
     setSelectedCaretaker(caretaker);
     setUnassignModalVisible(true);
   };
 
-  // Handle suspend button
   const handleSuspend = (caretaker) => {
     setSelectedCaretaker(caretaker);
     setSuspendReason("");
     setSuspendModalVisible(true);
   };
 
-  // Handle reinstate button
   const handleReinstate = (caretaker) => {
     setSelectedCaretaker(caretaker);
     setReinstateModalVisible(true);
   };
 
-  // Toggle turf expansion
   const toggleTurfExpanded = (turfId) => {
     setExpandedTurfs((prev) => ({
       ...prev,
@@ -249,7 +301,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     }));
   };
 
-  // Confirm assign/reassign
   const confirmAssign = async () => {
     if (!selectedCaretaker || !selectedTurfId) {
       Alert.alert("Error", "Please select a turf.");
@@ -267,7 +318,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       const batchOperations = [];
 
-      // If reassigning, remove from old turf
       if (isReassign && oldTurfId && oldTurfId !== selectedTurfId) {
         const oldTurf = allTurfs.find(
           (t) => t.turfId === oldTurfId || t.id === oldTurfId
@@ -285,7 +335,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         }
       }
 
-      // Add to new turf
       if (newTurf) {
         const currentCaretakerIds = newTurf.caretakerIds || [];
         if (!currentCaretakerIds.includes(caretakerId)) {
@@ -300,7 +349,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         }
       }
 
-      // Update caretaker document
       batchOperations.push({
         type: "update",
         collection: "users",
@@ -313,7 +361,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         },
       });
 
-      // Log action
       batchOperations.push({
         type: "set",
         collection: "owner_logs",
@@ -336,7 +383,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       await batchWrite(batchOperations);
 
-      // Update local caretakers state
       setCaretakers((prev) =>
         prev.map((c) =>
           (c.id || c.userId) === caretakerId
@@ -350,18 +396,15 @@ export default function ManagerCaretakerScreen({ navigation }) {
         )
       );
 
-      // Update local turfs state
       setAllTurfs((prev) =>
         prev.map((turf) => {
           const turfId = turf.turfId || turf.id;
-          // Remove from old turf
           if (isReassign && oldTurfId && turfId === oldTurfId) {
             return {
               ...turf,
               caretakerIds: (turf.caretakerIds || []).filter((id) => id !== caretakerId),
             };
           }
-          // Add to new turf
           if (turfId === selectedTurfId) {
             const currentIds = turf.caretakerIds || [];
             if (!currentIds.includes(caretakerId)) {
@@ -375,7 +418,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         })
       );
 
-      // Remove from Redux unassigned if was unassigned
       if (!isReassign) {
         dispatch(removeUnassignedCaretaker(caretakerId));
       }
@@ -393,7 +435,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     }
   };
 
-  // Confirm unassign
   const confirmUnassign = async () => {
     if (!selectedCaretaker) return;
 
@@ -406,7 +447,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       const batchOperations = [];
 
-      // Remove from turf
       if (turf) {
         const currentCaretakerIds = turf.caretakerIds || [];
         batchOperations.push({
@@ -419,7 +459,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         });
       }
 
-      // Update caretaker document
       batchOperations.push({
         type: "update",
         collection: "users",
@@ -432,7 +471,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         },
       });
 
-      // Log action
       batchOperations.push({
         type: "set",
         collection: "owner_logs",
@@ -454,7 +492,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       await batchWrite(batchOperations);
 
-      // Update local caretakers state
       setCaretakers((prev) =>
         prev.map((c) =>
           (c.id || c.userId) === caretakerId
@@ -463,7 +500,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         )
       );
 
-      // Update local turfs state
       if (turfId) {
         setAllTurfs((prev) =>
           prev.map((t) => {
@@ -479,7 +515,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         );
       }
 
-      // Add to Redux unassigned
       dispatch(addUnassignedCaretaker(caretakerId));
 
       setUnassignModalVisible(false);
@@ -495,7 +530,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     }
   };
 
-  // Confirm suspend
   const confirmSuspend = async () => {
     if (!suspendReason.trim()) {
       Alert.alert("Error", "Please provide a reason for suspension.");
@@ -512,7 +546,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       const batchOperations = [];
 
-      // If assigned, remove from turf
       if (selectedCaretaker.isAssigned && turf) {
         const currentCaretakerIds = turf.caretakerIds || [];
         batchOperations.push({
@@ -525,7 +558,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         });
       }
 
-      // Update caretaker document
       batchOperations.push({
         type: "update",
         collection: "users",
@@ -536,13 +568,11 @@ export default function ManagerCaretakerScreen({ navigation }) {
           suspendedBy: managerId,
           suspensionReason: suspendReason.trim(),
           canBeDeletedAfter: createTimestamp(thirtyDaysMs),
-          // Also unassign
           assignedTurfId: null,
           isAssigned: false,
         },
       });
 
-      // Log action
       batchOperations.push({
         type: "set",
         collection: "owner_logs",
@@ -556,8 +586,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
           targetId: caretakerId,
           details: {
             reason: suspendReason.trim(),
-            wasAssigned: selectedCaretaker.isAssigned,
-            previousTurfId: turfId,
+            ...(selectedCaretaker.isAssigned && { previousTurfId: turfId }),
           },
           timestamp: serverTimestamp(),
         },
@@ -565,7 +594,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       await batchWrite(batchOperations);
 
-      // Update local caretakers state
       setCaretakers((prev) =>
         prev.map((c) =>
           (c.id || c.userId) === caretakerId
@@ -574,14 +602,13 @@ export default function ManagerCaretakerScreen({ navigation }) {
                 isSuspended: true,
                 suspendedAt: new Date(),
                 suspensionReason: suspendReason.trim(),
-                assignedTurfId: null,
                 isAssigned: false,
+                assignedTurfId: null,
               }
             : c
         )
       );
 
-      // Update local turfs state if was assigned
       if (selectedCaretaker.isAssigned && turfId) {
         setAllTurfs((prev) =>
           prev.map((t) => {
@@ -612,7 +639,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     }
   };
 
-  // Confirm reinstate
   const confirmReinstate = async () => {
     setReinstating(true);
 
@@ -630,7 +656,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
             suspendedBy: null,
             suspensionReason: null,
             canBeDeletedAfter: null,
-            // Stays unassigned - needs to be reassigned
             isAssigned: false,
             assignedTurfId: null,
           },
@@ -654,7 +679,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
 
       await batchWrite(batchOperations);
 
-      // Update local state
       setCaretakers((prev) =>
         prev.map((c) =>
           (c.id || c.userId) === caretakerId
@@ -670,7 +694,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
         )
       );
 
-      // Add to Redux unassigned
       dispatch(addUnassignedCaretaker(caretakerId));
 
       setReinstateModalVisible(false);
@@ -686,159 +709,141 @@ export default function ManagerCaretakerScreen({ navigation }) {
     }
   };
 
-  // Caretaker Card Component
-  const CaretakerCard = ({ caretaker, showActions = true }) => (
-    <Surface style={styles.card} elevation={1}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatarContainer}>
-          {caretaker.profilePicture ? (
-            <Avatar.Image size={48} source={{ uri: caretaker.profilePicture }} />
-          ) : (
-            <Avatar.Text
-              size={48}
-              label={caretaker.name?.substring(0, 2).toUpperCase() || "?"}
-              style={{ backgroundColor: CARETAKER_COLOR }}
-            />
-          )}
-          {caretaker.isSuspended && (
-            <Badge style={styles.suspendedBadge} size={16}>
-              !
-            </Badge>
-          )}
-        </View>
-        <View style={styles.personInfo}>
-          <Text variant="titleMedium" style={styles.personName}>
-            {caretaker.name || "Unknown"}
-          </Text>
-          <Text variant="bodySmall" style={styles.phoneText}>
-            {caretaker.phone}
-          </Text>
-          <Text variant="bodySmall" style={styles.dateText}>
-            {caretaker.isAssigned
-              ? `Assigned ${getRelativeTime(caretaker.assignedAt)}`
-              : `Joined ${getRelativeTime(caretaker.createdAt || caretaker.joinedAt)}`}
-          </Text>
-        </View>
-        <Chip
-          mode="flat"
-          style={[
-            styles.statusChip,
-            {
-              backgroundColor: caretaker.isSuspended
-                ? "#FFEBEE"
-                : caretaker.isAssigned
-                ? "#E8F5E9"
-                : "#FFF3E0",
-            },
-          ]}
-          textStyle={{
-            color: caretaker.isSuspended
-              ? "#F44336"
-              : caretaker.isAssigned
-              ? "#4CAF50"
-              : "#FF9800",
-            fontSize: 11,
-          }}
-        >
-          {caretaker.isSuspended
-            ? "Suspended"
-            : caretaker.isAssigned
-            ? "Active"
-            : "Unassigned"}
-        </Chip>
-      </View>
+  // ── Card Component ─────────────────────────────────────────────────────────
 
-      {showActions && (
-        <>
-          <Divider style={styles.divider} />
-          <View style={styles.cardActions}>
-            {caretaker.isSuspended ? (
-              <Button
-                mode="contained"
-                compact
-                onPress={() => handleReinstate(caretaker)}
-                style={styles.actionButton}
-                labelStyle={styles.actionButtonLabel}
-                buttonColor="#4CAF50"
-              >
-                Reinstate
-              </Button>
-            ) : caretaker.isAssigned ? (
-              <>
-                <Button
-                  mode="outlined"
-                  compact
-                  onPress={() => handleReassign(caretaker)}
-                  style={styles.actionButton}
-                  labelStyle={styles.actionButtonLabel}
-                >
-                  Reassign
-                </Button>
-                <Button
-                  mode="outlined"
-                  compact
-                  onPress={() => handleUnassign(caretaker)}
-                  style={styles.actionButton}
-                  labelStyle={styles.actionButtonLabel}
-                >
-                  Unassign
-                </Button>
-                <Button
-                  mode="outlined"
-                  compact
-                  onPress={() => handleSuspend(caretaker)}
-                  style={[styles.actionButton, styles.suspendButton]}
-                  labelStyle={[styles.actionButtonLabel, { color: "#F44336" }]}
-                >
-                  Suspend
-                </Button>
-              </>
+  const CaretakerCard = ({ caretaker, showActions = true }) => {
+    const statusColor = caretaker.isSuspended
+      ? DANGER_COLOR
+      : caretaker.isAssigned
+      ? SUCCESS_COLOR
+      : CARETAKER_COLOR;
+
+    const statusLabel = caretaker.isSuspended
+      ? "Suspended"
+      : caretaker.isAssigned
+      ? "Active"
+      : "Unassigned";
+
+    const statusBg = caretaker.isSuspended
+      ? "#FFEBEE"
+      : caretaker.isAssigned
+      ? "#E8F5E9"
+      : "#FFF3E0";
+
+    return (
+      <Surface style={styles.card} elevation={1}>
+        <View style={styles.cardHeader}>
+          <View style={[styles.avatarRing, { borderColor: statusColor + "60" }]}>
+            {caretaker.profilePicture ? (
+              <Avatar.Image size={44} source={{ uri: caretaker.profilePicture }} />
             ) : (
-              <>
-                <Button
-                  mode="contained"
-                  compact
-                  onPress={() => handleAssign(caretaker)}
-                  style={styles.actionButton}
-                  labelStyle={styles.actionButtonLabel}
-                  buttonColor={CARETAKER_COLOR}
-                >
-                  Assign to Turf
-                </Button>
-                <Button
-                  mode="outlined"
-                  compact
-                  onPress={() => handleSuspend(caretaker)}
-                  style={[styles.actionButton, styles.suspendButton]}
-                  labelStyle={[styles.actionButtonLabel, { color: "#F44336" }]}
-                >
-                  Suspend
-                </Button>
-              </>
+              <Avatar.Text
+                size={44}
+                label={caretaker.name?.substring(0, 2).toUpperCase() || "?"}
+                style={{ backgroundColor: CARETAKER_COLOR }}
+              />
+            )}
+            {caretaker.isSuspended && (
+              <Badge style={styles.suspendedBadge} size={14}>!</Badge>
             )}
           </View>
-        </>
-      )}
-    </Surface>
-  );
 
-  // Empty State Component
-  const EmptyState = () => (
+          <View style={styles.personInfo}>
+            <Text style={styles.personName}>{caretaker.name || "Unknown"}</Text>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="phone-outline" size={11} color="#BDBDBD" />
+              <Text style={styles.phoneText}>{caretaker.phone}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="clock-outline" size={11} color="#BDBDBD" />
+              <Text style={styles.dateText}>
+                {caretaker.isAssigned
+                  ? `Assigned ${getRelativeTime(caretaker.assignedAt)}`
+                  : `Joined ${getRelativeTime(caretaker.createdAt || caretaker.joinedAt)}`}
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.statusPill, { backgroundColor: statusBg }]}>
+            <Text style={[styles.statusPillText, { color: statusColor }]}>
+              {statusLabel}
+            </Text>
+          </View>
+        </View>
+
+        {showActions && (
+          <>
+            <View style={styles.cardDivider} />
+            <View style={styles.actionRow}>
+              {caretaker.isSuspended ? (
+                <ActionChip
+                  icon="account-reactivate"
+                  label="Reinstate"
+                  color={SUCCESS_COLOR}
+                  filled
+                  onPress={() => handleReinstate(caretaker)}
+                />
+              ) : caretaker.isAssigned ? (
+                <>
+                  <ActionChip
+                    icon="swap-horizontal"
+                    label="Reassign"
+                    color={MANAGER_COLOR}
+                    onPress={() => handleReassign(caretaker)}
+                  />
+                  <ActionChip
+                    icon="link-off"
+                    label="Unassign"
+                    color="#757575"
+                    onPress={() => handleUnassign(caretaker)}
+                  />
+                  <ActionChip
+                    icon="account-cancel"
+                    label="Suspend"
+                    color={DANGER_COLOR}
+                    onPress={() => handleSuspend(caretaker)}
+                  />
+                </>
+              ) : (
+                <>
+                  <ActionChip
+                    icon="account-plus"
+                    label="Assign to Turf"
+                    color={CARETAKER_COLOR}
+                    filled
+                    onPress={() => handleAssign(caretaker)}
+                  />
+                  <ActionChip
+                    icon="account-cancel"
+                    label="Suspend"
+                    color={DANGER_COLOR}
+                    onPress={() => handleSuspend(caretaker)}
+                  />
+                </>
+              )}
+            </View>
+          </>
+        )}
+      </Surface>
+    );
+  };
+
+  // ── Empty States ───────────────────────────────────────────────────────────
+
+  const FullEmptyState = () => (
     <View style={styles.emptyContainer}>
       {loadingCaretakers ? (
         <>
           <ActivityIndicator animating color={MANAGER_COLOR} size="large" />
-          <Text variant="bodyMedium" style={styles.emptyText}>
-            Loading caretakers...
-          </Text>
+          <Text style={styles.emptyText}>Loading caretakers…</Text>
         </>
       ) : (
         <>
-          <MaterialCommunityIcons name="account-hard-hat" size={80} color="#ccc" />
-          <Text variant="titleLarge" style={styles.emptyTitle}>
-            No Caretakers Yet
-          </Text>
-          <Text variant="bodyMedium" style={styles.emptyText}>
+          <View style={styles.emptyIconCircle}>
+            <MaterialCommunityIcons name="account-hard-hat" size={48} color={CARETAKER_COLOR} />
+          </View>
+          <Text style={styles.emptyTitle}>No Caretakers Yet</Text>
+          <Text style={styles.emptyText}>
             Caretakers will appear here once they join your company using the invite code.
           </Text>
         </>
@@ -846,7 +851,15 @@ export default function ManagerCaretakerScreen({ navigation }) {
     </View>
   );
 
-  // Assign Modal
+  const SectionEmpty = ({ icon, color, text }) => (
+    <View style={styles.sectionEmptyContainer}>
+      <MaterialCommunityIcons name={icon} size={32} color={color + "60"} />
+      <Text style={styles.sectionEmptyText}>{text}</Text>
+    </View>
+  );
+
+  // ── Modals ─────────────────────────────────────────────────────────────────
+
   const AssignModal = () => {
     if (!selectedCaretaker) return null;
 
@@ -912,11 +925,13 @@ export default function ManagerCaretakerScreen({ navigation }) {
                     >
                       <MaterialCommunityIcons
                         name={isSelected ? "radiobox-marked" : "radiobox-blank"}
-                        size={24}
-                        color={isSelected ? MANAGER_COLOR : "#999"}
+                        size={22}
+                        color={isSelected ? MANAGER_COLOR : "#BDBDBD"}
                       />
                       <View style={styles.turfSelectInfo}>
-                        <Text variant="bodyMedium">{turf.name}</Text>
+                        <Text variant="bodyMedium" style={isSelected && { fontWeight: "600", color: MANAGER_COLOR }}>
+                          {turf.name}
+                        </Text>
                         {turf.location && (
                           <Text variant="bodySmall" style={styles.turfLocation}>
                             {turf.location.city || turf.location.address || ""}
@@ -930,7 +945,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
             )}
 
             <View style={styles.noteContainer}>
-              <MaterialCommunityIcons name="information-outline" size={16} color="#666" />
+              <MaterialCommunityIcons name="information-outline" size={15} color={MANAGER_COLOR} />
               <Text variant="bodySmall" style={styles.noteText}>
                 One caretaker is typically assigned to one turf
               </Text>
@@ -951,7 +966,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     );
   };
 
-  // Unassign Modal
   const UnassignModal = () => {
     if (!selectedCaretaker) return null;
 
@@ -981,7 +995,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
               onPress={confirmUnassign}
               loading={unassigning}
               disabled={unassigning}
-              textColor="#F44336"
+              textColor={DANGER_COLOR}
             >
               Unassign
             </Button>
@@ -991,7 +1005,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     );
   };
 
-  // Suspend Modal
   const SuspendModal = () => {
     if (!selectedCaretaker) return null;
 
@@ -1033,7 +1046,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
               onPress={confirmSuspend}
               loading={suspending}
               disabled={suspending || !suspendReason.trim()}
-              textColor="#F44336"
+              textColor={DANGER_COLOR}
             >
               Suspend
             </Button>
@@ -1043,7 +1056,6 @@ export default function ManagerCaretakerScreen({ navigation }) {
     );
   };
 
-  // Reinstate Modal
   const ReinstateModal = () => {
     if (!selectedCaretaker) return null;
 
@@ -1076,7 +1088,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
               onPress={confirmReinstate}
               loading={reinstating}
               disabled={reinstating}
-              textColor="#4CAF50"
+              textColor={SUCCESS_COLOR}
             >
               Reinstate
             </Button>
@@ -1086,29 +1098,61 @@ export default function ManagerCaretakerScreen({ navigation }) {
     );
   };
 
-  const totalActive = unassignedCaretakers.length + assignedCaretakers.length;
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <IconButton
-          icon="arrow-left"
-          size={24}
+        <TouchableOpacity
+          style={styles.backBtn}
           onPress={() => navigation.goBack()}
-        />
-        <View style={styles.headerTitleContainer}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Caretaker Management
-          </Text>
-          <Text variant="bodySmall" style={styles.subtitle}>
-            {totalActive} active • {suspendedCaretakers.length} suspended
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="arrow-left" size={22} color="#212121" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Caretaker Management</Text>
+          <Text style={styles.headerSubtitle}>
+            {unassignedCaretakers.length + assignedCaretakers.length} active
+            {suspendedCaretakers.length > 0
+              ? ` · ${suspendedCaretakers.length} suspended`
+              : ""}
           </Text>
         </View>
       </View>
 
+      {/* Stats Bar */}
+      <View style={styles.statsBar}>
+        <StatTile
+          count={assignedCaretakers.length}
+          label="Active"
+          color={SUCCESS_COLOR}
+          icon="account-check"
+        />
+        <View style={styles.statsDivider} />
+        <StatTile
+          count={unassignedCaretakers.length}
+          label="Unassigned"
+          color={CARETAKER_COLOR}
+          icon="clock-outline"
+        />
+        <View style={styles.statsDivider} />
+        <StatTile
+          count={suspendedCaretakers.length}
+          label="Suspended"
+          color={DANGER_COLOR}
+          icon="account-cancel"
+        />
+      </View>
+
       {caretakers.length === 0 && !loadingCaretakers ? (
-        <EmptyState />
+        <FullEmptyState />
+      ) : loadingCaretakers ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator animating color={MANAGER_COLOR} size="large" />
+          <Text style={styles.loadingText}>Loading caretakers…</Text>
+        </View>
       ) : (
         <ScrollView
           style={styles.scrollContent}
@@ -1121,22 +1165,16 @@ export default function ManagerCaretakerScreen({ navigation }) {
           }
           keyboardShouldPersistTaps="handled"
         >
-          {/* Unassigned Section */}
-          <List.Accordion
-            title={`Waiting for Assignment (${unassignedCaretakers.length})`}
-            titleStyle={styles.sectionTitle}
+          {/* ── Unassigned Section ── */}
+          <SectionHeader
+            title="Waiting for Assignment"
+            count={unassignedCaretakers.length}
+            icon="clock-outline"
+            color={CARETAKER_COLOR}
             expanded={unassignedExpanded}
-            onPress={() => setUnassignedExpanded(!unassignedExpanded)}
-            style={styles.accordionHeader}
-            left={(props) => (
-              <MaterialCommunityIcons
-                {...props}
-                name="clock-outline"
-                size={24}
-                color={CARETAKER_COLOR}
-              />
-            )}
-          >
+            onToggle={() => setUnassignedExpanded((v) => !v)}
+          />
+          {unassignedExpanded && (
             <View style={styles.sectionContent}>
               {unassignedCaretakers.length > 0 ? (
                 unassignedCaretakers.map((caretaker) => (
@@ -1146,107 +1184,95 @@ export default function ManagerCaretakerScreen({ navigation }) {
                   />
                 ))
               ) : (
-                <View style={styles.emptySectionContainer}>
-                  <MaterialCommunityIcons
-                    name="account-check"
-                    size={40}
-                    color="#4CAF50"
-                  />
-                  <Text variant="bodyMedium" style={styles.emptySectionText}>
-                    No caretakers waiting for assignment
-                  </Text>
-                </View>
+                <SectionEmpty
+                  icon="account-check"
+                  color={SUCCESS_COLOR}
+                  text="No caretakers waiting for assignment"
+                />
               )}
             </View>
-          </List.Accordion>
+          )}
 
-          <Divider />
+          <View style={styles.sectionSeparator} />
 
-          {/* Assigned Section - Grouped by Turf */}
-          <List.Accordion
-            title={`My Turfs' Caretakers (${assignedCaretakers.length})`}
-            titleStyle={styles.sectionTitle}
+          {/* ── Assigned by Turf Section ── */}
+          <SectionHeader
+            title="My Turfs' Caretakers"
+            count={assignedCaretakers.length}
+            icon="account-check"
+            color={SUCCESS_COLOR}
             expanded={assignedExpanded}
-            onPress={() => setAssignedExpanded(!assignedExpanded)}
-            style={styles.accordionHeader}
-            left={(props) => (
-              <MaterialCommunityIcons
-                {...props}
-                name="account-check"
-                size={24}
-                color="#4CAF50"
-              />
-            )}
-          >
+            onToggle={() => setAssignedExpanded((v) => !v)}
+          />
+          {assignedExpanded && (
             <View style={styles.sectionContent}>
-              {Object.entries(caretakersByTurf).map(([turfId, { turf, caretakers: turfCaretakers }]) => {
-                if (turfCaretakers.length === 0) return null;
+              {assignedCaretakers.length === 0 ? (
+                <SectionEmpty
+                  icon="account-question"
+                  color="#9E9E9E"
+                  text="No caretakers assigned to your turfs yet"
+                />
+              ) : (
+                Object.entries(caretakersByTurf).map(([turfId, { turf, caretakers: turfCaretakers }]) => {
+                  if (turfCaretakers.length === 0) return null;
+                  const isExpanded = expandedTurfs[turfId];
 
-                return (
-                  <View key={turfId} style={styles.turfGroup}>
-                    <TouchableOpacity
-                      style={styles.turfGroupHeader}
-                      onPress={() => toggleTurfExpanded(turfId)}
-                    >
-                      <MaterialCommunityIcons
-                        name="soccer-field"
-                        size={20}
-                        color={MANAGER_COLOR}
-                      />
-                      <Text variant="titleSmall" style={styles.turfGroupTitle}>
-                        {turf.name} ({turfCaretakers.length})
-                      </Text>
-                      <MaterialCommunityIcons
-                        name={expandedTurfs[turfId] ? "chevron-up" : "chevron-down"}
-                        size={24}
-                        color="#666"
-                      />
-                    </TouchableOpacity>
-                    {expandedTurfs[turfId] && (
-                      <View style={styles.turfGroupContent}>
-                        {turfCaretakers.map((caretaker) => (
-                          <CaretakerCard
-                            key={caretaker.id || caretaker.userId}
-                            caretaker={caretaker}
+                  return (
+                    <View key={turfId} style={styles.turfGroup}>
+                      <TouchableOpacity
+                        style={styles.turfGroupHeader}
+                        onPress={() => toggleTurfExpanded(turfId)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.turfGroupIconWrap}>
+                          <MaterialCommunityIcons
+                            name="soccer-field"
+                            size={16}
+                            color={MANAGER_COLOR}
                           />
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-              {assignedCaretakers.length === 0 && (
-                <View style={styles.emptySectionContainer}>
-                  <MaterialCommunityIcons
-                    name="account-question"
-                    size={40}
-                    color="#999"
-                  />
-                  <Text variant="bodyMedium" style={styles.emptySectionText}>
-                    No caretakers assigned to your turfs yet
-                  </Text>
-                </View>
+                        </View>
+                        <Text style={styles.turfGroupTitle}>{turf.name}</Text>
+                        <View style={styles.turfGroupBadge}>
+                          <Text style={styles.turfGroupBadgeText}>
+                            {turfCaretakers.length}
+                          </Text>
+                        </View>
+                        <MaterialCommunityIcons
+                          name={isExpanded ? "chevron-up" : "chevron-down"}
+                          size={18}
+                          color="#9E9E9E"
+                        />
+                      </TouchableOpacity>
+                      {isExpanded && (
+                        <View style={styles.turfGroupContent}>
+                          {turfCaretakers.map((caretaker) => (
+                            <CaretakerCard
+                              key={caretaker.id || caretaker.userId}
+                              caretaker={caretaker}
+                            />
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
               )}
             </View>
-          </List.Accordion>
+          )}
 
-          {/* Suspended Section */}
+          {/* ── Suspended Section ── */}
           {suspendedCaretakers.length > 0 && (
             <>
-              <Divider />
-              <List.Accordion
-                title={`Suspended (${suspendedCaretakers.length})`}
-                titleStyle={[styles.sectionTitle, { color: "#F44336" }]}
-                style={styles.accordionHeader}
-                left={(props) => (
-                  <MaterialCommunityIcons
-                    {...props}
-                    name="account-cancel"
-                    size={24}
-                    color="#F44336"
-                  />
-                )}
-              >
+              <View style={styles.sectionSeparator} />
+              <SectionHeader
+                title="Suspended"
+                count={suspendedCaretakers.length}
+                icon="account-cancel"
+                color={DANGER_COLOR}
+                expanded={suspendedExpanded}
+                onToggle={() => setSuspendedExpanded((v) => !v)}
+              />
+              {suspendedExpanded && (
                 <View style={styles.sectionContent}>
                   {suspendedCaretakers.map((caretaker) => (
                     <CaretakerCard
@@ -1255,7 +1281,7 @@ export default function ManagerCaretakerScreen({ navigation }) {
                     />
                   ))}
                 </View>
-              </List.Accordion>
+              )}
             </>
           )}
 
@@ -1272,111 +1298,241 @@ export default function ManagerCaretakerScreen({ navigation }) {
   );
 }
 
+// ── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
+
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    paddingRight: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#EBEBEB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 3,
+    gap: 4,
   },
-  headerTitleContainer: {
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerCenter: {
     flex: 1,
+    marginLeft: 4,
   },
-  title: {
-    fontWeight: "bold",
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
     color: "#212121",
+    letterSpacing: -0.2,
   },
-  subtitle: {
-    color: "#666",
-    marginTop: 2,
+  headerSubtitle: {
+    fontSize: 12,
+    color: "#9E9E9E",
+    marginTop: 1,
   },
+
+  // Stats Bar
+  statsBar: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EBEBEB",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  statTile: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  statIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  statCount: {
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 24,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#9E9E9E",
+    fontWeight: "500",
+  },
+  statsDivider: {
+    width: 1,
+    backgroundColor: "#EBEBEB",
+    marginVertical: 4,
+  },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: "#9E9E9E",
+  },
+
+  // Scroll
   scrollContent: {
     flex: 1,
   },
-  accordionHeader: {
+
+  // Section Headers
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#fff",
-  },
-  sectionTitle: {
-    fontWeight: "600",
-  },
-  sectionContent: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: "#f5f5f5",
+    paddingVertical: 14,
+    gap: 10,
   },
+  sectionIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sectionHeaderTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#212121",
+  },
+  sectionBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    minWidth: 26,
+    alignItems: "center",
+  },
+  sectionBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  // Section separator
+  sectionSeparator: {
+    height: 8,
+    backgroundColor: "#F0F4F8",
+  },
+
+  // Section Content
+  sectionContent: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+    backgroundColor: "#F0F4F8",
+  },
+
+  // Caretaker Card
   card: {
     borderRadius: 12,
     backgroundColor: "#fff",
-    marginTop: 12,
-    padding: 16,
+    marginTop: 10,
+    padding: 14,
   },
   cardHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    gap: 12,
   },
-  avatarContainer: {
+  avatarRing: {
+    borderRadius: 26,
+    borderWidth: 2,
+    padding: 1,
     position: "relative",
   },
   suspendedBadge: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
-    backgroundColor: "#F44336",
+    bottom: -2,
+    right: -2,
+    backgroundColor: DANGER_COLOR,
   },
   personInfo: {
     flex: 1,
-    marginLeft: 12,
+    gap: 3,
   },
   personName: {
-    fontWeight: "bold",
+    fontSize: 15,
+    fontWeight: "700",
     color: "#212121",
   },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   phoneText: {
-    color: "#666",
-    marginTop: 2,
+    fontSize: 12,
+    color: "#757575",
   },
   dateText: {
-    color: "#999",
-    marginTop: 4,
-    fontSize: 12,
+    fontSize: 11,
+    color: "#BDBDBD",
   },
-  statusChip: {
-    height: 24,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  divider: {
-    marginVertical: 12,
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: "600",
   },
-  cardActions: {
+  cardDivider: {
+    height: 1,
+    backgroundColor: "#F5F5F5",
+    marginTop: 12,
+    marginBottom: 10,
+    marginHorizontal: -14,
+  },
+  actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
   },
-  actionButton: {
-    marginRight: 0,
-  },
-  actionButtonLabel: {
-    fontSize: 12,
-  },
-  suspendButton: {
-    borderColor: "#F44336",
-  },
-  emptySectionContainer: {
+
+  // Action Chip
+  actionChip: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 32,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
   },
-  emptySectionText: {
-    color: "#666",
-    marginTop: 12,
+  actionChipText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
+
+  // Turf Group
   turfGroup: {
-    marginTop: 12,
+    marginTop: 10,
     backgroundColor: "#fff",
     borderRadius: 12,
     overflow: "hidden",
@@ -1384,35 +1540,86 @@ const styles = StyleSheet.create({
   turfGroupHeader: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    backgroundColor: "#fafafa",
+    padding: 12,
+    paddingHorizontal: 14,
+    gap: 10,
+    backgroundColor: "#fff",
+  },
+  turfGroupIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: MANAGER_COLOR + "18",
+    justifyContent: "center",
+    alignItems: "center",
   },
   turfGroupTitle: {
     flex: 1,
-    marginLeft: 12,
+    fontSize: 13,
     fontWeight: "600",
+    color: "#212121",
+  },
+  turfGroupBadge: {
+    backgroundColor: MANAGER_COLOR + "18",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  turfGroupBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: MANAGER_COLOR,
   },
   turfGroupContent: {
-    padding: 12,
-    paddingTop: 0,
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+    paddingTop: 2,
+    backgroundColor: "#F8F9FB",
+    borderTopWidth: 1,
+    borderTopColor: "#F0F4F8",
   },
+
+  // Empty States
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 48,
-    paddingHorizontal: 32,
+    paddingHorizontal: 40,
+    paddingBottom: 60,
+    gap: 12,
+  },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: CARETAKER_COLOR + "18",
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptyTitle: {
-    fontWeight: "bold",
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: "700",
     color: "#212121",
-  },
-  emptyText: {
-    color: "#666",
     textAlign: "center",
   },
+  emptyText: {
+    fontSize: 14,
+    color: "#9E9E9E",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  sectionEmptyContainer: {
+    alignItems: "center",
+    paddingVertical: 28,
+    gap: 8,
+  },
+  sectionEmptyText: {
+    fontSize: 13,
+    color: "#9E9E9E",
+    textAlign: "center",
+  },
+
+  // Modal
   dialog: {
     maxHeight: "80%",
   },
@@ -1420,9 +1627,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
+    gap: 12,
   },
   modalCaretakerDetails: {
-    marginLeft: 12,
+    flex: 1,
   },
   modalDivider: {
     marginBottom: 16,
@@ -1430,6 +1638,7 @@ const styles = StyleSheet.create({
   selectTurfLabel: {
     fontWeight: "600",
     marginBottom: 12,
+    color: "#212121",
   },
   turfSelectList: {
     maxHeight: 200,
@@ -1437,42 +1646,45 @@ const styles = StyleSheet.create({
   turfSelectItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 8,
     marginBottom: 4,
+    gap: 10,
   },
   turfSelectItemSelected: {
     backgroundColor: "#E3F2FD",
   },
   turfSelectInfo: {
-    marginLeft: 12,
     flex: 1,
   },
   turfLocation: {
-    color: "#999",
+    color: "#BDBDBD",
     marginTop: 2,
+    fontSize: 12,
   },
   noteContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    padding: 12,
+    backgroundColor: "#E3F2FD",
+    padding: 10,
     borderRadius: 8,
-    marginTop: 16,
+    marginTop: 14,
+    gap: 8,
   },
   noteText: {
-    color: "#666",
-    marginLeft: 8,
+    color: MANAGER_COLOR,
     flex: 1,
+    fontSize: 12,
   },
   noTurfsContainer: {
     alignItems: "center",
     paddingVertical: 24,
+    gap: 8,
   },
   noTurfsText: {
-    color: "#999",
-    marginTop: 12,
+    color: "#9E9E9E",
+    fontSize: 13,
   },
   warningBox: {
     flexDirection: "row",
@@ -1480,31 +1692,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF3E0",
     padding: 12,
     borderRadius: 8,
-    marginTop: 16,
+    marginTop: 14,
+    gap: 8,
   },
   warningText: {
     color: "#E65100",
-    marginLeft: 8,
     flex: 1,
+    lineHeight: 18,
   },
   reasonInput: {
-    marginTop: 16,
+    marginTop: 14,
   },
   previousReasonContainer: {
     backgroundColor: "#FFF3E0",
     padding: 12,
     borderRadius: 8,
-    marginTop: 16,
+    marginTop: 14,
   },
   previousReasonLabel: {
     color: "#E65100",
-    fontWeight: "500",
+    fontWeight: "600",
+    marginBottom: 4,
   },
   previousReason: {
-    color: "#666",
-    marginTop: 4,
+    color: "#757575",
   },
   bottomPadding: {
-    height: 24,
+    height: 32,
   },
 });

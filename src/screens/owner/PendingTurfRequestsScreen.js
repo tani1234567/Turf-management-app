@@ -761,7 +761,7 @@ export default function PendingTurfRequestsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   headerBar: {
     flexDirection: "row",

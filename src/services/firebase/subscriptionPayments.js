@@ -5,7 +5,7 @@ import { generateUpiUrl, generateTransactionRef } from "../../utils/upiUtils";
 
 // Platform UPI details (replace with your actual UPI)
 const PLATFORM_UPI_ID = "tanmaygharat957-1@oksbi";
-const PLATFORM_NAME = "Play Grid Platform";
+const PLATFORM_NAME = "SportSwift Platform";
 
 /**
  * Initiate subscription payment via UPI with tiered pricing

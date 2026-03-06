@@ -188,6 +188,7 @@ export default function NotificationsScreen({ navigation }) {
         try {
           // Handle nested tab screens that can't be navigated to directly
           const NESTED_TAB_SCREENS = {
+            Bookings: { parent: "UserTabs", tab: "Bookings" },
             ManagerBookings: { parent: "ManagerTabs", tab: "ManagerBookings" },
           };
 

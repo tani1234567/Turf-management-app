@@ -523,7 +523,7 @@ export default function InviteCodeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     flexDirection: "row",
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
   linkContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     padding: 12,
     borderRadius: 8,
     gap: 8,

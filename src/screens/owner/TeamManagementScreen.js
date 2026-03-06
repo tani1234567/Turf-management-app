@@ -26,8 +26,10 @@ import { selectTurfs } from "../../store/slices/ownerSlice";
 import { queryDocuments } from "../../services/firebase/firestore";
 
 const OWNER_COLOR = "#9C27B0";
-const MANAGER_COLOR = "#2196F3";
-const CARETAKER_COLOR = "#FF9800";
+const MANAGER_COLOR = "#3B82F6";
+const CARETAKER_COLOR = "#F59E0B";
+const SUCCESS_GREEN = "#22C55E";
+const DANGER_RED = "#EF4444";
 
 export default function TeamManagementScreen({ navigation }) {
   const company = useSelector(selectCompany);
@@ -113,7 +115,7 @@ export default function TeamManagementScreen({ navigation }) {
   };
 
   const ManagerCard = ({ manager }) => (
-    <Surface style={styles.card} elevation={1}>
+    <Surface style={[styles.card, styles.managerCard]} elevation={1}>
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => {
@@ -128,73 +130,54 @@ export default function TeamManagementScreen({ navigation }) {
               style={{ backgroundColor: MANAGER_COLOR }}
             />
             {manager.isSuspended && (
-              <Badge style={styles.suspendedBadge} size={16}>
-                !
-              </Badge>
+              <Badge style={styles.suspendedBadge} size={16}>!</Badge>
             )}
           </View>
           <View style={styles.personInfo}>
-            <Text variant="titleMedium" style={styles.personName}>
-              {manager.name}
-            </Text>
-            <Text variant="bodySmall" style={styles.phoneText}>
-              {manager.phone}
-            </Text>
+            <Text style={styles.personName}>{manager.name}</Text>
+            <Text style={styles.phoneText}>{manager.phone}</Text>
             <View style={styles.turfChips}>
-              {manager.assignedTurfs?.slice(0, 2).map((turfId, index) => (
-                <Chip
-                  key={turfId}
-                  mode="outlined"
-                  style={styles.turfChip}
-                  textStyle={styles.turfChipText}
-                >
-                  {getTurfName(turfId)}
-                </Chip>
+              {manager.assignedTurfs?.slice(0, 2).map((turfId) => (
+                <View key={turfId} style={styles.turfChipPill}>
+                  <Text style={styles.turfChipText}>{getTurfName(turfId)}</Text>
+                </View>
               ))}
               {manager.assignedTurfs?.length > 2 && (
-                <Chip mode="flat" style={styles.moreChip} textStyle={styles.moreChipText}>
-                  +{manager.assignedTurfs.length - 2}
-                </Chip>
+                <View style={styles.moreChipPill}>
+                  <Text style={styles.moreChipText}>+{manager.assignedTurfs.length - 2}</Text>
+                </View>
               )}
             </View>
           </View>
-          <Chip
-            mode="flat"
-            style={[
-              styles.statusChip,
+          <View style={[
+            styles.statusPill,
+            {
+              backgroundColor: manager.isSuspended ? "#FEE2E2"
+                : manager.isActive ? "#DCFCE7"
+                : "#FEF3C7",
+            },
+          ]}>
+            <Text style={[
+              styles.statusPillText,
               {
-                backgroundColor: manager.isSuspended
-                  ? "#FFEBEE"
-                  : manager.isActive
-                  ? "#E8F5E9"
-                  : "#FFF3E0",
+                color: manager.isSuspended ? DANGER_RED
+                  : manager.isActive ? SUCCESS_GREEN
+                  : CARETAKER_COLOR,
               },
-            ]}
-            textStyle={{
-              color: manager.isSuspended
-                ? "#F44336"
-                : manager.isActive
-                ? "#4CAF50"
-                : "#FF9800",
-              fontSize: 11,
-            }}
-          >
-            {manager.isSuspended ? "Suspended" : manager.isActive ? "Active" : "Inactive"}
-          </Chip>
+            ]}>
+              {manager.isSuspended ? "Suspended" : manager.isActive ? "Active" : "Inactive"}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <MaterialCommunityIcons name="calendar-check" size={16} color="#666" />
-            <Text variant="bodySmall" style={styles.statText}>
-              {manager.stats?.bookingsHandled || 0} bookings
-            </Text>
+            <MaterialCommunityIcons name="calendar-check" size={16} color="#9CA3AF" />
+            <Text style={styles.statText}>{manager.stats?.bookingsHandled || 0} bookings</Text>
           </View>
           <View style={styles.statItem}>
             <MaterialCommunityIcons name="star" size={16} color="#FFC107" />
-            <Text variant="bodySmall" style={styles.statText}>
-              {manager.stats?.rating?.toFixed(1) || "N/A"}
-            </Text>
+            <Text style={styles.statText}>{manager.stats?.rating?.toFixed(1) || "N/A"}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -242,7 +225,7 @@ export default function TeamManagementScreen({ navigation }) {
   );
 
   const CaretakerCard = ({ caretaker }) => (
-    <Surface style={styles.card} elevation={1}>
+    <Surface style={[styles.card, styles.caretakerCard]} elevation={1}>
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => {
@@ -257,63 +240,43 @@ export default function TeamManagementScreen({ navigation }) {
               style={{ backgroundColor: CARETAKER_COLOR }}
             />
             {caretaker.isSuspended && (
-              <Badge style={styles.suspendedBadge} size={16}>
-                !
-              </Badge>
+              <Badge style={styles.suspendedBadge} size={16}>!</Badge>
             )}
           </View>
           <View style={styles.personInfo}>
-            <Text variant="titleMedium" style={styles.personName}>
-              {caretaker.name}
-            </Text>
-            <Text variant="bodySmall" style={styles.phoneText}>
-              {caretaker.phone}
-            </Text>
+            <Text style={styles.personName}>{caretaker.name}</Text>
+            <Text style={styles.phoneText}>{caretaker.phone}</Text>
             {caretaker.isAssigned ? (
-              <Chip
-                mode="outlined"
-                style={styles.turfChip}
-                textStyle={styles.turfChipText}
-                icon="soccer-field"
-              >
-                {getTurfName(caretaker.assignedTurfId)}
-              </Chip>
+              <View style={styles.turfChipPill}>
+                <MaterialCommunityIcons name="soccer-field" size={12} color={CARETAKER_COLOR} />
+                <Text style={styles.turfChipText}>{getTurfName(caretaker.assignedTurfId)}</Text>
+              </View>
             ) : (
               <View style={styles.unassignedBadge}>
-                <MaterialCommunityIcons name="clock-outline" size={14} color="#FF9800" />
-                <Text variant="bodySmall" style={styles.unassignedText}>
-                  Waiting for assignment
-                </Text>
+                <MaterialCommunityIcons name="clock-outline" size={14} color={CARETAKER_COLOR} />
+                <Text style={styles.unassignedText}>Waiting for assignment</Text>
               </View>
             )}
           </View>
-          <Chip
-            mode="flat"
-            style={[
-              styles.statusChip,
+          <View style={[
+            styles.statusPill,
+            {
+              backgroundColor: caretaker.isSuspended ? "#FEE2E2"
+                : !caretaker.isAssigned ? "#FEF3C7"
+                : "#DCFCE7",
+            },
+          ]}>
+            <Text style={[
+              styles.statusPillText,
               {
-                backgroundColor: caretaker.isSuspended
-                  ? "#FFEBEE"
-                  : !caretaker.isAssigned
-                  ? "#FFF3E0"
-                  : "#E8F5E9",
+                color: caretaker.isSuspended ? DANGER_RED
+                  : !caretaker.isAssigned ? CARETAKER_COLOR
+                  : SUCCESS_GREEN,
               },
-            ]}
-            textStyle={{
-              color: caretaker.isSuspended
-                ? "#F44336"
-                : !caretaker.isAssigned
-                ? "#FF9800"
-                : "#4CAF50",
-              fontSize: 11,
-            }}
-          >
-            {caretaker.isSuspended
-              ? "Suspended"
-              : !caretaker.isAssigned
-              ? "Unassigned"
-              : "Active"}
-          </Chip>
+            ]}>
+              {caretaker.isSuspended ? "Suspended" : !caretaker.isAssigned ? "Unassigned" : "Active"}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
 
@@ -376,21 +339,21 @@ export default function TeamManagementScreen({ navigation }) {
       {loadingTeam ? (
         <>
           <ActivityIndicator animating color={OWNER_COLOR} />
-          <Text variant="bodyMedium" style={styles.emptyText}>
-            Loading team members...
-          </Text>
+          <Text style={styles.emptyText}>Loading team members...</Text>
         </>
       ) : (
         <>
-          <MaterialCommunityIcons
-            name={type === "managers" ? "account-tie" : "account-hard-hat"}
-            size={64}
-            color="#ccc"
-          />
-          <Text variant="titleMedium" style={styles.emptyTitle}>
+          <View style={styles.emptyIconCircle}>
+            <MaterialCommunityIcons
+              name={type === "managers" ? "account-tie" : "account-hard-hat"}
+              size={40}
+              color={OWNER_COLOR}
+            />
+          </View>
+          <Text style={styles.emptyTitle}>
             No {type === "managers" ? "Managers" : "Caretakers"} Yet
           </Text>
-          <Text variant="bodyMedium" style={styles.emptyText}>
+          <Text style={styles.emptyText}>
             Share your invite code to let {type === "managers" ? "managers" : "caretakers"} join your company.
           </Text>
         </>
@@ -406,10 +369,8 @@ export default function TeamManagementScreen({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View style={styles.headerTitles}>
-            <Text variant="headlineSmall" style={styles.title}>
-              Team Management
-            </Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>
+            <Text style={styles.title}>Team Management</Text>
+            <Text style={styles.subtitle}>
               {displayManagers.length} manager{displayManagers.length !== 1 ? "s" : ""} •{" "}
               {displayCaretakers.length} caretaker{displayCaretakers.length !== 1 ? "s" : ""}
             </Text>
@@ -507,7 +468,7 @@ export default function TeamManagementScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     padding: 16,
@@ -522,26 +483,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 22,
+    color: "#4A148C",
   },
   subtitle: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
     marginTop: 4,
   },
   alertBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF3E0",
+    backgroundColor: "#FFFBEB",
     marginHorizontal: 16,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: CARETAKER_COLOR,
   },
   alertText: {
     flex: 1,
     marginLeft: 8,
-    color: "#E65100",
-    fontWeight: "500",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
+    color: "#92400E",
   },
   tabContainer: {
     paddingHorizontal: 16,
@@ -558,8 +526,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 12,
     elevation: 0,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   searchInput: {
+    fontFamily: "Ubuntu-Regular",
     fontSize: 14,
   },
   listContent: {
@@ -572,6 +543,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 16,
     position: "relative",
+    overflow: "hidden",
+  },
+  managerCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: MANAGER_COLOR,
+  },
+  caretakerCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: CARETAKER_COLOR,
   },
   cardHeader: {
     flexDirection: "row",
@@ -584,59 +564,84 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 0,
     right: 0,
-    backgroundColor: "#F44336",
+    backgroundColor: DANGER_RED,
   },
   personInfo: {
     flex: 1,
     marginLeft: 12,
   },
   personName: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#111827",
   },
   phoneText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginTop: 2,
   },
   turfChips: {
     flexDirection: "row",
     flexWrap: "wrap",
     marginTop: 8,
+    gap: 4,
   },
-  turfChip: {
-    height: 28,
+  turfChipPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
     marginRight: 4,
     marginBottom: 4,
   },
   turfChipText: {
+    fontFamily: "Ubuntu-Regular",
     fontSize: 11,
+    color: "#374151",
   },
-  moreChip: {
-    height: 28,
-    backgroundColor: "#E0E0E0",
+  moreChipPill: {
+    backgroundColor: "#E5E7EB",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
   moreChipText: {
+    fontFamily: "Ubuntu-Medium",
     fontSize: 11,
-    color: "#666",
+    color: "#6B7280",
   },
-  statusChip: {
-    height: 24,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginLeft: 4,
+    alignSelf: "flex-start",
+  },
+  statusPillText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
   },
   unassignedBadge: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 8,
+    gap: 4,
   },
   unassignedText: {
-    color: "#FF9800",
-    marginLeft: 4,
+    fontFamily: "Ubuntu-Regular",
     fontSize: 12,
+    color: CARETAKER_COLOR,
   },
   statsRow: {
     flexDirection: "row",
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "#F3F4F6",
   },
   statItem: {
     flexDirection: "row",
@@ -644,7 +649,9 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   statText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginLeft: 4,
   },
   menuContainer: {
@@ -657,13 +664,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 48,
   },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F3E5F5",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
   emptyTitle: {
-    fontWeight: "bold",
-    marginTop: 16,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#111827",
     marginBottom: 8,
   },
   emptyText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
     textAlign: "center",
     paddingHorizontal: 32,
   },

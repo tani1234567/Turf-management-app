@@ -6,21 +6,48 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-} from "react-native";
-import {
   Text,
-  TextInput,
-  Button,
-  Surface,
-  Avatar,
-  IconButton,
-} from "react-native-paper";
+} from "react-native";
+import { TextInput, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useAppDispatch } from "../../hooks";
 import { setUser, setLoading, setError } from "../../store/slices/authSlice";
 import { setDocument, serverTimestamp } from "../../services/firebase/firestore";
+
+const BRAND_GREEN = "#16A34A";
+const BRAND_DARK = "#14532D";
+const PALE_GREEN = "#F0FDF4";
+const DANGER_RED = "#EF4444";
+const GRAY_TEXT = "#6B7280";
+
+const ROLE_CONFIG = {
+  user: {
+    color: "#4CAF50",
+    icon: "account",
+    label: "User",
+    message: "Set up your profile to start booking turfs and managing your games.",
+  },
+  owner: {
+    color: "#9C27B0",
+    icon: "office-building",
+    label: "Turf Owner",
+    message: "Next, you'll create your company and get an invite code to share with your team.",
+  },
+  manager: {
+    color: "#3B82F6",
+    icon: "briefcase",
+    label: "Manager",
+    message: "Next, you'll enter an invite code from a Turf Owner to join their company.",
+  },
+  caretaker: {
+    color: "#F97316",
+    icon: "account-hard-hat",
+    label: "Caretaker",
+    message: "Next, you'll enter an invite code to join a company. A manager will assign you to a turf.",
+  },
+};
 
 export default function ProfileSetupScreen({ route, navigation }) {
   const dispatch = useAppDispatch();
@@ -32,66 +59,53 @@ export default function ProfileSetupScreen({ route, navigation }) {
   const [loading, setLoadingState] = useState(false);
   const [errors, setErrors] = useState({});
 
-  const validateEmail = (email) => {
-    if (!email) return true; // Email is optional
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.user;
+
+  const validateEmail = (val) => {
+    if (!val) return true;
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
   };
 
   const validateForm = () => {
     const newErrors = {};
-
     if (!name.trim()) {
       newErrors.name = "Name is required";
     } else if (name.trim().length < 2) {
       newErrors.name = "Name must be at least 2 characters";
     }
-
     if (email && !validateEmail(email)) {
       newErrors.email = "Please enter a valid email";
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handlePickImage = async () => {
     try {
-      // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow access to your photos to upload a profile picture."
-        );
+        Alert.alert("Permission Required", "Please allow access to your photos.");
         return;
       }
-
-      // Pick image
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
       });
-
       if (!result.canceled && result.assets[0]) {
         setProfileImage(result.assets[0].uri);
       }
     } catch (error) {
-      console.error("Error picking image:", error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
-  const handleRemoveImage = () => {
-    setProfileImage(null);
-  };
+  const handleRemoveImage = () => setProfileImage(null);
 
   const handleSaveProfile = async () => {
     if (!validateForm()) return;
 
-    // For owner role, navigate to OwnerSetupScreen without saving yet
     if (role === "owner") {
       navigation.navigate("OwnerSetupScreen", {
         userId,
@@ -103,7 +117,6 @@ export default function ProfileSetupScreen({ route, navigation }) {
       return;
     }
 
-    // For manager and caretaker, navigate to JoinCompanyScreen without saving yet
     if (role === "manager" || role === "caretaker") {
       navigation.navigate("JoinCompanyScreen", {
         userId,
@@ -116,7 +129,6 @@ export default function ProfileSetupScreen({ route, navigation }) {
       return;
     }
 
-    // For regular user, save profile directly
     setLoadingState(true);
     dispatch(setLoading(true));
 
@@ -127,21 +139,15 @@ export default function ProfileSetupScreen({ route, navigation }) {
         name: name.trim(),
         email: email.trim() || null,
         role,
-        profilePicture: profileImage || null, // TODO: Upload to Firebase Storage
+        profilePicture: profileImage || null,
         isActive: true,
         createdAt: serverTimestamp(),
         lastLoginAt: serverTimestamp(),
         fcmTokens: [],
         favorites: [],
       };
-
-      // Save to Firestore
       await setDocument("users", userId, userData);
-
-      // Update Redux state
       dispatch(setUser(userData));
-
-      // Navigation will be handled by AppNavigator based on role
     } catch (error) {
       console.error("Error saving profile:", error);
       dispatch(setError(error.message));
@@ -152,89 +158,64 @@ export default function ProfileSetupScreen({ route, navigation }) {
     }
   };
 
-  const getRoleColor = () => {
-    switch (role) {
-      case "user":
-        return "#4CAF50";
-      case "owner":
-        return "#9C27B0";
-      case "manager":
-        return "#2196F3";
-      case "caretaker":
-        return "#FF9800";
-      default:
-        return "#4CAF50";
-    }
-  };
-
-  const getRoleTitle = () => {
-    switch (role) {
-      case "user":
-        return "User";
-      case "owner":
-        return "Turf Owner";
-      case "manager":
-        return "Manager";
-      case "caretaker":
-        return "Caretaker";
-      default:
-        return "User";
-    }
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons name="arrow-left" size={22} color="#374151" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Your Profile</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Complete Your Profile
-          </Text>
-          <View style={[styles.roleBadge, { backgroundColor: `${getRoleColor()}20` }]}>
-            <Text style={[styles.roleText, { color: getRoleColor() }]}>
-              {getRoleTitle()}
-            </Text>
-          </View>
-        </View>
-
-        {/* Profile Picture */}
+        {/* Avatar Section */}
         <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={handlePickImage} activeOpacity={0.7}>
-            {profileImage ? (
-              <View style={styles.avatarContainer}>
+          <View style={{ position: "relative" }}>
+            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.7}>
+              {profileImage ? (
                 <Image source={{ uri: profileImage }} style={styles.avatarImage} />
-                <IconButton
-                  icon="close-circle"
-                  size={24}
-                  iconColor="#F44336"
-                  style={styles.removeButton}
-                  onPress={handleRemoveImage}
-                />
-              </View>
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <MaterialCommunityIcons
-                  name="camera-plus"
-                  size={36}
-                  color="#999"
-                />
-                <Text variant="bodySmall" style={styles.avatarText}>
-                  Add Photo
-                </Text>
-              </View>
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <MaterialCommunityIcons
+                    name="account-circle"
+                    size={48}
+                    color={BRAND_GREEN + "60"}
+                  />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Camera badge */}
+            <View style={styles.cameraBadge}>
+              <MaterialCommunityIcons name="camera" size={14} color={BRAND_GREEN} />
+            </View>
+
+            {/* Remove button */}
+            {profileImage && (
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={handleRemoveImage}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="close" size={12} color="#fff" />
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
-          <Text variant="bodySmall" style={styles.optionalText}>
-            (Optional)
-          </Text>
+          </View>
+          <Text style={styles.avatarHint}>Tap to add photo</Text>
         </View>
 
-        {/* Form */}
-        <Surface style={styles.formContainer} elevation={1}>
+        {/* Form Card */}
+        <Surface style={styles.formCard} elevation={2}>
           <TextInput
             mode="outlined"
             label="Full Name *"
@@ -246,12 +227,13 @@ export default function ProfileSetupScreen({ route, navigation }) {
             }}
             error={!!errors.name}
             left={<TextInput.Icon icon="account" />}
+            outlineColor="#E5E7EB"
+            activeOutlineColor={BRAND_GREEN}
+            contentStyle={{ fontFamily: "Ubuntu-Regular" }}
             style={styles.input}
           />
           {errors.name && (
-            <Text variant="bodySmall" style={styles.errorText}>
-              {errors.name}
-            </Text>
+            <Text style={styles.errorText}>{errors.name}</Text>
           )}
 
           <TextInput
@@ -267,87 +249,58 @@ export default function ProfileSetupScreen({ route, navigation }) {
             keyboardType="email-address"
             autoCapitalize="none"
             left={<TextInput.Icon icon="email" />}
+            outlineColor="#E5E7EB"
+            activeOutlineColor={BRAND_GREEN}
+            contentStyle={{ fontFamily: "Ubuntu-Regular" }}
             style={styles.input}
           />
           {errors.email && (
-            <Text variant="bodySmall" style={styles.errorText}>
-              {errors.email}
-            </Text>
+            <Text style={styles.errorText}>{errors.email}</Text>
           )}
 
-          {/* Phone Number Display */}
-          <View style={styles.phoneDisplay}>
-            <MaterialCommunityIcons name="phone" size={20} color="#666" />
-            <Text variant="bodyMedium" style={styles.phoneText}>
-              {phoneNumber}
-            </Text>
-            <MaterialCommunityIcons
-              name="check-circle"
-              size={18}
-              color="#4CAF50"
-            />
+          {/* Phone row */}
+          <View style={styles.phoneRow}>
+            <MaterialCommunityIcons name="phone-check" size={20} color={BRAND_GREEN} />
+            <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+            <View style={styles.verifiedBadge}>
+              <MaterialCommunityIcons name="check" size={12} color={BRAND_GREEN} />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
           </View>
         </Surface>
 
-        {/* Info Note */}
-        {role === "owner" && (
-          <View style={[styles.infoContainer, { backgroundColor: "#F3E5F5" }]}>
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={18}
-              color="#9C27B0"
-            />
-            <Text variant="bodySmall" style={styles.infoText}>
-              Next, you'll create your company and get an invite code to share
-              with your managers and caretakers.
-            </Text>
-          </View>
-        )}
-
-        {role === "manager" && (
-          <View style={[styles.infoContainer, { backgroundColor: "#E3F2FD" }]}>
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={18}
-              color="#2196F3"
-            />
-            <Text variant="bodySmall" style={styles.infoText}>
-              Next, you'll enter an invite code from a Turf Owner to join their
-              company and select the turfs you'll manage.
-            </Text>
-          </View>
-        )}
-
-        {role === "caretaker" && (
-          <View style={styles.infoContainer}>
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={18}
-              color="#FF9800"
-            />
-            <Text variant="bodySmall" style={styles.infoText}>
-              Next, you'll enter an invite code from a Turf Owner to join their
-              company. You'll be assigned to a turf by a manager.
-            </Text>
-          </View>
-        )}
-
-        {/* Save Button */}
-        <Button
-          mode="contained"
-          onPress={handleSaveProfile}
-          loading={loading}
-          disabled={loading || !name.trim()}
-          style={styles.saveButton}
-          contentStyle={styles.buttonContent}
-          buttonColor={getRoleColor()}
+        {/* Role Info Card */}
+        <Surface
+          style={[styles.roleCard, { borderLeftColor: roleConfig.color }]}
+          elevation={1}
         >
-          {loading
-            ? "Saving..."
-            : role === "user"
-            ? "Complete Setup"
-            : "Continue"}
-        </Button>
+          <View style={styles.roleCardRow}>
+            <View style={[styles.roleIconCircle, { backgroundColor: roleConfig.color + "18" }]}>
+              <MaterialCommunityIcons name={roleConfig.icon} size={20} color={roleConfig.color} />
+            </View>
+            <Text style={styles.roleCardText}>{roleConfig.message}</Text>
+          </View>
+        </Surface>
+
+        {/* Continue Button */}
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            { backgroundColor: roleConfig.color },
+            (loading || !name.trim()) && styles.saveButtonDisabled,
+          ]}
+          onPress={handleSaveProfile}
+          disabled={loading || !name.trim()}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.saveButtonText}>
+            {loading
+              ? "Saving..."
+              : role === "user"
+              ? "Complete Setup"
+              : "Continue"}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -356,113 +309,172 @@ export default function ProfileSetupScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F7FFF9",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  headerTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 20,
+    color: BRAND_DARK,
+    flex: 1,
+    textAlign: "center",
   },
   scrollContent: {
     padding: 20,
-  },
-  header: {
-    alignItems: "center",
-    marginBottom: 24,
-    marginTop: 12,
-  },
-  title: {
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  roleBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  roleText: {
-    fontWeight: "600",
-    fontSize: 14,
+    paddingBottom: 40,
   },
   avatarSection: {
     alignItems: "center",
-    marginBottom: 24,
-  },
-  avatarContainer: {
-    position: "relative",
+    marginVertical: 20,
   },
   avatarImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  removeButton: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-    backgroundColor: "#fff",
-    margin: 0,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
   },
   avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#e0e0e0",
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: PALE_GREEN,
+    borderWidth: 2,
+    borderColor: BRAND_GREEN + "60",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#ccc",
-    borderStyle: "dashed",
   },
-  avatarText: {
-    color: "#999",
-    marginTop: 4,
+  cameraBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  optionalText: {
-    color: "#999",
+  removeBtn: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: DANGER_RED,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarHint: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: GRAY_TEXT,
     marginTop: 8,
   },
-  formContainer: {
-    padding: 20,
+  formCard: {
     borderRadius: 16,
     backgroundColor: "#fff",
+    padding: 16,
+    marginBottom: 16,
   },
   input: {
     marginBottom: 4,
     backgroundColor: "#fff",
   },
   errorText: {
-    color: "#F44336",
-    marginBottom: 12,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: DANGER_RED,
+    marginBottom: 8,
     marginLeft: 4,
   },
-  phoneDisplay: {
+  phoneRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 12,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 8,
+    gap: 10,
   },
-  phoneText: {
+  phoneNumber: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 15,
+    color: "#374151",
     flex: 1,
-    marginLeft: 12,
-    color: "#333",
   },
-  infoContainer: {
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: PALE_GREEN,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  verifiedText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
+    color: BRAND_GREEN,
+  },
+  roleCard: {
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    borderLeftWidth: 4,
+    padding: 14,
+    marginBottom: 20,
+  },
+  roleCardRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#FFF3E0",
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 20,
+    gap: 12,
   },
-  infoText: {
+  roleIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  roleCardText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
     flex: 1,
-    marginLeft: 8,
-    color: "#666",
     lineHeight: 18,
   },
   saveButton: {
-    marginTop: 24,
-    borderRadius: 8,
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  buttonContent: {
-    height: 50,
+  saveButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveButtonText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#fff",
   },
 });

@@ -37,7 +37,11 @@ import {
 } from "../../services/firebase/firestore";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
+const DANGER_RED = "#EF4444";
 
 // Block types
 const BLOCK_TYPES = {
@@ -1291,7 +1295,7 @@ function BlockCard({ block, isPast = false, onDelete }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
 
   // Header
@@ -1323,7 +1327,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   viewToggle: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
 
   // Scroll view
@@ -1801,7 +1805,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   blockCardChip: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   blockCardChipText: {
     fontSize: 11,

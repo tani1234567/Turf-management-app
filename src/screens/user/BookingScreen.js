@@ -4,8 +4,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
-  FlatList,
 } from "react-native";
 import {
   Text,
@@ -32,9 +30,7 @@ import {
 import TimeSlotGrid from "../../components/booking/TimeSlotGrid";
 import SlotColorLegend from "../../components/booking/SlotColorLegend";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#4CAF50";
-const DAY_WIDTH = (SCREEN_WIDTH - 32) / 7;
 
 // Sport icons mapping
 const SPORT_ICONS = {
@@ -78,25 +74,6 @@ const formatTime = (hour, minute) => {
 
 const TIME_SLOTS = generateTimeSlots();
 
-// Generate next 45 days
-const generateDates = () => {
-  const dates = [];
-  const today = new Date();
-  for (let i = 0; i < 45; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    dates.push({
-      date,
-      day: date.getDate(),
-      month: date.toLocaleString("default", { month: "short" }),
-      weekday: date.toLocaleString("default", { weekday: "short" }),
-      isToday: i === 0,
-      isWeekend: date.getDay() === 0 || date.getDay() === 6,
-      dateString: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
-    });
-  }
-  return dates;
-};
 
 const BOOKING_STEPS = [
   { key: "date", label: "Date", icon: "calendar" },
@@ -133,6 +110,12 @@ export default function BookingScreen({ navigation, route }) {
   const [endTime, setEndTime] = useState(null);
   const [selectedGround, setSelectedGround] = useState(null);
 
+  // Calendar month for date selection step
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
   // Snackbar state for disabled slot toasts
   const [snackbar, setSnackbar] = useState({ visible: false, message: "" });
 
@@ -144,8 +127,6 @@ export default function BookingScreen({ navigation, route }) {
   const academyUnsubRef = useRef(null);
   const blockedUnsubRef = useRef(null);
 
-  // Generated data
-  const dates = useMemo(() => generateDates(), []);
 
   // Fetch turf and grounds data
   const fetchData = useCallback(async () => {
@@ -632,91 +613,138 @@ export default function BookingScreen({ navigation, route }) {
     </View>
   );
 
-  // Render date selection (Step 1)
-  const renderDateSelection = () => (
-    <View style={styles.stepContent}>
-      <Text variant="titleMedium" style={styles.stepTitle}>
-        Select Date
-      </Text>
-      <Text variant="bodyMedium" style={styles.stepSubtitle}>
-        Choose when you want to play
-      </Text>
+  // Render date selection (Step 1) — full-month calendar grid
+  const renderDateSelection = () => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayMs = todayStart.getTime();
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.dateScrollView}
-        contentContainerStyle={styles.dateScrollContent}
-      >
-        {dates.map((date, index) => {
-          const isSelected = selectedDate?.dateString === date.dateString;
-          // Mock availability status (replace with actual data)
-          const availability = index % 5 === 0 ? "full" : index % 3 === 0 ? "partial" : "available";
+    const sixtyDaysEnd = new Date(todayStart);
+    sixtyDaysEnd.setDate(todayStart.getDate() + 60);
+    const sixtyDaysMs = sixtyDaysEnd.getTime();
 
-          return (
-            <TouchableOpacity
-              key={date.dateString}
-              style={[
-                styles.dateCard,
-                isSelected && styles.dateCardSelected,
-                date.isToday && styles.dateCardToday,
-              ]}
-              onPress={() => setSelectedDate(date)}
-            >
-              <Text
-                style={[
-                  styles.dateWeekday,
-                  isSelected && styles.dateTextSelected,
-                ]}
-              >
-                {date.weekday}
-              </Text>
-              <Text
-                style={[
-                  styles.dateDay,
-                  isSelected && styles.dateTextSelected,
-                ]}
-              >
-                {date.day}
-              </Text>
-              <Text
-                style={[
-                  styles.dateMonth,
-                  isSelected && styles.dateTextSelected,
-                ]}
-              >
-                {date.month}
-              </Text>
-              <View
-                style={[
-                  styles.availabilityDot,
-                  availability === "available" && styles.dotAvailable,
-                  availability === "partial" && styles.dotPartial,
-                  availability === "full" && styles.dotFull,
-                ]}
-              />
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+    const year = currentCalendarMonth.getFullYear();
+    const monthIdx = currentCalendarMonth.getMonth();
+    const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+    const firstDayOfWeek = new Date(year, monthIdx, 1).getDay();
 
-      {/* Legend */}
-      <View style={styles.legend}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, styles.dotAvailable]} />
-          <Text variant="bodySmall" style={styles.legendText}>Available</Text>
+    const thisMonthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1).getTime();
+    const twoMonthsLater = new Date(todayStart.getFullYear(), todayStart.getMonth() + 2, 1).getTime();
+    const nextMonthStart = new Date(year, monthIdx + 1, 1).getTime();
+
+    const canGoBack = currentCalendarMonth.getTime() > thisMonthStart;
+    const canGoForward = nextMonthStart <= twoMonthsLater;
+
+    const monthName = currentCalendarMonth.toLocaleString("default", { month: "long" });
+
+    const handleDatePress = (dayNum) => {
+      const date = new Date(year, monthIdx, dayNum);
+      date.setHours(0, 0, 0, 0);
+      const dateMs = date.getTime();
+      if (dateMs < todayMs || dateMs > sixtyDaysMs) return;
+      const dateString = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+      setSelectedDate({
+        date,
+        day: date.getDate(),
+        month: date.toLocaleString("default", { month: "short" }),
+        weekday: date.toLocaleString("default", { weekday: "short" }),
+        isToday: dateMs === todayMs,
+        isWeekend: date.getDay() === 0 || date.getDay() === 6,
+        dateString,
+      });
+    };
+
+    const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    return (
+      <View style={styles.stepContent}>
+        <Text variant="titleMedium" style={styles.stepTitle}>
+          Select Date
+        </Text>
+        <Text variant="bodyMedium" style={styles.stepSubtitle}>
+          Choose when you want to play
+        </Text>
+
+        {/* Month navigation */}
+        <View style={styles.calHeader}>
+          <TouchableOpacity
+            onPress={() => canGoBack && setCurrentCalendarMonth(new Date(year, monthIdx - 1, 1))}
+            disabled={!canGoBack}
+            style={styles.calNavBtn}
+          >
+            <MaterialCommunityIcons
+              name="chevron-left"
+              size={26}
+              color={canGoBack ? USER_COLOR : "#ccc"}
+            />
+          </TouchableOpacity>
+          <Text style={styles.calMonthTitle}>{monthName} {year}</Text>
+          <TouchableOpacity
+            onPress={() => canGoForward && setCurrentCalendarMonth(new Date(year, monthIdx + 1, 1))}
+            disabled={!canGoForward}
+            style={styles.calNavBtn}
+          >
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={26}
+              color={canGoForward ? USER_COLOR : "#ccc"}
+            />
+          </TouchableOpacity>
         </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, styles.dotPartial]} />
-          <Text variant="bodySmall" style={styles.legendText}>Partial</Text>
+
+        {/* Day-of-week headers */}
+        <View style={styles.calDayHeaders}>
+          {DAY_LABELS.map((d) => (
+            <Text key={d} style={styles.calDayHeader}>{d}</Text>
+          ))}
         </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, styles.dotFull]} />
-          <Text variant="bodySmall" style={styles.legendText}>Fully Booked</Text>
+
+        {/* Date grid */}
+        <View style={styles.calGrid}>
+          {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+            <View key={`e${i}`} style={styles.calCell} />
+          ))}
+          {Array.from({ length: daysInMonth }).map((_, i) => {
+            const dayNum = i + 1;
+            const date = new Date(year, monthIdx, dayNum);
+            date.setHours(0, 0, 0, 0);
+            const dateMs = date.getTime();
+            const isPast = dateMs < todayMs;
+            const isBeyond60 = dateMs > sixtyDaysMs;
+            const isDisabled = isPast || isBeyond60;
+            const isTodayCell = dateMs === todayMs;
+            const dateStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+            const isSelected = selectedDate?.dateString === dateStr;
+
+            return (
+              <View key={dayNum} style={styles.calCell}>
+                <TouchableOpacity
+                  style={[
+                    styles.calDateBox,
+                    isTodayCell && !isSelected && styles.calCellToday,
+                    isSelected && styles.calCellSelected,
+                    isDisabled && styles.calCellDisabled,
+                  ]}
+                  onPress={() => handleDatePress(dayNum)}
+                  disabled={isDisabled}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.calDateNum,
+                    isTodayCell && !isSelected && styles.calDateToday,
+                    isSelected && styles.calDateSelected,
+                    isDisabled && styles.calDateDisabled,
+                  ]}>
+                    {dayNum}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   // Render sport selection (Step 2)
   const renderSportSelection = () => (
@@ -1057,7 +1085,11 @@ export default function BookingScreen({ navigation, route }) {
             buttonColor={USER_COLOR}
             style={[styles.nextButton, currentStep === 3 && selectedGround && { flex: 1 }]}
           >
-            {currentStep === 3 ? "Proceed to Payment" : "Continue"}
+            {currentStep === 3
+              ? "Proceed to Payment"
+              : currentStep === 0 && selectedDate
+              ? `Continue with ${selectedDate.month} ${selectedDate.day}`
+              : "Continue"}
           </Button>
         </View>
       </Surface>
@@ -1167,78 +1199,101 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  // Date Selection
-  dateScrollView: {
+  // Date Selection — Calendar Grid
+  calHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  dateScrollContent: {
-    paddingVertical: 8,
+  calMonthTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 18,
+    color: "#000",
   },
-  dateCard: {
-    width: DAY_WIDTH - 8,
-    marginHorizontal: 4,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: "#f5f5f5",
-    alignItems: "center",
+  calNavBtn: {
+    padding: 6,
   },
-  dateCardSelected: {
-    backgroundColor: USER_COLOR,
-  },
-  dateCardToday: {
-    borderWidth: 2,
-    borderColor: USER_COLOR,
-  },
-  dateWeekday: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
-  },
-  dateDay: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  dateMonth: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-  dateTextSelected: {
-    color: "#fff",
-  },
-  availabilityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 6,
-  },
-  dotAvailable: {
-    backgroundColor: USER_COLOR,
-  },
-  dotPartial: {
-    backgroundColor: "#FFC107",
-  },
-  dotFull: {
-    backgroundColor: "#F44336",
-  },
-  legend: {
+  calDayHeaders: {
     flexDirection: "row",
+    marginBottom: 8,
+  },
+  calDayHeader: {
+    width: "14.28%",
+    textAlign: "center",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
+    color: "#666",
+  },
+  calGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  calCell: {
+    width: "14.28%",
+    aspectRatio: 1,
+    padding: 4,
+  },
+  calDateBox: {
+    flex: 1,
+    width: "100%",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 16,
+    borderRadius: 8,
+    backgroundColor: "#F5F5F5",
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
+  calCellToday: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: "#10B981",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  legendDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 6,
+  calCellSelected: {
+    backgroundColor: "#10B981",
+    borderWidth: 0,
+    borderColor: "transparent",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+    transform: [{ scale: 1.05 }],
   },
-  legendText: {
-    color: "#666",
+  calCellDisabled: {
+    backgroundColor: "#FAFAFA",
+    borderColor: "#F0F0F0",
+    opacity: 0.5,
+    shadowColor: "transparent",
+    elevation: 0,
+  },
+  calDateNum: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 16,
+    color: "#000000",
+  },
+  calDateToday: {
+    fontFamily: "Ubuntu-Bold",
+    color: "#10B981",
+  },
+  calDateSelected: {
+    fontFamily: "Ubuntu-Bold",
+    color: "#FFFFFF",
+  },
+  calDateDisabled: {
+    fontFamily: "Ubuntu-Regular",
+    color: "#CCCCCC",
   },
 
   // Sport Selection

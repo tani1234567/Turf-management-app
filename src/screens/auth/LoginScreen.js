@@ -4,22 +4,28 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   Alert,
+  Dimensions,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  Text,
   Image,
 } from "react-native";
-import {
-  Text,
-  TextInput,
-  Button,
-  Surface,
-  ActivityIndicator,
-} from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-import { auth, firebaseConfig } from "../../services/firebase/config";
+import { auth } from "../../services/firebase/config";
 import { useAppDispatch } from "../../hooks";
 import { setError } from "../../store/slices/authSlice";
+
+const BRAND_GREEN = "#16A34A";
+const BRAND_DARK = "#14532D";
+const PALE_GREEN = "#F0FDF4";
+const DANGER_RED = "#EF4444";
+const GRAY_TEXT = "#6B7280";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // Import react-native-firebase for native platforms
 let nativeFirebaseAuth = null;
@@ -40,11 +46,11 @@ export default function LoginScreen({ navigation }) {
   const [loading, setLoadingState] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [recaptchaReady, setRecaptchaReady] = useState(false);
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
   // Initialize reCAPTCHA for web only
   useEffect(() => {
     if (Platform.OS === "web") {
-      // Small delay to ensure DOM is ready
       const timer = setTimeout(() => {
         try {
           if (!recaptchaVerifier.current) {
@@ -77,14 +83,11 @@ export default function LoginScreen({ navigation }) {
         if (recaptchaVerifier.current) {
           try {
             recaptchaVerifier.current.clear();
-          } catch (e) {
-            // Ignore cleanup errors
-          }
+          } catch (e) {}
           recaptchaVerifier.current = null;
         }
       };
     } else {
-      // For native platforms with @react-native-firebase, no reCAPTCHA setup needed
       setRecaptchaReady(true);
       console.log("[Login] Native Firebase ready (no reCAPTCHA needed)");
     }
@@ -97,7 +100,6 @@ export default function LoginScreen({ navigation }) {
 
   const getErrorMessage = (error) => {
     const errorCode = error.code || "";
-
     switch (errorCode) {
       case "auth/invalid-phone-number":
         return "Invalid phone number format. Please check and try again.";
@@ -125,7 +127,6 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleSendOTP = async () => {
-    // Validate phone number
     if (!validatePhoneNumber(phoneNumber)) {
       setErrorMessage("Please enter a valid 10-digit phone number");
       return;
@@ -133,56 +134,40 @@ export default function LoginScreen({ navigation }) {
 
     setErrorMessage("");
     setLoadingState(true);
-    // Note: Don't dispatch global loading here as it causes RootNavigator to show loading screen
-    // and unmount the navigation stack
 
     try {
       const fullPhoneNumber = `+91${phoneNumber.replace(/\D/g, "")}`;
       console.log("[Login] Sending OTP to:", fullPhoneNumber);
 
       if (Platform.OS === "web") {
-        // Web: Use Firebase JS SDK directly
         if (!recaptchaVerifier.current) {
           throw new Error("Verification not ready. Please refresh the page.");
         }
-
         const confirmationResult = await signInWithPhoneNumber(
           auth,
           fullPhoneNumber,
           recaptchaVerifier.current
         );
-
         console.log("[Login] OTP sent successfully (web)");
-
-        // Store confirmation result for verification
         navigation.navigate("OTPScreen", {
           verificationId: confirmationResult.verificationId,
           phoneNumber: fullPhoneNumber,
           isWeb: true,
         });
-
-        // Store for later use
         window.confirmationResult = confirmationResult;
       } else {
-        // Native: Use @react-native-firebase/auth
         if (!nativeFirebaseAuth) {
           throw new Error("Firebase Auth not available on this platform.");
         }
-
         const confirmation = await nativeFirebaseAuth().signInWithPhoneNumber(
           fullPhoneNumber
         );
-
         console.log("[Login] OTP sent successfully (native)");
-
         navigation.navigate("OTPScreen", {
           verificationId: confirmation.verificationId,
           phoneNumber: fullPhoneNumber,
           isWeb: false,
-          // Pass the confirmation object reference for native
         });
-
-        // Store globally for OTP verification
         global.phoneAuthConfirmation = confirmation;
       }
     } catch (error) {
@@ -191,7 +176,6 @@ export default function LoginScreen({ navigation }) {
       setErrorMessage(friendlyMessage);
       dispatch(setError(error.message));
 
-      // Reset reCAPTCHA on web for retry
       if (Platform.OS === "web" && recaptchaVerifier.current) {
         try {
           recaptchaVerifier.current.clear();
@@ -206,7 +190,6 @@ export default function LoginScreen({ navigation }) {
         }
       }
 
-      // Show alert for mobile users
       if (Platform.OS !== "web") {
         Alert.alert("OTP Error", friendlyMessage, [{ text: "OK" }]);
       }
@@ -221,9 +204,10 @@ export default function LoginScreen({ navigation }) {
     if (errorMessage) setErrorMessage("");
   };
 
+  const isDisabled = loading || phoneNumber.length !== 10 || !recaptchaReady;
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Web reCAPTCHA Container */}
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {Platform.OS === "web" && (
         <div
           id="recaptcha-container"
@@ -236,87 +220,89 @@ export default function LoginScreen({ navigation }) {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Play Grid Logo */}
-          <View style={styles.logoContainer}>
+        {/* Hero Section */}
+        <View style={styles.hero}>
+          <View style={styles.logoWrapper}>
             <Image
-              source={require("../../../assets/PlayGrid_Logo.png")}
-              style={styles.logo}
-              resizeMode="contain"
+              source={require("../../../assets/SS_Logo.png")}
+              style={styles.logoImage}
+              resizeMode="cover"
             />
-            <Text variant="headlineMedium" style={styles.appName}>
-              Play Grid
-            </Text>
-            <Text variant="bodyMedium" style={styles.tagline}>
-              Book your favorite sports turf
-            </Text>
+          </View>
+          <Text style={styles.appName}>
+            Sport<Text style={styles.appNameAccent}>Swift</Text>
+          </Text>
+          <View style={styles.taglineRow}>
+            <View style={styles.taglineLine} />
+            <Text style={styles.tagline}>BOOK · PLAY · MANAGE</Text>
+            <View style={styles.taglineLine} />
+          </View>
+        </View>
+
+        {/* Form Section */}
+        <View style={styles.formSection}>
+          <Text style={styles.welcomeTitle}>Welcome back</Text>
+          <Text style={styles.welcomeSubtitle}>
+            Enter your mobile number to continue
+          </Text>
+
+          {/* Phone Input Row */}
+          <View style={styles.phoneRow}>
+            <View style={styles.countryBadge}>
+              <Text style={styles.countryBadgeText}>+91</Text>
+            </View>
+            <TextInput
+              style={[
+                styles.phoneInput,
+                phoneFocused && styles.phoneInputFocused,
+              ]}
+              placeholder="9999999999"
+              placeholderTextColor="#9CA3AF"
+              value={phoneNumber}
+              onChangeText={handlePhoneChange}
+              keyboardType="phone-pad"
+              maxLength={10}
+              onFocus={() => setPhoneFocused(true)}
+              onBlur={() => setPhoneFocused(false)}
+            />
           </View>
 
-          {/* Login Form */}
-          <Surface style={styles.formContainer} elevation={1}>
-            <Text variant="titleLarge" style={styles.title}>
-              Login / Sign Up
-            </Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>
-              Enter your phone number to continue
-            </Text>
-
-            <View style={styles.phoneInputContainer}>
-              <Surface style={styles.countryCode} elevation={0}>
-                <Text variant="bodyLarge" style={styles.countryCodeText}>
-                  +91
-                </Text>
-              </Surface>
-              <TextInput
-                mode="outlined"
-                label="Phone Number"
-                placeholder="9999999999"
-                placeholderTextColor="#BDBDBD"
-                value={phoneNumber}
-                onChangeText={handlePhoneChange}
-                keyboardType="phone-pad"
-                maxLength={10}
-                style={styles.phoneInput}
-                error={!!errorMessage}
-                left={<TextInput.Icon icon="phone" />}
-              />
+          {/* Error Card */}
+          {!!errorMessage && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorCardText}>{errorMessage}</Text>
             </View>
+          )}
 
-            {errorMessage ? (
-              <Text variant="bodySmall" style={styles.errorText}>
-                {errorMessage}
-              </Text>
-            ) : null}
+          {/* Recaptcha loading */}
+          {!recaptchaReady && (
+            <View style={styles.recaptchaRow}>
+              <ActivityIndicator size="small" color={BRAND_GREEN} />
+              <Text style={styles.recaptchaText}>Initializing verification...</Text>
+            </View>
+          )}
 
-            {!recaptchaReady && (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="small" color="#4CAF50" />
-                <Text variant="bodySmall" style={styles.loadingText}>
-                  Initializing verification...
-                </Text>
-              </View>
+          {/* Send OTP Button */}
+          <TouchableOpacity
+            style={[styles.otpButton, isDisabled && styles.otpButtonDisabled]}
+            onPress={handleSendOTP}
+            disabled={isDisabled}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.otpButtonText}>Send OTP</Text>
             )}
+          </TouchableOpacity>
 
-            <Button
-              mode="contained"
-              onPress={handleSendOTP}
-              loading={loading}
-              disabled={loading || phoneNumber.length !== 10 || !recaptchaReady}
-              style={styles.button}
-              contentStyle={styles.buttonContent}
-            >
-              {loading ? "Sending OTP..." : "Send OTP"}
-            </Button>
-
-            <Text variant="bodySmall" style={styles.termsText}>
-              By continuing, you agree to our Terms of Service and Privacy
-              Policy
-            </Text>
-          </Surface>
-        </ScrollView>
+          {/* Terms */}
+          <Text style={styles.termsText}>
+            By continuing, you agree to our{" "}
+            <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
+            <Text style={styles.termsLink}>Privacy Policy</Text>
+          </Text>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -325,98 +311,163 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#0A0F1E",
   },
   keyboardView: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
+  hero: {
+    height: SCREEN_HEIGHT * 0.38,
+    backgroundColor: "#0A0F1E",
     justifyContent: "center",
-    padding: 20,
-  },
-  logoContainer: {
     alignItems: "center",
-    marginBottom: 40,
+    gap: 12,
   },
-  logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 16,
+  logoWrapper: {
+    padding: 5,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#4ADE80",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  logoImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 22,
   },
   appName: {
     fontFamily: "Ubuntu-Bold",
-    color: "#2E7D32",
-    marginBottom: 8,
+    fontSize: 34,
+    color: "#FFFFFF",
+    letterSpacing: 1,
+    marginTop: 4,
+  },
+  appNameAccent: {
+    color: "#02b443",
+  },
+  taglineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  taglineLine: {
+    width: 28,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.25)",
   },
   tagline: {
     fontFamily: "Ubuntu-Regular",
-    color: "#666",
-    textAlign: "center",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.45)",
+    letterSpacing: 2.5,
   },
-  formContainer: {
-    padding: 24,
-    borderRadius: 16,
-    backgroundColor: "#fff",
+  formSection: {
+    backgroundColor: "#FFFFFF",
+    flex: 1,
+    padding: 28,
+    paddingTop: 32,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    marginBottom: -40,
   },
-  title: {
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 8,
+  welcomeTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 23,
+    color: "#0A0F1E",
+    marginBottom: 6,
   },
-  subtitle: {
-    textAlign: "center",
-    color: "#666",
+  welcomeSubtitle: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: GRAY_TEXT,
     marginBottom: 24,
   },
-  phoneInputContainer: {
+  phoneRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    gap: 8,
   },
-  countryCode: {
-    height: 56,
-    paddingHorizontal: 16,
+  countryBadge: {
+    backgroundColor: "#0A0F1E",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 52,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f0f0f0",
-    borderRadius: 4,
-    marginRight: 8,
-    marginTop: 6,
   },
-  countryCodeText: {
-    fontWeight: "600",
+  countryBadgeText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#fff",
   },
   phoneInput: {
     flex: 1,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 16,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    height: 52,
+    color: "#111827",
     backgroundColor: "#fff",
   },
-  errorText: {
-    color: "#F44336",
-    marginBottom: 16,
-    marginLeft: 4,
+  phoneInputFocused: {
+    borderColor: BRAND_GREEN,
   },
-  loadingContainer: {
+  errorCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: DANGER_RED,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+  },
+  errorCardText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: DANGER_RED,
+  },
+  recaptchaRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
+    marginTop: 12,
+    gap: 8,
   },
-  loadingText: {
-    marginLeft: 8,
-    color: "#666",
+  recaptchaText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
   },
-  button: {
-    marginTop: 16,
-    borderRadius: 8,
+  otpButton: {
+    backgroundColor: "#0A0F1E",
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
   },
-  buttonContent: {
-    height: 50,
+  otpButtonDisabled: {
+    opacity: 0.45,
+  },
+  otpButtonText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#fff",
   },
   termsText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: GRAY_TEXT,
     textAlign: "center",
-    color: "#999",
     marginTop: 20,
-    lineHeight: 18,
+  },
+  termsLink: {
+    color: BRAND_GREEN,
   },
 });

@@ -33,7 +33,10 @@ import {
   addDocument,
 } from "../../services/firebase/firestore";
 
-const MANAGER_BLUE = "#2196F3";
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE = "#F59E0B";
 
 const PERCENTAGE_OPTIONS = [
   { value: 10, label: "10%" },
@@ -497,7 +500,7 @@ export default function AdvancePaymentSettingsScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   loadingContainer: {
     flex: 1,

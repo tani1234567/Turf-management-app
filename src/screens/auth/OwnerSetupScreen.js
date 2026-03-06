@@ -8,15 +8,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Text,
 } from "react-native";
 import {
-  Text,
   TextInput,
-  Button,
   Surface,
-  IconButton,
   Checkbox,
-  ProgressBar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -31,6 +28,13 @@ import {
 } from "../../services/firebase/firestore";
 import { createInviteCodeObject } from "../../utils/inviteCodeUtils";
 
+const BRAND_GREEN = "#16A34A";
+const BRAND_DARK = "#14532D";
+const BRAND_MID = "#15803D";
+const PALE_GREEN = "#F0FDF4";
+const GRAY_TEXT = "#6B7280";
+const DANGER_RED = "#EF4444";
+
 const STEPS = [
   { id: 1, title: "Company Info", icon: "office-building" },
   { id: 2, title: "Business Details", icon: "file-document" },
@@ -41,54 +45,45 @@ export default function OwnerSetupScreen({ route, navigation }) {
   const dispatch = useAppDispatch();
   const { userId, phoneNumber, name, email, profilePicture } = route.params;
 
-  // Step tracking
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Step 1: Company Info
+  // Step 1
   const [companyName, setCompanyName] = useState("");
   const [companyLogo, setCompanyLogo] = useState(null);
   const [companyDescription, setCompanyDescription] = useState("");
   const [companyPhone, setCompanyPhone] = useState(phoneNumber || "");
   const [companyEmail, setCompanyEmail] = useState(email || "");
 
-  // Step 2: Business Details
+  // Step 2
   const [gstNumber, setGstNumber] = useState("");
   const [panNumber, setPanNumber] = useState("");
 
-  // Step 3: Preferences
+  // Step 3
   const [hasOperationalPermissions, setHasOperationalPermissions] = useState(false);
 
-  // Loading and errors
   const [loading, setLoadingState] = useState(false);
   const [errors, setErrors] = useState({});
 
   const validateStep = (step) => {
     const newErrors = {};
-
     if (step === 1) {
       if (!companyName.trim()) {
         newErrors.companyName = "Company name is required";
       } else if (companyName.trim().length < 3) {
         newErrors.companyName = "Company name must be at least 3 characters";
       }
-
       if (companyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(companyEmail)) {
         newErrors.companyEmail = "Please enter a valid email";
       }
     }
-
     if (step === 2) {
-      // GST validation (optional but must be valid format if provided)
       if (gstNumber && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstNumber.toUpperCase())) {
         newErrors.gstNumber = "Invalid GST format (e.g., 27XXXXX1234X1ZX)";
       }
-
-      // PAN validation (optional but must be valid format if provided)
       if (panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panNumber.toUpperCase())) {
         newErrors.panNumber = "Invalid PAN format (e.g., ABCDE1234F)";
       }
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -104,40 +99,31 @@ export default function OwnerSetupScreen({ route, navigation }) {
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    if (currentStep > 1) setCurrentStep(currentStep - 1);
   };
 
   const handlePickLogo = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow access to your photos to upload a company logo."
-        );
+        Alert.alert("Permission Required", "Please allow access to your photos.");
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
       });
-
       if (!result.canceled && result.assets[0]) {
         setCompanyLogo(result.assets[0].uri);
       }
     } catch (error) {
-      console.error("Error picking image:", error);
       Alert.alert("Error", "Failed to pick image. Please try again.");
     }
   };
 
   const handleCreateCompany = async () => {
-    // Validate required params
     if (!userId) {
       Alert.alert("Error", "User ID is missing. Please try logging in again.");
       return;
@@ -147,20 +133,16 @@ export default function OwnerSetupScreen({ route, navigation }) {
     dispatch(setLoading(true));
 
     try {
-      // Generate invite code
       const inviteCode = createInviteCodeObject(userId);
-
-      // Calculate trial end date (30 days from now)
       const trialEndDate = new Date();
       trialEndDate.setDate(trialEndDate.getDate() + 30);
 
-      // Create company document
       const companyData = {
         name: companyName.trim(),
         ownerUserIds: [userId],
         phone: companyPhone.trim() || null,
         email: companyEmail.trim() || null,
-        logo: companyLogo || null, // TODO: Upload to Firebase Storage
+        logo: companyLogo || null,
         description: companyDescription.trim() || null,
         gstNumber: gstNumber.trim().toUpperCase() || null,
         panNumber: panNumber.trim().toUpperCase() || null,
@@ -194,10 +176,8 @@ export default function OwnerSetupScreen({ route, navigation }) {
         updatedAt: serverTimestamp(),
       };
 
-      // Add company to Firestore (addDocument returns the ID string directly)
       const companyId = await addDocument("companies", companyData);
 
-      // Update user document with owner fields
       const userData = {
         userId,
         phone: phoneNumber || null,
@@ -207,7 +187,7 @@ export default function OwnerSetupScreen({ route, navigation }) {
         profilePicture: profilePicture || null,
         companyId: companyId,
         hasOperationalPermissions: hasOperationalPermissions,
-        managedTurfIds: [], // Empty means all turfs
+        managedTurfIds: [],
         isActive: true,
         isSuspended: false,
         createdAt: serverTimestamp(),
@@ -216,15 +196,12 @@ export default function OwnerSetupScreen({ route, navigation }) {
       };
 
       await setDocument("users", userId, userData);
-
-      // Update Redux state
       dispatch(setUser(userData));
       dispatch(setCompany({ ...companyData, companyId, id: companyId }));
 
-      // Navigation will be handled by RootNavigator based on role
       Alert.alert(
         "Welcome!",
-        `Your company "${companyName}" has been created successfully. You have a 30-day free trial.`,
+        `Your company "${companyName}" has been created. You have a 30-day free trial.`,
         [{ text: "Get Started", onPress: () => {} }]
       );
     } catch (error) {
@@ -237,92 +214,79 @@ export default function OwnerSetupScreen({ route, navigation }) {
   };
 
   const renderStepIndicator = () => (
-    <View style={styles.stepIndicator}>
-      <View style={styles.stepsRow}>
-        {STEPS.map((step, index) => (
-          <React.Fragment key={step.id}>
-            <View style={styles.stepItem}>
-              <View
-                style={[
-                  styles.stepCircle,
-                  currentStep >= step.id && styles.stepCircleActive,
-                  currentStep > step.id && styles.stepCircleCompleted,
-                ]}
-              >
-                {currentStep > step.id ? (
-                  <MaterialCommunityIcons name="check" size={18} color="#fff" />
-                ) : (
-                  <MaterialCommunityIcons
-                    name={step.icon}
-                    size={18}
-                    color={currentStep >= step.id ? "#fff" : "#999"}
-                  />
-                )}
-              </View>
-              <Text
-                variant="bodySmall"
-                style={[
-                  styles.stepTitle,
-                  currentStep >= step.id && styles.stepTitleActive,
-                ]}
-              >
-                {step.title}
-              </Text>
+    <View style={styles.stepIndicatorRow}>
+      {STEPS.map((step, index) => (
+        <React.Fragment key={step.id}>
+          <View style={styles.stepItem}>
+            <View
+              style={[
+                styles.stepCircle,
+                currentStep >= step.id && styles.stepCircleActive,
+              ]}
+            >
+              {currentStep > step.id ? (
+                <MaterialCommunityIcons name="check" size={16} color="#fff" />
+              ) : (
+                <Text
+                  style={[
+                    styles.stepNumber,
+                    currentStep >= step.id && styles.stepNumberActive,
+                  ]}
+                >
+                  {step.id}
+                </Text>
+              )}
             </View>
-            {index < STEPS.length - 1 && (
-              <View
-                style={[
-                  styles.stepLine,
-                  currentStep > step.id && styles.stepLineActive,
-                ]}
-              />
-            )}
-          </React.Fragment>
-        ))}
-      </View>
-      <ProgressBar
-        progress={currentStep / STEPS.length}
-        color="#9C27B0"
-        style={styles.progressBar}
-      />
+            <Text
+              style={[
+                styles.stepLabel,
+                currentStep >= step.id && styles.stepLabelActive,
+              ]}
+            >
+              {step.title}
+            </Text>
+          </View>
+          {index < STEPS.length - 1 && (
+            <View
+              style={[
+                styles.stepLine,
+                currentStep > step.id && styles.stepLineActive,
+              ]}
+            />
+          )}
+        </React.Fragment>
+      ))}
     </View>
   );
 
   const renderStep1 = () => (
     <View style={styles.stepContent}>
-      <Text variant="titleMedium" style={styles.sectionTitle}>
-        Company Information
-      </Text>
+      <Text style={styles.sectionTitle}>Company Information</Text>
 
       {/* Company Logo */}
       <View style={styles.logoSection}>
         <TouchableOpacity onPress={handlePickLogo} activeOpacity={0.7}>
           {companyLogo ? (
-            <View style={styles.logoContainer}>
+            <View style={{ position: "relative" }}>
               <Image source={{ uri: companyLogo }} style={styles.logoImage} />
-              <IconButton
-                icon="close-circle"
-                size={24}
-                iconColor="#F44336"
-                style={styles.removeButton}
+              <TouchableOpacity
+                style={styles.removeLogoBtn}
                 onPress={() => setCompanyLogo(null)}
-              />
+              >
+                <MaterialCommunityIcons name="close" size={14} color="#fff" />
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.logoPlaceholder}>
-              <MaterialCommunityIcons name="camera-plus" size={32} color="#999" />
-              <Text variant="bodySmall" style={styles.logoText}>
-                Add Logo
-              </Text>
+              <MaterialCommunityIcons name="camera-plus" size={32} color={BRAND_GREEN + "80"} />
+              <Text style={styles.logoPlaceholderText}>Add Logo</Text>
             </View>
           )}
         </TouchableOpacity>
-        <Text variant="bodySmall" style={styles.optionalText}>
-          (Optional)
-        </Text>
+        <Text style={styles.optionalText}>(Optional)</Text>
       </View>
 
-      <Surface style={styles.formContainer} elevation={1}>
+      <Surface style={styles.formCard} elevation={1}>
         <TextInput
           mode="outlined"
           label="Company Name *"
@@ -334,12 +298,13 @@ export default function OwnerSetupScreen({ route, navigation }) {
           }}
           error={!!errors.companyName}
           left={<TextInput.Icon icon="office-building" />}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={BRAND_GREEN}
+          contentStyle={{ fontFamily: "Ubuntu-Regular" }}
           style={styles.input}
         />
         {errors.companyName && (
-          <Text variant="bodySmall" style={styles.errorText}>
-            {errors.companyName}
-          </Text>
+          <Text style={styles.errorText}>{errors.companyName}</Text>
         )}
 
         <TextInput
@@ -351,6 +316,9 @@ export default function OwnerSetupScreen({ route, navigation }) {
           multiline
           numberOfLines={3}
           left={<TextInput.Icon icon="text" />}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={BRAND_GREEN}
+          contentStyle={{ fontFamily: "Ubuntu-Regular" }}
           style={styles.input}
         />
 
@@ -362,6 +330,9 @@ export default function OwnerSetupScreen({ route, navigation }) {
           onChangeText={setCompanyPhone}
           keyboardType="phone-pad"
           left={<TextInput.Icon icon="phone" />}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={BRAND_GREEN}
+          contentStyle={{ fontFamily: "Ubuntu-Regular" }}
           style={styles.input}
         />
 
@@ -378,12 +349,13 @@ export default function OwnerSetupScreen({ route, navigation }) {
           keyboardType="email-address"
           autoCapitalize="none"
           left={<TextInput.Icon icon="email" />}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={BRAND_GREEN}
+          contentStyle={{ fontFamily: "Ubuntu-Regular" }}
           style={styles.input}
         />
         {errors.companyEmail && (
-          <Text variant="bodySmall" style={styles.errorText}>
-            {errors.companyEmail}
-          </Text>
+          <Text style={styles.errorText}>{errors.companyEmail}</Text>
         )}
       </Surface>
     </View>
@@ -391,14 +363,10 @@ export default function OwnerSetupScreen({ route, navigation }) {
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
-      <Text variant="titleMedium" style={styles.sectionTitle}>
-        Business Details
-      </Text>
-      <Text variant="bodySmall" style={styles.sectionSubtitle}>
-        Optional - You can add these later
-      </Text>
+      <Text style={styles.sectionTitle}>Business Details</Text>
+      <Text style={styles.sectionSubtitle}>Optional — You can add these later</Text>
 
-      <Surface style={styles.formContainer} elevation={1}>
+      <Surface style={styles.formCard} elevation={1}>
         <TextInput
           mode="outlined"
           label="GST Number (Optional)"
@@ -411,12 +379,13 @@ export default function OwnerSetupScreen({ route, navigation }) {
           error={!!errors.gstNumber}
           autoCapitalize="characters"
           left={<TextInput.Icon icon="file-document" />}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={BRAND_GREEN}
+          contentStyle={{ fontFamily: "Ubuntu-Regular" }}
           style={styles.input}
         />
         {errors.gstNumber && (
-          <Text variant="bodySmall" style={styles.errorText}>
-            {errors.gstNumber}
-          </Text>
+          <Text style={styles.errorText}>{errors.gstNumber}</Text>
         )}
 
         <TextInput
@@ -432,122 +401,116 @@ export default function OwnerSetupScreen({ route, navigation }) {
           autoCapitalize="characters"
           maxLength={10}
           left={<TextInput.Icon icon="card-account-details" />}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={BRAND_GREEN}
+          contentStyle={{ fontFamily: "Ubuntu-Regular" }}
           style={styles.input}
         />
         {errors.panNumber && (
-          <Text variant="bodySmall" style={styles.errorText}>
-            {errors.panNumber}
-          </Text>
+          <Text style={styles.errorText}>{errors.panNumber}</Text>
         )}
       </Surface>
 
-      <View style={styles.infoContainer}>
-        <MaterialCommunityIcons name="information-outline" size={18} color="#2196F3" />
-        <Text variant="bodySmall" style={styles.infoText}>
-          GST and PAN details help generate proper invoices for your customers.
-          You can add these later from company settings.
-        </Text>
+      <View style={styles.tipCard}>
+        <View style={styles.tipAccentBar} />
+        <View style={styles.tipContent}>
+          <MaterialCommunityIcons name="lightbulb-outline" size={16} color={BRAND_MID} />
+          <Text style={styles.tipText}>
+            GST and PAN details help generate proper invoices for your customers. You can add these later from company settings.
+          </Text>
+        </View>
       </View>
     </View>
   );
 
   const renderStep3 = () => (
     <View style={styles.stepContent}>
-      <Text variant="titleMedium" style={styles.sectionTitle}>
-        Operational Preferences
-      </Text>
+      <Text style={styles.sectionTitle}>Operational Preferences</Text>
 
-      <Surface style={styles.formContainer} elevation={1}>
+      <Surface style={styles.formCard} elevation={1}>
         <TouchableOpacity
-          style={styles.checkboxContainer}
+          style={styles.checkboxRow}
           onPress={() => setHasOperationalPermissions(!hasOperationalPermissions)}
           activeOpacity={0.7}
         >
           <Checkbox
             status={hasOperationalPermissions ? "checked" : "unchecked"}
             onPress={() => setHasOperationalPermissions(!hasOperationalPermissions)}
-            color="#9C27B0"
+            color={BRAND_GREEN}
           />
           <View style={styles.checkboxContent}>
-            <Text variant="bodyLarge" style={styles.checkboxTitle}>
-              I want to manage day-to-day operations
-            </Text>
-            <Text variant="bodySmall" style={styles.checkboxDescription}>
-              Enable this to approve bookings, respond to chats, assign
-              caretakers, and perform other manager tasks yourself.
+            <Text style={styles.checkboxTitle}>I want to manage day-to-day operations</Text>
+            <Text style={styles.checkboxDesc}>
+              Enable to approve bookings, respond to chats, assign caretakers, and perform manager tasks.
             </Text>
           </View>
         </TouchableOpacity>
 
         {hasOperationalPermissions && (
-          <View style={styles.permissionsInfo}>
-            <Text variant="bodySmall" style={styles.permissionsTitle}>
-              With operational permissions, you can:
-            </Text>
+          <View style={styles.permissionsList}>
+            <Text style={styles.permissionsTitle}>With operational permissions, you can:</Text>
             {[
               "Approve or reject booking requests",
               "Respond to customer chats",
               "Assign caretakers to turfs",
               "Create and manage academies",
               "Block time slots for maintenance",
-            ].map((item, index) => (
-              <View key={index} style={styles.permissionItem}>
-                <MaterialCommunityIcons name="check" size={16} color="#9C27B0" />
-                <Text variant="bodySmall" style={styles.permissionText}>
-                  {item}
-                </Text>
+            ].map((item, i) => (
+              <View key={i} style={styles.permissionItem}>
+                <MaterialCommunityIcons name="check" size={14} color={BRAND_GREEN} />
+                <Text style={styles.permissionText}>{item}</Text>
               </View>
             ))}
           </View>
         )}
       </Surface>
 
-      <View style={styles.infoContainer}>
-        <MaterialCommunityIcons name="lightbulb-outline" size={18} color="#FF9800" />
-        <Text variant="bodySmall" style={styles.infoText}>
-          You can change this setting anytime from Settings. If disabled, you'll
-          need to hire managers to handle daily operations.
-        </Text>
-      </View>
-
-      {/* Trial Info */}
-      <Surface style={styles.trialCard} elevation={2}>
-        <View style={styles.trialHeader}>
-          <MaterialCommunityIcons name="gift" size={24} color="#9C27B0" />
-          <Text variant="titleMedium" style={styles.trialTitle}>
-            30-Day Free Trial
+      <View style={styles.tipCard}>
+        <View style={styles.tipAccentBar} />
+        <View style={styles.tipContent}>
+          <MaterialCommunityIcons name="lightbulb-outline" size={16} color={BRAND_MID} />
+          <Text style={styles.tipText}>
+            You can change this setting anytime from Settings. If disabled, you'll need managers to handle daily operations.
           </Text>
         </View>
-        <Text variant="bodySmall" style={styles.trialText}>
-          Start with a free 30-day trial. Add unlimited turfs and explore all
-          features. After the trial, pay only ₹299/ground/month.
+      </View>
+
+      {/* Trial info card */}
+      <View style={styles.trialCard}>
+        <View style={styles.trialHeader}>
+          <MaterialCommunityIcons name="gift" size={22} color={BRAND_GREEN} />
+          <Text style={styles.trialTitle}>30-Day Free Trial</Text>
+        </View>
+        <Text style={styles.trialText}>
+          Start with a free 30-day trial. Add unlimited turfs and explore all features. After the trial, pay only ₹299/ground/month.
         </Text>
-      </Surface>
+      </View>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         {/* Header */}
         <View style={styles.header}>
-          {currentStep > 1 && (
-            <IconButton
-              icon="arrow-left"
-              size={24}
-              onPress={handleBack}
-              style={styles.backButton}
-            />
+          {currentStep > 1 ? (
+            <TouchableOpacity style={styles.iconBtn} onPress={handleBack} activeOpacity={0.8}>
+              <MaterialCommunityIcons name="arrow-left" size={22} color="#374151" />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40 }} />
           )}
-          <Text variant="headlineSmall" style={styles.title}>
-            Create Your Company
-          </Text>
+          <Text style={styles.headerTitle}>Create Your Company</Text>
+          <View style={{ width: 40 }} />
         </View>
 
-        {renderStepIndicator()}
+        {/* Step Indicator */}
+        <View style={styles.stepIndicatorWrapper}>
+          {renderStepIndicator()}
+        </View>
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -558,33 +521,33 @@ export default function OwnerSetupScreen({ route, navigation }) {
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
 
-          {/* Navigation Buttons */}
-          <View style={styles.buttonContainer}>
+          {/* Nav Buttons */}
+          <View style={styles.buttonRow}>
             {currentStep > 1 && (
-              <Button
-                mode="outlined"
-                onPress={handleBack}
+              <TouchableOpacity
                 style={styles.backBtn}
-                contentStyle={styles.buttonContent}
+                onPress={handleBack}
+                activeOpacity={0.8}
               >
-                Back
-              </Button>
+                <Text style={styles.backBtnText}>Back</Text>
+              </TouchableOpacity>
             )}
-            <Button
-              mode="contained"
+            <TouchableOpacity
+              style={[
+                styles.nextBtn,
+                currentStep === 1 && styles.nextBtnFull,
+                (loading || (currentStep === 1 && !companyName.trim())) && styles.nextBtnDisabled,
+              ]}
               onPress={handleNext}
-              loading={loading}
               disabled={loading || (currentStep === 1 && !companyName.trim())}
-              style={[styles.nextButton, currentStep === 1 && styles.fullWidth]}
-              contentStyle={styles.buttonContent}
-              buttonColor="#9C27B0"
+              activeOpacity={0.85}
             >
-              {currentStep === STEPS.length
-                ? loading
-                  ? "Creating..."
-                  : "Create Company"
-                : "Continue"}
-            </Button>
+              <Text style={styles.nextBtnText}>
+                {currentStep === STEPS.length
+                  ? loading ? "Creating..." : "Create Company"
+                  : "Continue"}
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -595,7 +558,7 @@ export default function OwnerSetupScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F7FFF9",
   },
   keyboardView: {
     flex: 1,
@@ -605,220 +568,292 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
+    paddingBottom: 4,
   },
-  backButton: {
-    marginLeft: -8,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  title: {
-    fontWeight: "bold",
+  headerTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 20,
+    color: BRAND_DARK,
     flex: 1,
     textAlign: "center",
-    marginRight: 40,
   },
-  stepIndicator: {
+  stepIndicatorWrapper: {
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
-  stepsRow: {
+  stepIndicatorRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
   },
   stepItem: {
     alignItems: "center",
   },
   stepCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#e0e0e0",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
   },
   stepCircleActive: {
-    backgroundColor: "#9C27B0",
+    backgroundColor: BRAND_GREEN,
   },
-  stepCircleCompleted: {
-    backgroundColor: "#4CAF50",
+  stepNumber: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: "#9CA3AF",
   },
-  stepTitle: {
-    marginTop: 4,
-    color: "#999",
+  stepNumberActive: {
+    fontFamily: "Ubuntu-Bold",
+    color: "#fff",
+  },
+  stepLabel: {
+    fontFamily: "Ubuntu-Regular",
     fontSize: 11,
+    color: GRAY_TEXT,
+    marginTop: 4,
+    textAlign: "center",
   },
-  stepTitleActive: {
-    color: "#9C27B0",
-    fontWeight: "600",
+  stepLabelActive: {
+    color: BRAND_GREEN,
+    fontFamily: "Ubuntu-Medium",
   },
   stepLine: {
-    width: 40,
+    flex: 1,
     height: 2,
-    backgroundColor: "#e0e0e0",
-    marginHorizontal: 8,
-    marginBottom: 20,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 6,
+    marginTop: 16,
   },
   stepLineActive: {
-    backgroundColor: "#4CAF50",
-  },
-  progressBar: {
-    marginTop: 16,
-    borderRadius: 4,
-    height: 4,
+    backgroundColor: BRAND_GREEN,
   },
   scrollContent: {
     padding: 20,
     paddingTop: 0,
+    paddingBottom: 40,
   },
   stepContent: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 17,
+    color: BRAND_DARK,
     marginBottom: 4,
   },
   sectionSubtitle: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
     marginBottom: 16,
   },
   logoSection: {
     alignItems: "center",
     marginVertical: 16,
   },
-  logoContainer: {
-    position: "relative",
-  },
   logoImage: {
     width: 100,
     height: 100,
     borderRadius: 16,
   },
-  removeButton: {
+  removeLogoBtn: {
     position: "absolute",
-    top: -10,
-    right: -10,
-    backgroundColor: "#fff",
-    margin: 0,
+    top: -8,
+    right: -8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: DANGER_RED,
+    justifyContent: "center",
+    alignItems: "center",
   },
   logoPlaceholder: {
     width: 100,
     height: 100,
     borderRadius: 16,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: PALE_GREEN,
+    borderWidth: 2,
+    borderColor: BRAND_GREEN + "40",
+    borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#ccc",
-    borderStyle: "dashed",
   },
-  logoText: {
-    color: "#999",
+  logoPlaceholderText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: GRAY_TEXT,
     marginTop: 4,
   },
   optionalText: {
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: GRAY_TEXT,
     marginTop: 8,
   },
-  formContainer: {
-    padding: 16,
+  formCard: {
     borderRadius: 16,
     backgroundColor: "#fff",
+    padding: 16,
+    marginBottom: 16,
   },
   input: {
     marginBottom: 4,
     backgroundColor: "#fff",
   },
   errorText: {
-    color: "#F44336",
-    marginBottom: 12,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: DANGER_RED,
+    marginBottom: 8,
     marginLeft: 4,
   },
-  infoContainer: {
+  tipCard: {
+    borderRadius: 12,
+    backgroundColor: PALE_GREEN,
+    borderLeftWidth: 3,
+    borderLeftColor: BRAND_MID,
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  tipAccentBar: {
+    height: 0,
+  },
+  tipContent: {
     flexDirection: "row",
     alignItems: "flex-start",
-    backgroundColor: "#E3F2FD",
     padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
+    gap: 8,
   },
-  infoText: {
+  tipText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: BRAND_DARK,
     flex: 1,
-    marginLeft: 8,
-    color: "#666",
     lineHeight: 18,
   },
-  checkboxContainer: {
+  checkboxRow: {
     flexDirection: "row",
     alignItems: "flex-start",
   },
   checkboxContent: {
     flex: 1,
     marginLeft: 8,
+    paddingTop: 6,
   },
   checkboxTitle: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: BRAND_DARK,
+    marginBottom: 4,
   },
-  checkboxDescription: {
-    color: "#666",
-    marginTop: 4,
+  checkboxDesc: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
     lineHeight: 18,
   },
-  permissionsInfo: {
-    backgroundColor: "#F3E5F5",
+  permissionsList: {
+    backgroundColor: PALE_GREEN,
+    borderRadius: 10,
     padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
+    marginTop: 12,
   },
   permissionsTitle: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 13,
+    color: BRAND_DARK,
     marginBottom: 8,
-    color: "#7B1FA2",
   },
   permissionItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    gap: 8,
+    marginVertical: 3,
   },
   permissionText: {
-    marginLeft: 8,
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
   },
   trialCard: {
+    borderRadius: 14,
+    backgroundColor: PALE_GREEN,
+    borderLeftWidth: 4,
+    borderLeftColor: BRAND_GREEN,
     padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    marginTop: 16,
+    marginTop: 4,
+    marginBottom: 16,
   },
   trialHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
     marginBottom: 8,
   },
   trialTitle: {
-    marginLeft: 8,
-    fontWeight: "bold",
-    color: "#9C27B0",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: BRAND_DARK,
   },
   trialText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
     lineHeight: 20,
   },
-  buttonContainer: {
+  buttonRow: {
     flexDirection: "row",
     marginTop: 24,
     gap: 12,
   },
   backBtn: {
     flex: 1,
-    borderRadius: 8,
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#fff",
   },
-  nextButton: {
+  backBtnText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 15,
+    color: GRAY_TEXT,
+  },
+  nextBtn: {
     flex: 2,
-    borderRadius: 8,
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BRAND_GREEN,
   },
-  fullWidth: {
+  nextBtnFull: {
     flex: 1,
   },
-  buttonContent: {
-    height: 50,
+  nextBtnDisabled: {
+    opacity: 0.5,
+  },
+  nextBtnText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#fff",
   },
 });

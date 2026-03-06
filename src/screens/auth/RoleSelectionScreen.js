@@ -4,16 +4,17 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-} from "react-native";
-import {
   Text,
-  Surface,
-  Button,
-  useTheme,
-} from "react-native-paper";
+} from "react-native";
+import { Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks";
+
+const BRAND_GREEN = "#16A34A";
+const BRAND_DARK = "#14532D";
+const GRAY_TEXT = "#6B7280";
+const DARK_TEXT = "#111827";
 
 const ROLES = [
   {
@@ -22,7 +23,7 @@ const ROLES = [
     description: "Book turfs for your games, view availability, and manage your bookings",
     icon: "account",
     color: "#4CAF50",
-    features: ["Browse & book turfs", "View booking history", "Chat with managers"],
+    features: ["Browse & book turfs", "View booking history"],
   },
   {
     id: "owner",
@@ -30,31 +31,28 @@ const ROLES = [
     description: "Own and manage turf businesses, handle subscriptions, and oversee operations",
     icon: "office-building",
     color: "#9C27B0",
-    features: ["Create & manage company", "Add turfs & grounds", "View company analytics"],
+    features: ["Create & manage company", "View company analytics"],
   },
   {
     id: "manager",
     title: "Manager",
     description: "Manage turf operations, handle bookings, and coordinate with caretakers",
     icon: "briefcase",
-    color: "#2196F3",
-    features: ["Manage multiple turfs", "Accept/reject bookings", "View analytics"],
+    color: "#3B82F6",
+    features: ["Manage multiple turfs", "Accept/reject bookings"],
   },
   {
     id: "caretaker",
     title: "Caretaker",
     description: "Handle day-to-day operations, collect payments, and manage on-ground activities",
     icon: "account-hard-hat",
-    color: "#FF9800",
-    features: ["View daily schedule", "Collect payments", "Mark attendance"],
+    color: "#F97316",
+    features: ["View daily schedule", "Collect payments"],
   },
 ];
 
 export default function RoleSelectionScreen({ route, navigation }) {
-  const theme = useTheme();
   const { user } = useAuth();
-
-  // Get userId and phoneNumber from route params or from auth state
   const userId = route?.params?.userId || user?.userId;
   const phoneNumber = route?.params?.phoneNumber || user?.phone;
 
@@ -62,7 +60,6 @@ export default function RoleSelectionScreen({ route, navigation }) {
 
   const handleContinue = () => {
     if (!selectedRole) return;
-
     navigation.navigate("ProfileSetupScreen", {
       userId,
       phoneNumber,
@@ -71,62 +68,43 @@ export default function RoleSelectionScreen({ route, navigation }) {
   };
 
   const RoleCard = ({ role, isSelected, onSelect }) => (
-    <TouchableOpacity
-      onPress={() => onSelect(role.id)}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity onPress={() => onSelect(role.id)} activeOpacity={0.7}>
       <Surface
         style={[
           styles.roleCard,
-          isSelected && { borderColor: role.color, borderWidth: 2 },
+          { borderLeftColor: isSelected ? role.color : "#F3F4F6" },
         ]}
         elevation={isSelected ? 3 : 1}
       >
-        <View style={styles.roleHeader}>
-          <View
-            style={[styles.iconContainer, { backgroundColor: `${role.color}20` }]}
-          >
-            <MaterialCommunityIcons
-              name={role.icon}
-              size={32}
-              color={role.color}
-            />
+        <View style={styles.cardRow}>
+          {/* Left icon */}
+          <View style={[styles.iconCircle, { backgroundColor: role.color + "18" }]}>
+            <MaterialCommunityIcons name={role.icon} size={22} color={role.color} />
           </View>
-          <View style={styles.roleInfo}>
-            <Text variant="titleMedium" style={styles.roleTitle}>
-              {role.title}
-            </Text>
-            <Text variant="bodySmall" style={styles.roleDescription}>
-              {role.description}
-            </Text>
+
+          {/* Middle content */}
+          <View style={styles.cardMiddle}>
+            <Text style={styles.roleTitle}>{role.title}</Text>
+            <Text style={styles.roleDesc}>{role.description}</Text>
+            {role.features.map((feature, i) => (
+              <View key={i} style={styles.featureRow}>
+                <MaterialCommunityIcons name="check" size={12} color={role.color} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
           </View>
+
+          {/* Right radio */}
           <View
             style={[
               styles.radioOuter,
-              isSelected && { borderColor: role.color },
+              { borderColor: isSelected ? role.color : "#D1D5DB" },
             ]}
           >
             {isSelected && (
-              <View
-                style={[styles.radioInner, { backgroundColor: role.color }]}
-              />
+              <View style={[styles.radioInner, { backgroundColor: role.color }]} />
             )}
           </View>
-        </View>
-
-        <View style={styles.featuresContainer}>
-          {role.features.map((feature, index) => (
-            <View key={index} style={styles.featureItem}>
-              <MaterialCommunityIcons
-                name="check-circle"
-                size={16}
-                color={role.color}
-              />
-              <Text variant="bodySmall" style={styles.featureText}>
-                {feature}
-              </Text>
-            </View>
-          ))}
         </View>
       </Surface>
     </TouchableOpacity>
@@ -140,16 +118,20 @@ export default function RoleSelectionScreen({ route, navigation }) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Choose Your Role
-          </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Select how you want to use Play Grid
-          </Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate("LoginScreen")}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={18} color={BRAND_DARK} />
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Choose Your Role</Text>
+          <Text style={styles.subtitle}>Select how you want to use the app</Text>
         </View>
 
         {/* Role Cards */}
-        <View style={styles.rolesContainer}>
+        <View style={styles.cardsContainer}>
           {ROLES.map((role) => (
             <RoleCard
               key={role.id}
@@ -160,29 +142,25 @@ export default function RoleSelectionScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* Note */}
-        <View style={styles.noteContainer}>
-          <MaterialCommunityIcons
-            name="information-outline"
-            size={18}
-            color="#666"
-          />
-          <Text variant="bodySmall" style={styles.noteText}>
-            Managers & Caretakers need an invite code from a Turf Owner to join.
-            Caretakers will be assigned to a turf after joining.
-          </Text>
+        {/* Info pill */}
+        <View style={styles.infoPillWrapper}>
+          <View style={styles.infoPill}>
+            <MaterialCommunityIcons name="lock-outline" size={14} color="#F97316" />
+            <Text style={styles.infoPillText}>
+              Managers & Caretakers need an invite code
+            </Text>
+          </View>
         </View>
 
         {/* Continue Button */}
-        <Button
-          mode="contained"
+        <TouchableOpacity
+          style={[styles.continueButton, !selectedRole && styles.continueButtonDisabled]}
           onPress={handleContinue}
           disabled={!selectedRole}
-          style={styles.continueButton}
-          contentStyle={styles.buttonContent}
+          activeOpacity={0.85}
         >
-          Continue
-        </Button>
+          <Text style={styles.continueButtonText}>Continue</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -191,112 +169,136 @@ export default function RoleSelectionScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F7FFF9",
   },
   scrollContent: {
     padding: 20,
   },
   header: {
+    paddingBottom: 0,
+    marginBottom: 20,
+    marginTop: 8,
+  },
+  backButton: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 24,
-    marginTop: 12,
+    gap: 4,
+    alignSelf: "flex-start",
+    marginBottom: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  backButtonText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: BRAND_DARK,
   },
   title: {
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 24,
+    color: BRAND_DARK,
+    marginBottom: 4,
   },
   subtitle: {
-    color: "#666",
-    textAlign: "center",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: GRAY_TEXT,
   },
-  rolesContainer: {
-    gap: 16,
+  cardsContainer: {
+    gap: 12,
   },
   roleCard: {
-    padding: 16,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: "transparent",
+    borderLeftWidth: 4,
+    marginBottom: 0,
+    overflow: "hidden",
   },
-  roleHeader: {
+  cardRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    padding: 16,
+    alignItems: "center",
+    gap: 12,
   },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
   },
-  roleInfo: {
+  cardMiddle: {
     flex: 1,
   },
   roleTitle: {
-    fontWeight: "bold",
-    marginBottom: 4,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: DARK_TEXT,
+    marginBottom: 2,
   },
-  roleDescription: {
-    color: "#666",
-    lineHeight: 18,
+  roleDesc: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: GRAY_TEXT,
+    lineHeight: 16,
+    marginBottom: 6,
+  },
+  featureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 3,
+  },
+  featureText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: GRAY_TEXT,
   },
   radioOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#ddd",
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
   },
   radioInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
   },
-  featuresContainer: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+  infoPillWrapper: {
+    alignItems: "center",
+    marginVertical: 16,
   },
-  featureItem: {
+  infoPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    gap: 6,
+    backgroundColor: "#FFF7ED",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignSelf: "center",
   },
-  featureText: {
-    marginLeft: 6,
-    color: "#444",
-  },
-  noteContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#E3F2FD",
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 24,
-  },
-  noteText: {
-    flex: 1,
-    marginLeft: 8,
-    color: "#666",
-    lineHeight: 18,
+  infoPillText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#92400E",
   },
   continueButton: {
-    marginTop: 24,
-    borderRadius: 8,
+    backgroundColor: BRAND_GREEN,
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  buttonContent: {
-    height: 50,
+  continueButtonDisabled: {
+    opacity: 0.5,
+  },
+  continueButtonText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#fff",
   },
 });

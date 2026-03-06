@@ -2,6 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Tab screens
 import HomeScreen from "../screens/user/HomeScreen";
@@ -28,6 +29,9 @@ const Stack = createStackNavigator();
 const USER_COLOR = "#4CAF50";
 
 function UserTabs() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 60 + insets.bottom;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -38,9 +42,15 @@ function UserTabs() {
           backgroundColor: "#fff",
           borderTopWidth: 1,
           borderTopColor: "#eee",
-          height: 60,
-          paddingBottom: 8,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom + 6,
           paddingTop: 8,
+          // Top shadow
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 6,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,

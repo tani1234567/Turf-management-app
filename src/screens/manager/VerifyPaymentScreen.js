@@ -599,7 +599,7 @@ export default function VerifyPaymentScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   loadingContainer: {
     flex: 1,
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
   screenshot: {
     width: "100%",
     height: 250,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
   viewFullButton: {
     flexDirection: "row",

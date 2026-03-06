@@ -15,7 +15,11 @@ import { selectCompany } from "../../store/slices/companySlice";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../../services/firebase/config";
 
-const CARETAKER_COLOR = "#FF9800";
+const CARETAKER_ORANGE = "#F97316";
+const PALE_ORANGE      = "#FFF7ED";
+const NAVY_ORANGE      = "#7C2D12";
+const SUCCESS_GREEN    = "#22C55E";
+const DANGER_RED       = "#EF4444";
 
 export default function WaitingForAssignmentScreen() {
   const dispatch = useDispatch();
@@ -35,7 +39,6 @@ export default function WaitingForAssignmentScreen() {
         if (docSnapshot.exists()) {
           const userData = docSnapshot.data();
 
-          // Update user profile in Redux if assignment status changed
           if (userData.isAssigned !== user.isAssigned) {
             dispatch(updateUserProfile({
               isAssigned: userData.isAssigned,
@@ -43,7 +46,6 @@ export default function WaitingForAssignmentScreen() {
               assignedCompanyId: userData.assignedCompanyId,
             }));
 
-            // Show success notification
             if (userData.isAssigned) {
               Alert.alert(
                 "Assignment Complete!",
@@ -64,7 +66,6 @@ export default function WaitingForAssignmentScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // The real-time listener will automatically handle updates
     setTimeout(() => {
       setRefreshing(false);
     }, 1000);
@@ -99,7 +100,7 @@ export default function WaitingForAssignmentScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[CARETAKER_COLOR]}
+            colors={[CARETAKER_ORANGE]}
           />
         }
       >
@@ -108,36 +109,32 @@ export default function WaitingForAssignmentScreen() {
           <Avatar.Text
             size={80}
             label={user?.name?.substring(0, 2).toUpperCase() || "CT"}
-            style={{ backgroundColor: CARETAKER_COLOR }}
+            style={{ backgroundColor: CARETAKER_ORANGE }}
           />
-          <Text variant="headlineSmall" style={styles.name}>
-            {user?.name || "Caretaker"}
-          </Text>
-          <Text variant="bodyMedium" style={styles.phone}>
-            {user?.phone || "+91 98765 43210"}
-          </Text>
+          <Text style={styles.name}>{user?.name || "Caretaker"}</Text>
+          <Text style={styles.phone}>{user?.phone || "+91 98765 43210"}</Text>
         </View>
 
         {/* Company Info */}
         {company && (
-          <Surface style={styles.companyCard} elevation={1}>
+          <Surface style={styles.companyCard} elevation={2}>
             <MaterialCommunityIcons
               name="office-building"
               size={32}
               color="#9C27B0"
             />
             <View style={styles.companyInfo}>
-              <Text variant="titleMedium" style={styles.companyName}>
+              <Text style={styles.companyName}>
                 {company.name || "Company Name"}
               </Text>
-              <Text variant="bodySmall" style={styles.companySubtext}>
+              <Text style={styles.companySubtext}>
                 You've joined this company
               </Text>
             </View>
             <MaterialCommunityIcons
               name="check-circle"
               size={24}
-              color="#4CAF50"
+              color={SUCCESS_GREEN}
             />
           </Surface>
         )}
@@ -148,13 +145,13 @@ export default function WaitingForAssignmentScreen() {
             <MaterialCommunityIcons
               name="clock-outline"
               size={64}
-              color={CARETAKER_COLOR}
+              color={CARETAKER_ORANGE}
             />
           </View>
-          <Text variant="headlineSmall" style={styles.waitingTitle}>
+          <Text style={styles.waitingTitle}>
             Waiting for Assignment
           </Text>
-          <Text variant="bodyMedium" style={styles.waitingText}>
+          <Text style={styles.waitingText}>
             You have successfully joined the company. A manager or owner will
             assign you to a specific turf soon.
           </Text>
@@ -165,12 +162,8 @@ export default function WaitingForAssignmentScreen() {
                 <MaterialCommunityIcons name="check" size={14} color="#fff" />
               </View>
               <View style={styles.stepContent}>
-                <Text variant="titleSmall" style={styles.stepTitle}>
-                  Account Created
-                </Text>
-                <Text variant="bodySmall" style={styles.stepSubtitle}>
-                  Your profile is set up
-                </Text>
+                <Text style={styles.stepTitle}>Account Created</Text>
+                <Text style={styles.stepSubtitle}>Your profile is set up</Text>
               </View>
             </View>
 
@@ -181,10 +174,8 @@ export default function WaitingForAssignmentScreen() {
                 <MaterialCommunityIcons name="check" size={14} color="#fff" />
               </View>
               <View style={styles.stepContent}>
-                <Text variant="titleSmall" style={styles.stepTitle}>
-                  Joined Company
-                </Text>
-                <Text variant="bodySmall" style={styles.stepSubtitle}>
+                <Text style={styles.stepTitle}>Joined Company</Text>
+                <Text style={styles.stepSubtitle}>
                   Connected to {company?.name || "the company"}
                 </Text>
               </View>
@@ -197,14 +188,12 @@ export default function WaitingForAssignmentScreen() {
                 <MaterialCommunityIcons
                   name="clock-outline"
                   size={14}
-                  color="#FF9800"
+                  color={CARETAKER_ORANGE}
                 />
               </View>
               <View style={styles.stepContent}>
-                <Text variant="titleSmall" style={styles.stepTitle}>
-                  Turf Assignment
-                </Text>
-                <Text variant="bodySmall" style={styles.stepSubtitle}>
+                <Text style={styles.stepTitle}>Turf Assignment</Text>
+                <Text style={styles.stepSubtitle}>
                   Waiting for manager to assign
                 </Text>
               </View>
@@ -220,35 +209,21 @@ export default function WaitingForAssignmentScreen() {
             color="#2196F3"
           />
           <View style={styles.infoContent}>
-            <Text variant="titleSmall" style={styles.infoTitle}>
-              What happens next?
-            </Text>
-            <Text variant="bodySmall" style={styles.infoText}>
-              Once assigned, you'll be able to:
-            </Text>
+            <Text style={styles.infoTitle}>What happens next?</Text>
+            <Text style={styles.infoText}>Once assigned, you'll be able to:</Text>
             <View style={styles.featureList}>
-              <Text variant="bodySmall" style={styles.featureItem}>
-                • View today's bookings
-              </Text>
-              <Text variant="bodySmall" style={styles.featureItem}>
-                • Check the weekly schedule
-              </Text>
-              <Text variant="bodySmall" style={styles.featureItem}>
-                • Mark attendance for customers
-              </Text>
-              <Text variant="bodySmall" style={styles.featureItem}>
-                • Report maintenance issues
-              </Text>
+              <Text style={styles.featureItem}>• View today's bookings</Text>
+              <Text style={styles.featureItem}>• Check the weekly schedule</Text>
+              <Text style={styles.featureItem}>• Mark attendance for customers</Text>
+              <Text style={styles.featureItem}>• Report maintenance issues</Text>
             </View>
           </View>
         </Surface>
 
         {/* Pull to refresh hint */}
         <View style={styles.refreshHint}>
-          <MaterialCommunityIcons name="gesture-swipe-down" size={20} color="#999" />
-          <Text variant="bodySmall" style={styles.refreshHintText}>
-            Pull down to check for updates
-          </Text>
+          <MaterialCommunityIcons name="gesture-swipe-down" size={20} color="#9CA3AF" />
+          <Text style={styles.refreshHintText}>Pull down to check for updates</Text>
         </View>
 
         {/* Actions */}
@@ -258,6 +233,8 @@ export default function WaitingForAssignmentScreen() {
             icon="help-circle-outline"
             onPress={handleContactSupport}
             style={styles.actionButton}
+            textColor={CARETAKER_ORANGE}
+            labelStyle={{ fontFamily: "Ubuntu-Medium" }}
           >
             Need Help?
           </Button>
@@ -265,7 +242,8 @@ export default function WaitingForAssignmentScreen() {
             mode="text"
             icon="logout"
             onPress={handleLogout}
-            textColor="#F44336"
+            textColor={DANGER_RED}
+            labelStyle={{ fontFamily: "Ubuntu-Medium" }}
           >
             Logout
           </Button>
@@ -278,7 +256,7 @@ export default function WaitingForAssignmentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFBEB",
   },
   scrollContent: {
     padding: 20,
@@ -289,11 +267,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   name: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 20,
+    color: NAVY_ORANGE,
     marginTop: 12,
   },
   phone: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: "#6B7280",
     marginTop: 4,
   },
   companyCard: {
@@ -303,16 +285,22 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#fff",
     marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: CARETAKER_ORANGE,
+    gap: 12,
   },
   companyInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   companyName: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#111827",
   },
   companySubtext: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginTop: 2,
   },
   waitingCard: {
@@ -326,18 +314,22 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: "#FFF3E0",
+    backgroundColor: PALE_ORANGE,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
   },
   waitingTitle: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 18,
+    color: NAVY_ORANGE,
     marginBottom: 8,
     textAlign: "center",
   },
   waitingText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
     textAlign: "center",
     lineHeight: 22,
     marginBottom: 24,
@@ -359,28 +351,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   stepCompleted: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: SUCCESS_GREEN,
   },
   stepPending: {
-    backgroundColor: "#FFF3E0",
+    backgroundColor: PALE_ORANGE,
     borderWidth: 2,
-    borderColor: "#FF9800",
+    borderColor: CARETAKER_ORANGE,
   },
   stepContent: {
     marginLeft: 12,
     flex: 1,
   },
   stepTitle: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#111827",
   },
   stepSubtitle: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginTop: 2,
   },
   stepLine: {
     width: 2,
     height: 20,
-    backgroundColor: "#E0E0E0",
+    backgroundColor: "#E5E7EB",
     marginLeft: 13,
     marginVertical: 4,
   },
@@ -390,24 +386,29 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#E3F2FD",
     marginBottom: 16,
+    gap: 12,
   },
   infoContent: {
     flex: 1,
-    marginLeft: 12,
   },
   infoTitle: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
     color: "#1565C0",
     marginBottom: 4,
   },
   infoText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#374151",
   },
   featureList: {
     marginTop: 8,
   },
   featureItem: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#374151",
     marginTop: 4,
   },
   refreshHint: {
@@ -415,10 +416,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
+    gap: 6,
   },
   refreshHintText: {
-    color: "#999",
-    marginLeft: 8,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#9CA3AF",
   },
   actions: {
     alignItems: "center",
@@ -426,5 +429,6 @@ const styles = StyleSheet.create({
   actionButton: {
     marginBottom: 8,
     borderRadius: 8,
+    borderColor: CARETAKER_ORANGE,
   },
 });

@@ -2,6 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Tab screens
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
@@ -35,19 +36,27 @@ const Stack = createStackNavigator();
 const OWNER_COLOR = "#9C27B0";
 
 function OwnerTabs() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 60 + insets.bottom;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: OWNER_COLOR,
-        tabBarInactiveTintColor: "#999",
+        tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopWidth: 1,
           borderTopColor: "#eee",
-          paddingBottom: 8,
+          paddingBottom: insets.bottom + 6,
           paddingTop: 8,
-          height: 60,
+          height: tabBarHeight,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 4,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 12,

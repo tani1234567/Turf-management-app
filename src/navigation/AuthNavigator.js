@@ -15,7 +15,7 @@ export default function AuthNavigator({ isNewUser = false }) {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        cardStyle: { backgroundColor: "#f5f5f5" },
+        cardStyle: { backgroundColor: "#F7FFF9" },
       }}
       initialRouteName={isNewUser ? "RoleSelectionScreen" : "LoginScreen"}
     >

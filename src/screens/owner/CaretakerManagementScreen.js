@@ -1219,7 +1219,7 @@ export default function CaretakerManagementScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     flexDirection: "row",
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
   sectionContent: {
     paddingHorizontal: 16,
     paddingBottom: 16,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   card: {
     borderRadius: 12,
@@ -1422,7 +1422,7 @@ const styles = StyleSheet.create({
   noteContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
     padding: 12,
     borderRadius: 8,
     marginTop: 16,

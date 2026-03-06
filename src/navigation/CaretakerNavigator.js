@@ -3,6 +3,7 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { selectIsCaretakerAssigned } from "../store/slices/authSlice";
 
 // Import screens
@@ -20,19 +21,26 @@ const Tab = createBottomTabNavigator();
 
 // Tab Navigator Component
 function CaretakerTabs() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 60 + insets.bottom;
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#FF9800",
-        tabBarInactiveTintColor: "#999",
+        tabBarActiveTintColor: "#F97316",
+        tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopWidth: 1,
-          borderTopColor: "#eee",
-          height: 60,
-          paddingBottom: 8,
+          borderTopColor: "#F3F4F6",
+          height: tabBarHeight,
+          paddingBottom: insets.bottom + 6,
           paddingTop: 8,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,

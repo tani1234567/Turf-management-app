@@ -6,11 +6,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
+  Text,
 } from "react-native";
 import {
-  Text,
   TextInput,
-  Button,
   Surface,
   ActivityIndicator,
 } from "react-native-paper";
@@ -30,6 +30,17 @@ import {
   extractCodeFromLink,
 } from "../../utils/inviteCodeUtils";
 
+const BRAND_GREEN = "#16A34A";
+const BRAND_DARK = "#14532D";
+const PALE_GREEN = "#F0FDF4";
+const DANGER_RED = "#EF4444";
+const GRAY_TEXT = "#6B7280";
+
+const ROLE_CONFIG = {
+  manager: { color: "#3B82F6", icon: "briefcase", label: "Manager" },
+  caretaker: { color: "#F97316", icon: "account-hard-hat", label: "Caretaker" },
+};
+
 export default function JoinCompanyScreen({ route, navigation }) {
   const dispatch = useAppDispatch();
   const { userId, phoneNumber, name, email, profilePicture, role } = route.params;
@@ -42,12 +53,9 @@ export default function JoinCompanyScreen({ route, navigation }) {
   const [selectedTurfs, setSelectedTurfs] = useState([]);
   const [error, setError] = useState("");
 
-  const getRoleColor = () => {
-    return role === "manager" ? "#2196F3" : "#FF9800";
-  };
+  const roleConfig = ROLE_CONFIG[role] || ROLE_CONFIG.manager;
 
   const handleCodeChange = (text) => {
-    // Check if it's a link and extract code
     const extractedCode = extractCodeFromLink(text);
     if (extractedCode) {
       setInviteCode(extractedCode);
@@ -70,7 +78,6 @@ export default function JoinCompanyScreen({ route, navigation }) {
     setError("");
 
     try {
-      // Query companies with this invite code
       const companies = await queryDocuments("companies", [
         { field: "inviteCode.code", operator: "==", value: inviteCode.toUpperCase() },
       ]);
@@ -84,7 +91,6 @@ export default function JoinCompanyScreen({ route, navigation }) {
       const companyData = companies[0];
       setCompany(companyData);
 
-      // For managers, fetch available turfs
       if (role === "manager") {
         const turfs = await queryDocuments("turfs", [
           { field: "companyId", operator: "==", value: companyData.id },
@@ -109,8 +115,6 @@ export default function JoinCompanyScreen({ route, navigation }) {
 
   const handleJoinCompany = async () => {
     if (!company) return;
-
-    // Manager must select at least one turf
     if (role === "manager" && selectedTurfs.length === 0) {
       Alert.alert("Select Turfs", "Please select at least one turf to manage.");
       return;
@@ -120,7 +124,6 @@ export default function JoinCompanyScreen({ route, navigation }) {
     dispatch(setLoading(true));
 
     try {
-      // Create user document
       const userData = {
         userId,
         phone: phoneNumber,
@@ -140,34 +143,23 @@ export default function JoinCompanyScreen({ route, navigation }) {
         userData.assignedTurfIds = selectedTurfs;
         userData.selectedTurfId = selectedTurfs[0] || null;
       } else {
-        // Caretaker
         userData.assignedTurfId = null;
         userData.isAssigned = false;
       }
 
-      // Save user document
       await setDocument("users", userId, userData);
 
-      // Update company document
       if (role === "manager") {
-        // Add to managers array
         const updatedManagers = [...(company.managers || []), userId];
-        await updateDocument("companies", company.id, {
-          managers: updatedManagers,
-        });
-
-        // Add manager to each selected turf
+        await updateDocument("companies", company.id, { managers: updatedManagers });
         for (const turfId of selectedTurfs) {
           const turf = availableTurfs.find((t) => t.id === turfId);
           if (turf) {
             const updatedManagerIds = [...(turf.managerIds || []), userId];
-            await updateDocument("turfs", turfId, {
-              managerIds: updatedManagerIds,
-            });
+            await updateDocument("turfs", turfId, { managerIds: updatedManagerIds });
           }
         }
       } else {
-        // Caretaker - add to caretakers and unassignedCaretakers
         const updatedCaretakers = [...(company.caretakers || []), userId];
         const updatedUnassigned = [...(company.unassignedCaretakers || []), userId];
         await updateDocument("companies", company.id, {
@@ -176,10 +168,8 @@ export default function JoinCompanyScreen({ route, navigation }) {
         });
       }
 
-      // Update Redux state
       dispatch(setUser(userData));
 
-      // Show success message
       Alert.alert(
         "Welcome!",
         role === "manager"
@@ -197,33 +187,46 @@ export default function JoinCompanyScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#374151" />
+          </TouchableOpacity>
+          <View style={[styles.roleIconCircle, { backgroundColor: roleConfig.color + "18" }]}>
+            <MaterialCommunityIcons name={roleConfig.icon} size={22} color={roleConfig.color} />
+          </View>
+          <Text style={styles.headerTitle}>{roleConfig.label}</Text>
+        </View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <MaterialCommunityIcons
-              name={role === "manager" ? "briefcase" : "account-hard-hat"}
-              size={48}
-              color={getRoleColor()}
-            />
-            <Text variant="headlineSmall" style={styles.title}>
-              Join a Company
-            </Text>
-            <Text variant="bodyMedium" style={styles.subtitle}>
-              Enter the invite code shared by your Turf Owner
-            </Text>
-          </View>
+          {/* Page heading */}
+          <Text style={styles.pageTitle}>Join a Company</Text>
+          <Text style={styles.pageSubtitle}>
+            Enter the invite code shared by your Turf Owner
+          </Text>
 
-          {/* Invite Code Input */}
-          <Surface style={styles.codeContainer} elevation={1}>
+          {/* Invite Code Card */}
+          <Surface style={styles.codeCard} elevation={2}>
+            {/* Accent bar */}
+            <View style={styles.accentRow}>
+              <View style={styles.accentBar} />
+              <Text style={styles.accentLabel}>INVITE CODE</Text>
+            </View>
+            <Text style={styles.codeHint}>Paste or type your 8-character code</Text>
+
             <TextInput
               mode="outlined"
               label="Invite Code"
@@ -234,156 +237,136 @@ export default function JoinCompanyScreen({ route, navigation }) {
               maxLength={8}
               left={<TextInput.Icon icon="key" />}
               right={
-                inviteCode.length === 8 && (
+                inviteCode.length === 8 ? (
                   <TextInput.Icon
                     icon={company ? "check-circle" : "help-circle"}
-                    color={company ? "#4CAF50" : "#999"}
+                    color={company ? BRAND_GREEN : "#9CA3AF"}
                   />
-                )
+                ) : null
               }
+              outlineColor="#E5E7EB"
+              activeOutlineColor={BRAND_GREEN}
+              contentStyle={{
+                fontFamily: "Ubuntu-Bold",
+                fontSize: 18,
+                letterSpacing: 4,
+              }}
               style={styles.codeInput}
               error={!!error}
             />
             {error && (
-              <Text variant="bodySmall" style={styles.errorText}>
-                {error}
-              </Text>
+              <View style={styles.errorCard}>
+                <Text style={styles.errorCardText}>{error}</Text>
+              </View>
             )}
 
             {!company && (
-              <Button
-                mode="contained"
+              <TouchableOpacity
+                style={[
+                  styles.validateBtn,
+                  (validating || inviteCode.length !== 8) && styles.validateBtnDisabled,
+                ]}
                 onPress={handleValidateCode}
-                loading={validating}
                 disabled={validating || inviteCode.length !== 8}
-                style={styles.validateButton}
-                buttonColor={getRoleColor()}
+                activeOpacity={0.8}
               >
-                {validating ? "Validating..." : "Validate Code"}
-              </Button>
+                {validating ? (
+                  <ActivityIndicator color={BRAND_GREEN} size="small" />
+                ) : (
+                  <Text style={styles.validateBtnText}>Validate Code</Text>
+                )}
+              </TouchableOpacity>
             )}
           </Surface>
 
-          {/* Company Info */}
+          {/* Company reveal card */}
           {company && (
-            <Surface style={styles.companyCard} elevation={2}>
-              <View style={styles.companyHeader}>
-                <MaterialCommunityIcons
-                  name="office-building"
-                  size={32}
-                  color="#9C27B0"
-                />
+            <Surface style={styles.companyCard} elevation={1}>
+              <View style={styles.companyRow}>
+                <MaterialCommunityIcons name="check-circle" size={20} color={BRAND_GREEN} />
                 <View style={styles.companyInfo}>
-                  <Text variant="titleMedium" style={styles.companyName}>
-                    {company.name}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.companyStats}>
-                    {company.stats?.totalTurfs || 0} turfs •{" "}
-                    {(company.managers?.length || 0) + (company.caretakers?.length || 0)} team members
+                  <Text style={styles.companyName}>{company.name}</Text>
+                  <Text style={styles.companyMeta}>
+                    Turfs: {company.stats?.totalTurfs || 0} · Team:{" "}
+                    {(company.managers?.length || 0) + (company.caretakers?.length || 0)}
                   </Text>
                 </View>
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={24}
-                  color="#4CAF50"
-                />
               </View>
             </Surface>
           )}
 
-          {/* Turf Selection (Manager Only) */}
+          {/* Turf Selection — Manager only */}
           {company && role === "manager" && (
             <View style={styles.turfSection}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Select Turfs to Manage
-              </Text>
-              <Text variant="bodySmall" style={styles.sectionSubtitle}>
-                Owner can modify your assignments later
-              </Text>
+              <Text style={styles.turfSectionTitle}>Select Turfs to Manage</Text>
+              <Text style={styles.turfSectionSub}>Owner can modify your assignments later</Text>
 
               {availableTurfs.length === 0 ? (
                 <Surface style={styles.emptyCard} elevation={1}>
-                  <MaterialCommunityIcons
-                    name="alert-circle-outline"
-                    size={32}
-                    color="#FF9800"
-                  />
-                  <Text variant="bodyMedium" style={styles.emptyText}>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={32} color="#F97316" />
+                  <Text style={styles.emptyText}>
                     No turfs available yet. The owner needs to add turfs first.
                   </Text>
                 </Surface>
               ) : (
-                availableTurfs.map((turf) => (
-                  <Surface
-                    key={turf.id}
-                    style={[
-                      styles.turfCard,
-                      selectedTurfs.includes(turf.id) && styles.turfCardSelected,
-                    ]}
-                    elevation={1}
-                    onTouchEnd={() => toggleTurfSelection(turf.id)}
-                  >
-                    <View style={styles.turfInfo}>
-                      <Text variant="titleSmall" style={styles.turfName}>
-                        {turf.name}
-                      </Text>
-                      <Text variant="bodySmall" style={styles.turfLocation}>
-                        {turf.location?.city || "Location not set"}
-                      </Text>
-                      <Text variant="bodySmall" style={styles.turfGrounds}>
-                        {turf.totalGrounds || turf.grounds?.length || 0} grounds
-                      </Text>
-                    </View>
-                    <MaterialCommunityIcons
-                      name={
-                        selectedTurfs.includes(turf.id)
-                          ? "checkbox-marked-circle"
-                          : "checkbox-blank-circle-outline"
-                      }
-                      size={24}
-                      color={selectedTurfs.includes(turf.id) ? "#2196F3" : "#999"}
-                    />
-                  </Surface>
-                ))
+                availableTurfs.map((turf) => {
+                  const selected = selectedTurfs.includes(turf.id);
+                  return (
+                    <TouchableOpacity
+                      key={turf.id}
+                      style={[styles.turfCard, selected && styles.turfCardSelected]}
+                      onPress={() => toggleTurfSelection(turf.id)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.turfInfo}>
+                        <Text style={styles.turfName}>{turf.name}</Text>
+                        <Text style={styles.turfLocation}>
+                          {turf.location?.city || "Location not set"}
+                        </Text>
+                        <Text style={styles.turfGrounds}>
+                          {turf.totalGrounds || turf.grounds?.length || 0} grounds
+                        </Text>
+                      </View>
+                      {selected && (
+                        <View style={styles.turfCheckBadge}>
+                          <MaterialCommunityIcons name="check" size={12} color="#fff" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </View>
           )}
 
-          {/* Caretaker Info */}
+          {/* Caretaker info banner */}
           {company && role === "caretaker" && (
-            <View style={styles.caretakerInfo}>
-              <MaterialCommunityIcons
-                name="information-outline"
-                size={24}
-                color="#FF9800"
-              />
-              <View style={styles.caretakerInfoText}>
-                <Text variant="titleSmall" style={styles.caretakerInfoTitle}>
-                  Waiting for Assignment
-                </Text>
-                <Text variant="bodySmall" style={styles.caretakerInfoDesc}>
-                  After joining, you'll see a "Waiting for Assignment" screen.
-                  A manager or owner will assign you to a specific turf.
-                </Text>
-              </View>
+            <View style={styles.caretakerBanner}>
+              <MaterialCommunityIcons name="information-outline" size={18} color={BRAND_DARK} />
+              <Text style={styles.caretakerBannerText}>
+                After joining, you'll see a "Waiting for Assignment" screen. A manager or owner will assign you to a specific turf.
+              </Text>
             </View>
           )}
 
           {/* Join Button */}
           {company && (
-            <Button
-              mode="contained"
+            <TouchableOpacity
+              style={[
+                styles.joinButton,
+                { backgroundColor: roleConfig.color },
+                (loading || (role === "manager" && selectedTurfs.length === 0)) && styles.joinButtonDisabled,
+              ]}
               onPress={handleJoinCompany}
-              loading={loading}
-              disabled={
-                loading || (role === "manager" && selectedTurfs.length === 0)
-              }
-              style={styles.joinButton}
-              contentStyle={styles.buttonContent}
-              buttonColor={getRoleColor()}
+              disabled={loading || (role === "manager" && selectedTurfs.length === 0)}
+              activeOpacity={0.85}
             >
-              {loading ? "Joining..." : "Join Company"}
-            </Button>
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.joinButtonText}>Join Company</Text>
+              )}
+            </TouchableOpacity>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -394,142 +377,251 @@ export default function JoinCompanyScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F7FFF9",
   },
   keyboardView: {
     flex: 1,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  roleIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 18,
+    color: BRAND_DARK,
+  },
   scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 24,
-    marginTop: 12,
+  pageTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 22,
+    color: BRAND_DARK,
+    marginBottom: 4,
   },
-  title: {
-    fontWeight: "bold",
-    marginTop: 12,
-    marginBottom: 8,
+  pageSubtitle: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: GRAY_TEXT,
+    marginBottom: 20,
   },
-  subtitle: {
-    color: "#666",
-    textAlign: "center",
-  },
-  codeContainer: {
-    padding: 16,
+  codeCard: {
     borderRadius: 16,
     backgroundColor: "#fff",
+    padding: 16,
+    marginBottom: 16,
+  },
+  accentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  accentBar: {
+    width: 3,
+    height: 16,
+    backgroundColor: BRAND_GREEN,
+    borderRadius: 2,
+  },
+  accentLabel: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 11,
+    color: GRAY_TEXT,
+    letterSpacing: 1,
+  },
+  codeHint: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
+    marginBottom: 12,
   },
   codeInput: {
     backgroundColor: "#fff",
-    fontSize: 18,
-    letterSpacing: 2,
   },
-  errorText: {
-    color: "#F44336",
-    marginTop: 8,
-  },
-  validateButton: {
-    marginTop: 16,
+  errorCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: DANGER_RED,
+    backgroundColor: "#FEF2F2",
     borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  errorCardText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: DANGER_RED,
+  },
+  validateBtn: {
+    marginTop: 14,
+    borderRadius: 10,
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: BRAND_GREEN,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  validateBtnDisabled: {
+    opacity: 0.5,
+  },
+  validateBtnText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: BRAND_GREEN,
   },
   companyCard: {
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    marginTop: 16,
+    borderRadius: 14,
+    backgroundColor: PALE_GREEN,
+    borderLeftWidth: 4,
+    borderLeftColor: BRAND_GREEN,
+    padding: 14,
+    marginBottom: 20,
   },
-  companyHeader: {
+  companyRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
   },
   companyInfo: {
     flex: 1,
-    marginLeft: 12,
   },
   companyName: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: BRAND_DARK,
   },
-  companyStats: {
-    color: "#666",
+  companyMeta: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: GRAY_TEXT,
     marginTop: 2,
   },
   turfSection: {
-    marginTop: 24,
+    marginBottom: 20,
   },
-  sectionTitle: {
-    fontWeight: "bold",
-    marginBottom: 4,
+  turfSectionTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: BRAND_DARK,
+    marginBottom: 2,
   },
-  sectionSubtitle: {
-    color: "#666",
+  turfSectionSub: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
     marginBottom: 12,
   },
   emptyCard: {
     padding: 24,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: "#fff",
     alignItems: "center",
   },
   emptyText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: GRAY_TEXT,
     textAlign: "center",
-    marginTop: 12,
+    marginTop: 10,
+    lineHeight: 20,
   },
   turfCard: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
     backgroundColor: "#fff",
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: "transparent",
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
   },
   turfCardSelected: {
-    borderColor: "#2196F3",
-    backgroundColor: "#E3F2FD",
+    borderColor: BRAND_GREEN,
+    backgroundColor: PALE_GREEN,
   },
   turfInfo: {
     flex: 1,
   },
   turfName: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: BRAND_DARK,
   },
   turfLocation: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: GRAY_TEXT,
     marginTop: 2,
   },
   turfGrounds: {
-    color: "#999",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#9CA3AF",
     marginTop: 2,
   },
-  caretakerInfo: {
+  turfCheckBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: BRAND_GREEN,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  caretakerBanner: {
     flexDirection: "row",
-    backgroundColor: "#FFF3E0",
-    padding: 16,
+    alignItems: "flex-start",
+    backgroundColor: PALE_GREEN,
     borderRadius: 12,
-    marginTop: 16,
+    padding: 14,
+    gap: 10,
+    marginBottom: 20,
   },
-  caretakerInfoText: {
+  caretakerBannerText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: BRAND_DARK,
     flex: 1,
-    marginLeft: 12,
-  },
-  caretakerInfoTitle: {
-    fontWeight: "600",
-    color: "#E65100",
-  },
-  caretakerInfoDesc: {
-    color: "#666",
-    marginTop: 4,
     lineHeight: 18,
   },
   joinButton: {
-    marginTop: 24,
-    borderRadius: 8,
+    borderRadius: 12,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
   },
-  buttonContent: {
-    height: 50,
+  joinButtonDisabled: {
+    opacity: 0.5,
+  },
+  joinButtonText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#fff",
   },
 });

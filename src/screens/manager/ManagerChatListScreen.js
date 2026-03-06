@@ -4,8 +4,9 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
-import { Text, Surface, ActivityIndicator, SegmentedButtons } from "react-native-paper";
+import { Text, ActivityIndicator } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -14,8 +15,11 @@ import { useAuth } from "../../hooks/useAuth";
 import { useAppSelector } from "../../hooks/useAppSelector";
 import { useCompanyChats } from "../../hooks/useChat";
 import { ChatListItem } from "../../components/chat";
-import { COLORS } from "../../constants/theme";
 import { selectCompany } from "../../store/slices/companySlice";
+
+const MANAGER_BLUE = "#3B82F6";
+const PALE_BLUE = "#DBEAFE";
+const NAVY_BLUE = "#1E40AF";
 
 export default function ManagerChatListScreen() {
   const navigation = useNavigation();
@@ -75,25 +79,33 @@ export default function ManagerChatListScreen() {
 
   const keyExtractor = useCallback((item) => item.id, []);
 
+  const FILTER_OPTIONS = [
+    { value: "all", label: "All", icon: "chat-outline" },
+    { value: "negotiation", label: "Requests", icon: "handshake-outline" },
+    { value: "unread", label: "Unread", icon: "message-badge-outline" },
+  ];
+
   const renderEmptyState = () => {
     const isFiltered = filter !== "all";
     return (
       <View style={styles.emptyContainer}>
-        <Surface style={styles.emptyCard} elevation={1}>
-          <MaterialCommunityIcons
-            name={isFiltered ? "filter-outline" : "chat-outline"}
-            size={64}
-            color="#ccc"
-          />
-          <Text variant="titleMedium" style={styles.emptyTitle}>
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconCircle}>
+            <MaterialCommunityIcons
+              name={isFiltered ? "filter-outline" : "chat-outline"}
+              size={40}
+              color={MANAGER_BLUE}
+            />
+          </View>
+          <Text style={styles.emptyTitle}>
             {isFiltered ? "No Matching Chats" : "No Messages Yet"}
           </Text>
-          <Text variant="bodyMedium" style={styles.emptyText}>
+          <Text style={styles.emptyText}>
             {isFiltered
               ? "Try changing your filter to see more conversations"
               : "Customer inquiries and booking messages will appear here"}
           </Text>
-        </Surface>
+        </View>
       </View>
     );
   };
@@ -101,9 +113,10 @@ export default function ManagerChatListScreen() {
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.headerTop}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Customer Messages
-        </Text>
+        <View>
+          <Text style={styles.title}>Messages</Text>
+          <Text style={styles.subtitle}>Customer conversations</Text>
+        </View>
         {totalUnread > 0 && (
           <View style={styles.totalUnreadBadge}>
             <Text style={styles.totalUnreadText}>
@@ -115,30 +128,35 @@ export default function ManagerChatListScreen() {
 
       {/* Filter tabs */}
       {chats.length > 0 && (
-        <SegmentedButtons
-          value={filter}
-          onValueChange={setFilter}
-          buttons={[
-            {
-              value: "all",
-              label: `All (${filterCounts.all})`,
-              style: styles.filterButton,
-            },
-            {
-              value: "negotiation",
-              label: `Requests (${filterCounts.negotiation})`,
-              icon: "handshake-outline",
-              style: styles.filterButton,
-            },
-            {
-              value: "unread",
-              label: `Unread (${filterCounts.unread})`,
-              style: styles.filterButton,
-            },
-          ]}
-          style={styles.filterTabs}
-          density="small"
-        />
+        <View style={styles.filterRow}>
+          {FILTER_OPTIONS.map((opt) => {
+            const count = filterCounts[opt.value];
+            const isActive = filter === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.filterTab, isActive && styles.filterTabActive]}
+                onPress={() => setFilter(opt.value)}
+              >
+                <MaterialCommunityIcons
+                  name={opt.icon}
+                  size={14}
+                  color={isActive ? "#fff" : "#6B7280"}
+                />
+                <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
+                  {opt.label}
+                </Text>
+                {count > 0 && (
+                  <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+                    <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
+                      {count}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       )}
     </View>
   );
@@ -148,8 +166,8 @@ export default function ManagerChatListScreen() {
       <SafeAreaView style={styles.container}>
         {renderHeader()}
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.secondary} />
-          <Text variant="bodyMedium" style={styles.loadingText}>
+          <ActivityIndicator size="large" color={MANAGER_BLUE} />
+          <Text style={styles.loadingText}>
             Loading conversations...
           </Text>
         </View>
@@ -173,8 +191,8 @@ export default function ManagerChatListScreen() {
           refreshControl={
             <RefreshControl
               refreshing={false}
-              colors={[COLORS.secondary]}
-              tintColor={COLORS.secondary}
+              colors={[MANAGER_BLUE]}
+              tintColor={MANAGER_BLUE}
             />
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -187,42 +205,100 @@ export default function ManagerChatListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F0F4F8",
   },
+
+  // Header
   header: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 12,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#E5E7EB",
   },
   headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 14,
   },
   title: {
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 20,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
+  },
+  subtitle: {
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
+    marginTop: 1,
   },
   totalUnreadBadge: {
-    backgroundColor: COLORS.secondary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    backgroundColor: MANAGER_BLUE,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 12,
   },
   totalUnreadText: {
     color: "#fff",
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
   },
-  filterTabs: {
-    backgroundColor: "#f5f5f5",
+
+  // Filter tabs (custom)
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
   },
-  filterButton: {
-    minWidth: 80,
+  filterTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#fff",
+    gap: 4,
   },
+  filterTabActive: {
+    backgroundColor: MANAGER_BLUE,
+    borderColor: MANAGER_BLUE,
+  },
+  filterTabText: {
+    fontSize: 12,
+    fontFamily: "Ubuntu-Medium",
+    color: "#6B7280",
+  },
+  filterTabTextActive: {
+    color: "#fff",
+    fontFamily: "Ubuntu-Bold",
+  },
+  filterBadge: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  filterBadgeActive: {
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  filterBadgeText: {
+    fontSize: 9,
+    fontFamily: "Ubuntu-Bold",
+    color: "#6B7280",
+  },
+  filterBadgeTextActive: {
+    color: "#fff",
+  },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -230,33 +306,56 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontFamily: "Ubuntu-Regular",
+    color: "#6B7280",
   },
+
+  // List
   listContent: {
     flexGrow: 1,
   },
   separator: {
     height: 0,
   },
+
+  // Empty state
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     padding: 16,
   },
   emptyCard: {
-    padding: 32,
+    padding: 36,
     borderRadius: 16,
     backgroundColor: "#fff",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: PALE_BLUE,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
-    marginTop: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: 16,
+    fontFamily: "Ubuntu-Bold",
+    color: "#111827",
+    marginBottom: 6,
   },
   emptyText: {
-    marginTop: 8,
-    color: "#999",
+    fontSize: 13,
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
     textAlign: "center",
+    lineHeight: 20,
   },
 });

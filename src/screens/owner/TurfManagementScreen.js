@@ -27,6 +27,8 @@ import { queryDocuments, updateDocument } from "../../services/firebase/firestor
 import { isRemoteImageUri } from "../../services/firebase/turfImages";
 
 const OWNER_COLOR = "#9C27B0";
+const PALE_PURPLE = "#F3E5F5";
+const SUCCESS_GREEN = "#22C55E";
 
 export default function TurfManagementScreen({ navigation, route }) {
   const dispatch = useDispatch();
@@ -140,57 +142,49 @@ export default function TurfManagementScreen({ navigation, route }) {
         <View style={styles.cardContent}>
           <View style={styles.turfHeader}>
             <View style={styles.turfInfo}>
-              <Text variant="titleMedium" style={styles.turfName}>
-                {turf.name}
-              </Text>
+              <Text style={styles.turfName}>{turf.name}</Text>
               <View style={styles.turfLocation}>
-                <MaterialCommunityIcons name="map-marker" size={14} color="#666" />
-                <Text variant="bodySmall" style={styles.locationText}>
+                <MaterialCommunityIcons name="map-marker" size={14} color="#6B7280" />
+                <Text style={styles.locationText}>
                   {turf.location?.city || "Location not set"}
                 </Text>
               </View>
             </View>
-            <Chip
-              mode="flat"
-              style={[
-                styles.statusChip,
-                { backgroundColor: turf.isActive ? "#E8F5E9" : "#FFEBEE" },
-              ]}
-              textStyle={{
-                color: turf.isActive ? "#4CAF50" : "#F44336",
-                fontSize: 11,
-              }}
-            >
-              {turf.isActive ? "Active" : "Inactive"}
-            </Chip>
+            <View style={[
+              styles.statusPill,
+              { backgroundColor: turf.isActive ? "#DCFCE7" : "#FEE2E2" },
+            ]}>
+              <Text style={[
+                styles.statusPillText,
+                { color: turf.isActive ? SUCCESS_GREEN : "#EF4444" },
+              ]}>
+                {turf.isActive ? "Active" : "Inactive"}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.turfStats}>
             <View style={styles.statItem}>
-              <MaterialCommunityIcons name="soccer-field" size={16} color="#666" />
-              <Text variant="bodySmall" style={styles.statText}>
+              <MaterialCommunityIcons name="soccer-field" size={16} color="#9CA3AF" />
+              <Text style={styles.statText}>
                 {turf.totalGrounds || turf.grounds?.length || 0} grounds
               </Text>
             </View>
             <View style={styles.statItem}>
-              <MaterialCommunityIcons name="account-tie" size={16} color="#666" />
-              <Text variant="bodySmall" style={styles.statText}>
+              <MaterialCommunityIcons name="account-tie" size={16} color="#9CA3AF" />
+              <Text style={styles.statText}>
                 {turf.managerIds?.length || 0} managers
               </Text>
             </View>
             <View style={styles.statItem}>
-              <MaterialCommunityIcons name="calendar-check" size={16} color="#666" />
-              <Text variant="bodySmall" style={styles.statText}>
-                {turf.stats?.todayBookings || 0} today
-              </Text>
+              <MaterialCommunityIcons name="calendar-check" size={16} color="#9CA3AF" />
+              <Text style={styles.statText}>{turf.stats?.todayBookings || 0} today</Text>
             </View>
           </View>
 
           <View style={styles.turfFooter}>
-            <Text variant="bodySmall" style={styles.revenueLabel}>
-              Revenue this month
-            </Text>
-            <Text variant="titleSmall" style={styles.revenueValue}>
+            <Text style={styles.revenueLabel}>Revenue this month</Text>
+            <Text style={styles.revenueValue}>
               ₹{(turf.stats?.monthlyRevenue || 0).toLocaleString()}
             </Text>
           </View>
@@ -278,10 +272,8 @@ export default function TurfManagementScreen({ navigation, route }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text variant="headlineSmall" style={styles.title}>
-          Turf Management
-        </Text>
-        <Text variant="bodyMedium" style={styles.subtitle}>
+        <Text style={styles.title}>Turf Management</Text>
+        <Text style={styles.subtitle}>
           {turfs.length} turf{turfs.length !== 1 ? "s" : ""} •{" "}
           {company?.stats?.totalGrounds || 0} grounds
         </Text>
@@ -328,17 +320,21 @@ export default function TurfManagementScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
   header: {
     padding: 16,
     paddingBottom: 8,
   },
   title: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 22,
+    color: "#4A148C",
   },
   subtitle: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
     marginTop: 4,
   },
   searchContainer: {
@@ -349,8 +345,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 12,
     elevation: 0,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   searchInput: {
+    fontFamily: "Ubuntu-Regular",
     fontSize: 14,
   },
   listContent: {
@@ -363,6 +362,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: "hidden",
     position: "relative",
+    borderLeftWidth: 4,
+    borderLeftColor: OWNER_COLOR,
   },
   coverImage: {
     width: "100%",
@@ -381,7 +382,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   turfName: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#111827",
   },
   turfLocation: {
     flexDirection: "row",
@@ -389,27 +392,38 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   locationText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginLeft: 4,
   },
-  statusChip: {
-    height: 24,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginLeft: 8,
+  },
+  statusPillText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
   },
   turfStats: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "#F3F4F6",
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#F3F4F6",
   },
   statItem: {
     flexDirection: "row",
     alignItems: "center",
   },
   statText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginLeft: 4,
   },
   turfFooter: {
@@ -419,11 +433,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   revenueLabel: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
   },
   revenueValue: {
-    fontWeight: "bold",
-    color: "#4CAF50",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: SUCCESS_GREEN,
   },
   menuContainer: {
     position: "absolute",
@@ -436,12 +453,16 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   emptyTitle: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#111827",
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
     textAlign: "center",
     paddingHorizontal: 32,
   },
@@ -449,6 +470,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 16,
     bottom: 16,
-    backgroundColor: "#9C27B0",
+    backgroundColor: OWNER_COLOR,
   },
 });

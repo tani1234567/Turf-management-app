@@ -17,6 +17,16 @@ export const FONTS = {
   bold: 'Ubuntu-Bold',
 };
 
+// Emerald green palette — used on the user-facing side
+export const USER_COLORS = {
+  primary: "#10B981",   // emerald-500
+  light: "#34D399",     // emerald-400
+  dark: "#059669",      // emerald-600
+  success: "#22C55E",
+  pale: "#D1FAE5",      // subtle backgrounds
+  medium: "#6EE7B7",    // emerald-300
+};
+
 export const SIZES = {
   base: 8,
   small: 12,

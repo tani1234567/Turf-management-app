@@ -10,13 +10,10 @@ import {
 import {
   Text,
   Surface,
-  List,
   Divider,
-  Button,
   Dialog,
   Portal,
   TextInput,
-  Avatar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -38,7 +35,42 @@ import {
   generateInviteLink,
 } from "../../utils/inviteCodeUtils";
 
-const OWNER_COLOR = "#9C27B0";
+const OWNER_PURPLE = "#9C27B0";
+const PALE_PURPLE  = "#F3E5F5";
+const NAVY_PURPLE  = "#4A148C";
+const SUCCESS_GREEN = "#22C55E";
+const WARN_ORANGE  = "#F59E0B";
+const DANGER_RED   = "#EF4444";
+
+// Settings sections
+const SETTINGS_SECTIONS = [
+  {
+    title: "Company",
+    items: [
+      { id: "company",    icon: "office-building",          label: "Company Details",       color: OWNER_PURPLE  },
+      { id: "inviteCode", icon: "account-key",              label: "Invite Codes",          color: "#3B82F6"     },
+      { id: "payments",   icon: "credit-card-settings",     label: "Payment Settings",      color: "#10B981"     },
+      { id: "ops",        icon: "shield-account",           label: "Operational Permissions", color: "#8B5CF6"   },
+    ],
+  },
+  {
+    title: "Business",
+    items: [
+      { id: "turfs",      icon: "soccer-field",             label: "Turf Management",       color: "#4CAF50"     },
+      { id: "team",       icon: "account-group",            label: "Team Management",       color: WARN_ORANGE   },
+      { id: "sub",        icon: "credit-card",              label: "Subscription",          color: "#F97316"     },
+      { id: "analytics",  icon: "chart-bar",                label: "Analytics",             color: "#3B82F6"     },
+    ],
+  },
+  {
+    title: "Support",
+    items: [
+      { id: "notifications", icon: "bell",                  label: "Notifications",         color: WARN_ORANGE   },
+      { id: "help",          icon: "help-circle",           label: "Help & Support",        color: "#00BCD4"     },
+      { id: "about",         icon: "information",           label: "About",                 color: "#607D8B"     },
+    ],
+  },
+];
 
 export default function OwnerSettingsScreen({ navigation }) {
   const dispatch = useDispatch();
@@ -49,7 +81,6 @@ export default function OwnerSettingsScreen({ navigation }) {
   const subscriptionStatus = useSelector(selectSubscriptionStatus);
   const subscription = useSelector(selectSubscription);
 
-  // Compute days remaining for the relevant deadline
   const getDaysRemaining = (dateValue) => {
     if (!dateValue) return null;
     const endDate = dateValue?.toDate ? dateValue.toDate() : new Date(dateValue);
@@ -95,16 +126,10 @@ export default function OwnerSettingsScreen({ navigation }) {
     }
   };
 
-  const handleRegenerateCode = () => {
-    setRegenerateDialogVisible(true);
-  };
-
   const confirmRegenerateCode = async () => {
     setRegenerateDialogVisible(false);
-    // Generate new code
     const newCodeObject = regenerateInviteCodeObject(user?.userId);
     dispatch(setInviteCode(newCodeObject));
-    // TODO: Update Firestore
     Alert.alert("Code Regenerated", "Your new invite code is ready to share.");
   };
 
@@ -114,7 +139,6 @@ export default function OwnerSettingsScreen({ navigation }) {
       return;
     }
     setEditCompanyDialogVisible(false);
-    // TODO: Update Firestore
     Alert.alert("Updated", "Company name has been updated.");
   };
 
@@ -136,133 +160,132 @@ export default function OwnerSettingsScreen({ navigation }) {
     ]);
   };
 
+  const handleMenuPress = (itemId) => {
+    switch (itemId) {
+      case "company":       setEditCompanyDialogVisible(true); break;
+      case "inviteCode":    navigation.navigate("InviteCode"); break;
+      case "payments":      navigation.navigate("PaymentSettings"); break;
+      case "ops":           navigation.navigate("OperationalSettings"); break;
+      case "turfs":         navigation.navigate("Turfs"); break;
+      case "team":          navigation.navigate("Team"); break;
+      case "sub":           navigation.navigate("SubscriptionPayment"); break;
+      case "analytics":     navigation.navigate("OwnerAnalyticsDashboard"); break;
+      case "notifications": break;
+      case "help":          break;
+      case "about":         break;
+      default:              break;
+    }
+  };
+
   const displayCode = formatCodeForDisplay(inviteCode?.code || "DEMO1234");
+
+  const getSubStatusColor = () => {
+    switch (subscriptionStatus) {
+      case "active":       return SUCCESS_GREEN;
+      case "trial":        return "#3B82F6";
+      case "grace_period": return WARN_ORANGE;
+      case "expired":      return DANGER_RED;
+      default:             return "#9CA3AF";
+    }
+  };
+
+  const MenuItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.menuItem}
+      onPress={() => handleMenuPress(item.id)}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}18` }]}>
+        <MaterialCommunityIcons name={item.icon} size={20} color={item.color} />
+      </View>
+      <Text style={styles.menuLabel}>{item.label}</Text>
+      <MaterialCommunityIcons name="chevron-right" size={18} color="#D1D5DB" />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header */}
         <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.title}>
-            Settings
-          </Text>
+          <Text style={styles.title}>Settings</Text>
         </View>
 
-        {/* Profile Section */}
-        <Surface style={styles.section} elevation={1}>
-          <View style={styles.profileHeader}>
-            <Avatar.Text
-              size={64}
-              label={user?.name?.substring(0, 2).toUpperCase() || "OW"}
-              style={{ backgroundColor: OWNER_COLOR }}
-            />
+        {/* Profile Card */}
+        <Surface style={styles.profileCard} elevation={2}>
+          <View style={styles.profileBanner}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarInitials}>
+                {user?.name?.substring(0, 2).toUpperCase() || "OW"}
+              </Text>
+            </View>
             <View style={styles.profileInfo}>
-              <Text variant="titleLarge" style={styles.profileName}>
-                {user?.name || "Owner Name"}
-              </Text>
-              <Text variant="bodyMedium" style={styles.profileRole}>
-                Turf Owner
-              </Text>
-              <Text variant="bodySmall" style={styles.profilePhone}>
-                {user?.phone || "+91 98765 43210"}
-              </Text>
+              <Text style={styles.profileName}>{user?.name || "Owner Name"}</Text>
+              <View style={styles.rolePill}>
+                <Text style={styles.rolePillText}>Turf Owner</Text>
+              </View>
             </View>
-          </View>
-          <Button
-            mode="outlined"
-            onPress={() => {
-              // TODO: Navigate to edit profile
-            }}
-            style={styles.editButton}
-          >
-            Edit Profile
-          </Button>
-        </Surface>
-
-        {/* Company Section */}
-        <Surface style={styles.section} elevation={1}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Company
-          </Text>
-          <TouchableOpacity
-            style={styles.companyRow}
-            onPress={() => setEditCompanyDialogVisible(true)}
-          >
-            <MaterialCommunityIcons name="office-building" size={24} color={OWNER_COLOR} />
-            <View style={styles.companyInfo}>
-              <Text variant="titleSmall">{company?.name || "My Turf Company"}</Text>
-              <Text variant="bodySmall" style={styles.companySubtext}>
-                Tap to edit company details
-              </Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color="#999" />
-          </TouchableOpacity>
-        </Surface>
-
-        {/* Invite Code Section */}
-        <Surface style={styles.section} elevation={1}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                Invite Code
-              </Text>
-              <Text variant="bodySmall" style={styles.sectionSubtitle}>
-                Share this code with managers and caretakers
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => navigation.navigate("InviteCode")}>
-              <Text variant="bodySmall" style={styles.viewAllLink}>
-                View All
-              </Text>
+            <TouchableOpacity style={styles.editProfileBtn}>
+              <MaterialCommunityIcons name="pencil-outline" size={18} color={OWNER_PURPLE} />
             </TouchableOpacity>
           </View>
+          {user?.phone && (
+            <View style={styles.profilePhoneRow}>
+              <MaterialCommunityIcons name="phone-outline" size={14} color="#9CA3AF" />
+              <Text style={styles.profilePhone}>{user.phone}</Text>
+            </View>
+          )}
+        </Surface>
 
-          <TouchableOpacity
-            style={styles.codeContainer}
-            onPress={() => navigation.navigate("InviteCode")}
-            activeOpacity={0.7}
-          >
-            <Text variant="headlineMedium" style={styles.codeText}>
-              {displayCode}
-            </Text>
-            <MaterialCommunityIcons name="chevron-right" size={24} color={OWNER_COLOR} />
-          </TouchableOpacity>
+        {/* Invite Code Box */}
+        <View style={styles.sectionTitleRow}>
+          <View style={styles.sectionTitleAccent} />
+          <Text style={styles.sectionTitle}>INVITE CODE</Text>
+        </View>
 
+        <Surface style={styles.inviteCard} elevation={2}>
+          <Text style={styles.inviteSubtitle}>Share with managers &amp; caretakers to join your team</Text>
+          <View style={styles.codeBox}>
+            <Text style={styles.codeText}>{displayCode}</Text>
+          </View>
           <View style={styles.codeActions}>
-            <Button
-              mode="contained"
-              icon="content-copy"
-              onPress={handleCopyInviteCode}
-              style={styles.codeButton}
-              buttonColor={OWNER_COLOR}
+            <TouchableOpacity style={styles.codeActionBtn} onPress={handleCopyInviteCode}>
+              <MaterialCommunityIcons name="content-copy" size={18} color={OWNER_PURPLE} />
+              <Text style={[styles.codeActionText, { color: OWNER_PURPLE }]}>Copy</Text>
+            </TouchableOpacity>
+            <View style={styles.codeActionDivider} />
+            <TouchableOpacity style={styles.codeActionBtn} onPress={handleShareInviteCode}>
+              <MaterialCommunityIcons name="share-variant" size={18} color={SUCCESS_GREEN} />
+              <Text style={[styles.codeActionText, { color: SUCCESS_GREEN }]}>Share</Text>
+            </TouchableOpacity>
+            <View style={styles.codeActionDivider} />
+            <TouchableOpacity
+              style={styles.codeActionBtn}
+              onPress={() => navigation.navigate("InviteCode")}
             >
-              Copy
-            </Button>
-            <Button
-              mode="contained"
-              icon="share-variant"
-              onPress={handleShareInviteCode}
-              style={styles.codeButton}
-              buttonColor="#4CAF50"
-            >
-              Share
-            </Button>
+              <MaterialCommunityIcons name="arrow-right-circle-outline" size={18} color="#6B7280" />
+              <Text style={[styles.codeActionText, { color: "#6B7280" }]}>Manage</Text>
+            </TouchableOpacity>
           </View>
         </Surface>
 
-        {/* Subscription Section */}
-        <Surface style={styles.section} elevation={1}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Subscription
-          </Text>
+        {/* Subscription */}
+        <View style={styles.sectionTitleRow}>
+          <View style={styles.sectionTitleAccent} />
+          <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
+        </View>
 
-          {/* Status Row */}
-          <View style={styles.subscriptionRow}>
-            <View style={styles.subscriptionInfo}>
+        <Surface style={styles.subCard} elevation={2}>
+          <View style={styles.subRow}>
+            <View style={{ flex: 1 }}>
               {subscriptionStatus === "trial" && (
                 <>
-                  <Text variant="titleSmall">Free Trial</Text>
-                  <Text variant="bodySmall" style={styles.subscriptionSubtext}>
+                  <Text style={styles.subStatusLabel}>Free Trial</Text>
+                  <Text style={styles.subStatusDetail}>
                     {trialDaysLeft !== null && trialDaysLeft >= 0
                       ? `${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining`
                       : "Trial period"}
@@ -271,8 +294,8 @@ export default function OwnerSettingsScreen({ navigation }) {
               )}
               {subscriptionStatus === "active" && (
                 <>
-                  <Text variant="titleSmall">Active Plan</Text>
-                  <Text variant="bodySmall" style={styles.subscriptionSubtext}>
+                  <Text style={styles.subStatusLabel}>Active Plan</Text>
+                  <Text style={styles.subStatusDetail}>
                     {subscriptionDaysLeft !== null
                       ? subscriptionDaysLeft <= 7
                         ? `Expires in ${subscriptionDaysLeft} day${subscriptionDaysLeft !== 1 ? "s" : ""}`
@@ -283,10 +306,8 @@ export default function OwnerSettingsScreen({ navigation }) {
               )}
               {subscriptionStatus === "grace_period" && (
                 <>
-                  <Text variant="titleSmall" style={{ color: "#E65100" }}>
-                    Grace Period
-                  </Text>
-                  <Text variant="bodySmall" style={[styles.subscriptionSubtext, { color: "#BF360C" }]}>
+                  <Text style={[styles.subStatusLabel, { color: WARN_ORANGE }]}>Grace Period</Text>
+                  <Text style={[styles.subStatusDetail, { color: "#B45309" }]}>
                     {graceDaysLeft !== null && graceDaysLeft >= 0
                       ? `${graceDaysLeft} day${graceDaysLeft !== 1 ? "s" : ""} left to renew`
                       : "Renew now to keep turfs active"}
@@ -295,35 +316,15 @@ export default function OwnerSettingsScreen({ navigation }) {
               )}
               {subscriptionStatus === "expired" && (
                 <>
-                  <Text variant="titleSmall" style={{ color: "#D32F2F" }}>
-                    Expired
-                  </Text>
-                  <Text variant="bodySmall" style={[styles.subscriptionSubtext, { color: "#D32F2F" }]}>
+                  <Text style={[styles.subStatusLabel, { color: DANGER_RED }]}>Expired</Text>
+                  <Text style={[styles.subStatusDetail, { color: DANGER_RED }]}>
                     Turfs deactivated — renew to reactivate
                   </Text>
                 </>
               )}
             </View>
-            <View
-              style={[
-                styles.statusBadge,
-                subscriptionStatus === "active" && { backgroundColor: "#E8F5E9" },
-                subscriptionStatus === "trial" && { backgroundColor: "#E3F2FD" },
-                subscriptionStatus === "grace_period" && { backgroundColor: "#FFF3E0" },
-                subscriptionStatus === "expired" && { backgroundColor: "#FFEBEE" },
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: "600",
-                  color:
-                    subscriptionStatus === "active" ? "#4CAF50"
-                    : subscriptionStatus === "trial" ? "#1976D2"
-                    : subscriptionStatus === "grace_period" ? "#E65100"
-                    : "#D32F2F",
-                }}
-              >
+            <View style={[styles.subPill, { backgroundColor: `${getSubStatusColor()}20` }]}>
+              <Text style={[styles.subPillText, { color: getSubStatusColor() }]}>
                 {subscriptionStatus === "active" ? "Active"
                   : subscriptionStatus === "trial" ? "Trial"
                   : subscriptionStatus === "grace_period" ? "Grace"
@@ -332,231 +333,108 @@ export default function OwnerSettingsScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Grace Period Warning Banner */}
           {subscriptionStatus === "grace_period" && (
-            <View style={styles.subscriptionWarningBanner}>
-              <MaterialCommunityIcons name="alert-circle" size={20} color="#E65100" />
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={styles.subscriptionWarningTitle}>
-                  Subscription expired
-                </Text>
-                <Text style={styles.subscriptionWarningText}>
-                  Your turfs are still active during the grace period.
-                  {graceDaysLeft !== null && graceDaysLeft >= 0
-                    ? ` You have ${graceDaysLeft} day${graceDaysLeft !== 1 ? "s" : ""} to renew before they are deactivated.`
-                    : " Renew immediately to avoid deactivation."}
-                </Text>
-              </View>
+            <View style={styles.subWarningBanner}>
+              <MaterialCommunityIcons name="alert-circle" size={18} color={WARN_ORANGE} />
+              <Text style={styles.subWarningText}>
+                {graceDaysLeft !== null && graceDaysLeft >= 0
+                  ? `${graceDaysLeft} day${graceDaysLeft !== 1 ? "s" : ""} to renew before turfs are deactivated.`
+                  : "Renew immediately to avoid deactivation."}
+              </Text>
             </View>
           )}
 
-          {/* Expired Warning Banner */}
           {subscriptionStatus === "expired" && (
-            <View style={styles.subscriptionErrorBanner}>
-              <MaterialCommunityIcons name="close-circle" size={20} color="#D32F2F" />
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={styles.subscriptionErrorTitle}>
-                  Turfs deactivated
-                </Text>
-                <Text style={styles.subscriptionErrorText}>
-                  Your subscription has expired and your turfs are no longer visible to users. Renew your subscription to reactivate them.
-                </Text>
-              </View>
+            <View style={styles.subErrorBanner}>
+              <MaterialCommunityIcons name="close-circle" size={18} color={DANGER_RED} />
+              <Text style={styles.subErrorText}>
+                Turfs are no longer visible to users. Renew to reactivate.
+              </Text>
             </View>
           )}
 
-          {/* Active expiring soon warning */}
           {subscriptionStatus === "active" && subscriptionDaysLeft !== null && subscriptionDaysLeft <= 7 && subscriptionDaysLeft >= 0 && (
-            <View style={styles.subscriptionWarningBanner}>
-              <MaterialCommunityIcons name="clock-alert-outline" size={20} color="#E65100" />
-              <Text style={[styles.subscriptionWarningText, { flex: 1, marginLeft: 8 }]}>
-                Renew soon to avoid service disruption.
-              </Text>
+            <View style={styles.subWarningBanner}>
+              <MaterialCommunityIcons name="clock-alert-outline" size={18} color={WARN_ORANGE} />
+              <Text style={styles.subWarningText}>Renew soon to avoid service disruption.</Text>
             </View>
           )}
 
-          {/* Action Button */}
-          {(subscriptionStatus === "grace_period" || subscriptionStatus === "expired") ? (
-            <Button
-              mode="contained"
-              onPress={() => navigation.navigate("SubscriptionPayment")}
-              style={styles.subscriptionButton}
-              buttonColor={subscriptionStatus === "expired" ? "#D32F2F" : "#E65100"}
-              icon="refresh"
-            >
-              Renew Subscription
-            </Button>
-          ) : (
-            <Button
-              mode="outlined"
-              onPress={() => navigation.navigate("SubscriptionPayment")}
-              style={styles.subscriptionButton}
-            >
-              Manage Subscription
-            </Button>
-          )}
-        </Surface>
-
-        {/* Payment Settings Section */}
-        <Surface style={styles.section} elevation={1}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Payments
-          </Text>
           <TouchableOpacity
-            style={styles.permissionRow}
-            onPress={() => navigation.navigate("PaymentSettings")}
+            style={[
+              styles.subActionBtn,
+              (subscriptionStatus === "expired" || subscriptionStatus === "grace_period")
+                ? { backgroundColor: DANGER_RED }
+                : { backgroundColor: OWNER_PURPLE },
+            ]}
+            onPress={() => navigation.navigate("SubscriptionPayment")}
           >
-            <View style={styles.paymentIconContainer}>
-              <MaterialCommunityIcons name="credit-card-settings" size={24} color={OWNER_COLOR} />
-            </View>
-            <View style={styles.permissionInfo}>
-              <Text variant="titleSmall">Payment Settings</Text>
-              <Text variant="bodySmall" style={styles.permissionSubtext}>
-                Configure UPI & bank details for advance payments
-              </Text>
-            </View>
-            <View style={styles.permissionStatus}>
-              {company?.paymentConfig?.upiEnabled ? (
-                <View style={[styles.permissionBadge, { backgroundColor: "#E8F5E9" }]}>
-                  <Text style={{ color: "#4CAF50", fontSize: 11, fontWeight: "600" }}>
-                    Active
-                  </Text>
-                </View>
-              ) : (
-                <View style={[styles.permissionBadge, { backgroundColor: "#FFF3E0" }]}>
-                  <Text style={{ color: "#FF9800", fontSize: 11, fontWeight: "600" }}>
-                    Setup
-                  </Text>
-                </View>
-              )}
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#999" />
-            </View>
+            <MaterialCommunityIcons
+              name={subscriptionStatus === "expired" || subscriptionStatus === "grace_period" ? "refresh" : "credit-card"}
+              size={16}
+              color="#fff"
+            />
+            <Text style={styles.subActionBtnText}>
+              {subscriptionStatus === "expired" || subscriptionStatus === "grace_period"
+                ? "Renew Subscription"
+                : "Manage Subscription"}
+            </Text>
           </TouchableOpacity>
         </Surface>
 
-        {/* Permissions Section */}
-        <Surface style={styles.section} elevation={1}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Permissions
-          </Text>
-          <TouchableOpacity
-            style={styles.permissionRow}
-            onPress={() => navigation.navigate("OperationalSettings")}
-          >
-            <View style={styles.permissionInfo}>
-              <Text variant="titleSmall">Operational Permissions</Text>
-              <Text variant="bodySmall" style={styles.permissionSubtext}>
-                {user?.hasOperationalPermissions
-                  ? "Enabled - You can perform manager tasks"
-                  : "Disabled - View-only mode"}
-              </Text>
+        {/* Settings Sections */}
+        {SETTINGS_SECTIONS.map((section) => (
+          <View key={section.title}>
+            <View style={styles.sectionTitleRow}>
+              <View style={styles.sectionTitleAccent} />
+              <Text style={styles.sectionTitle}>{section.title.toUpperCase()}</Text>
             </View>
-            <View style={styles.permissionStatus}>
-              <View
-                style={[
-                  styles.permissionBadge,
-                  {
-                    backgroundColor: user?.hasOperationalPermissions ? "#E8F5E9" : "#FFEBEE",
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    color: user?.hasOperationalPermissions ? "#4CAF50" : "#F44336",
-                    fontSize: 11,
-                    fontWeight: "600",
-                  }}
-                >
-                  {user?.hasOperationalPermissions ? "ON" : "OFF"}
-                </Text>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={24} color="#999" />
-            </View>
-          </TouchableOpacity>
-        </Surface>
-
-        {/* Other Settings */}
-        <Surface style={styles.section} elevation={1}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Other
-          </Text>
-          <List.Item
-            title="Notifications"
-            description="Configure notification preferences"
-            left={(props) => <List.Icon {...props} icon="bell-outline" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => {
-              // TODO: Navigate to notifications settings
-            }}
-          />
-          <Divider />
-          <List.Item
-            title="Help & Support"
-            description="FAQ, contact support"
-            left={(props) => <List.Icon {...props} icon="help-circle-outline" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => {
-              // TODO: Navigate to help
-            }}
-          />
-          <Divider />
-          <List.Item
-            title="About"
-            description="App version, terms, privacy"
-            left={(props) => <List.Icon {...props} icon="information-outline" />}
-            right={(props) => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => {
-              // TODO: Navigate to about
-            }}
-          />
-        </Surface>
+            <Surface style={styles.menuCard} elevation={2}>
+              {section.items.map((item, index) => (
+                <React.Fragment key={item.id}>
+                  <MenuItem item={item} />
+                  {index < section.items.length - 1 && (
+                    <Divider style={styles.divider} />
+                  )}
+                </React.Fragment>
+              ))}
+            </Surface>
+          </View>
+        ))}
 
         {/* Logout Button */}
-        <Button
-          mode="outlined"
-          onPress={handleLogout}
-          style={styles.logoutButton}
-          textColor="#F44336"
-          icon="logout"
-        >
-          Logout
-        </Button>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <MaterialCommunityIcons name="logout" size={18} color={DANGER_RED} />
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
 
-        <View style={styles.footer}>
-          <Text variant="bodySmall" style={styles.footerText}>
-            Turf Management System v2.0
-          </Text>
-        </View>
+        <Text style={styles.version}>Turf Management System v2.0</Text>
       </ScrollView>
 
       {/* Regenerate Code Dialog */}
       <Portal>
-        <Dialog
-          visible={regenerateDialogVisible}
-          onDismiss={() => setRegenerateDialogVisible(false)}
-        >
+        <Dialog visible={regenerateDialogVisible} onDismiss={() => setRegenerateDialogVisible(false)}>
           <Dialog.Title>Regenerate Invite Code?</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodyMedium">
-              This will create a new invite code and invalidate the current one. Team
-              members who haven't joined yet will need the new code.
+              This will create a new invite code and invalidate the current one. Team members who
+              haven't joined yet will need the new code.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setRegenerateDialogVisible(false)}>Cancel</Button>
-            <Button onPress={confirmRegenerateCode} textColor="#F44336">
-              Regenerate
-            </Button>
+            <TouchableOpacity onPress={() => setRegenerateDialogVisible(false)} style={styles.dialogBtn}>
+              <Text style={styles.dialogBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={confirmRegenerateCode} style={styles.dialogBtn}>
+              <Text style={[styles.dialogBtnText, { color: DANGER_RED }]}>Regenerate</Text>
+            </TouchableOpacity>
           </Dialog.Actions>
         </Dialog>
       </Portal>
 
       {/* Edit Company Dialog */}
       <Portal>
-        <Dialog
-          visible={editCompanyDialogVisible}
-          onDismiss={() => setEditCompanyDialogVisible(false)}
-        >
+        <Dialog visible={editCompanyDialogVisible} onDismiss={() => setEditCompanyDialogVisible(false)}>
           <Dialog.Title>Edit Company</Dialog.Title>
           <Dialog.Content>
             <TextInput
@@ -568,8 +446,12 @@ export default function OwnerSettingsScreen({ navigation }) {
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setEditCompanyDialogVisible(false)}>Cancel</Button>
-            <Button onPress={handleUpdateCompanyName}>Save</Button>
+            <TouchableOpacity onPress={() => setEditCompanyDialogVisible(false)} style={styles.dialogBtn}>
+              <Text style={styles.dialogBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleUpdateCompanyName} style={styles.dialogBtn}>
+              <Text style={[styles.dialogBtnText, { color: OWNER_PURPLE }]}>Save</Text>
+            </TouchableOpacity>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -580,211 +462,323 @@ export default function OwnerSettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F5F0FF",
   },
-  header: {
+  scrollContent: {
     padding: 16,
-    paddingBottom: 8,
+    paddingBottom: 32,
+  },
+
+  // Header
+  header: {
+    marginBottom: 16,
+    paddingTop: 4,
   },
   title: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 26,
+    color: NAVY_PURPLE,
+    letterSpacing: -0.3,
   },
-  section: {
-    margin: 16,
-    marginTop: 0,
-    marginBottom: 12,
-    padding: 16,
+
+  // Profile Card
+  profileCard: {
     borderRadius: 16,
     backgroundColor: "#fff",
+    marginBottom: 24,
+    overflow: "hidden",
   },
-  sectionTitle: {
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    color: "#666",
-    marginBottom: 12,
-  },
-  profileHeader: {
+  profileBanner: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    padding: 16,
+    paddingBottom: 14,
+    backgroundColor: PALE_PURPLE,
+    gap: 12,
+  },
+  avatarContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: `${OWNER_PURPLE}40`,
+  },
+  avatarInitials: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 18,
+    color: OWNER_PURPLE,
   },
   profileInfo: {
-    marginLeft: 16,
     flex: 1,
   },
   profileName: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: NAVY_PURPLE,
   },
-  profileRole: {
-    color: OWNER_COLOR,
-    fontWeight: "500",
+  rolePill: {
+    marginTop: 4,
+    backgroundColor: `${OWNER_PURPLE}20`,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  rolePillText: {
+    fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
+    color: OWNER_PURPLE,
+  },
+  editProfileBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profilePhoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   profilePhone: {
-    color: "#666",
-    marginTop: 2,
+    fontSize: 13,
+    color: "#6B7280",
+    fontFamily: "Ubuntu-Regular",
   },
-  editButton: {
-    borderRadius: 8,
-  },
-  companyRow: {
+
+  // Section title
+  sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
+    marginBottom: 8,
+    marginLeft: 2,
+    gap: 8,
   },
-  companyInfo: {
-    flex: 1,
-    marginLeft: 12,
+  sectionTitleAccent: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: OWNER_PURPLE,
   },
-  companySubtext: {
-    color: "#666",
-    marginTop: 2,
+  sectionTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 11,
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 4,
-  },
-  viewAllLink: {
-    color: OWNER_COLOR,
-    fontWeight: "600",
-  },
-  codeContainer: {
-    backgroundColor: "#F3E5F5",
+
+  // Invite Code Card
+  inviteCard: {
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    marginBottom: 24,
     padding: 16,
+    overflow: "hidden",
+  },
+  inviteSubtitle: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 12,
+  },
+  codeBox: {
+    backgroundColor: PALE_PURPLE,
     borderRadius: 12,
+    paddingVertical: 16,
     alignItems: "center",
-    marginVertical: 12,
-    flexDirection: "row",
-    justifyContent: "center",
+    marginBottom: 14,
   },
   codeText: {
-    fontWeight: "bold",
-    color: OWNER_COLOR,
-    letterSpacing: 4,
-    flex: 1,
-    textAlign: "center",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 28,
+    color: OWNER_PURPLE,
+    letterSpacing: 6,
   },
   codeActions: {
     flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+    paddingTop: 12,
   },
-  codeButton: {
-    marginHorizontal: 8,
-    borderRadius: 8,
-  },
-  warningText: {
-    color: "#999",
-    textAlign: "center",
-    marginTop: 4,
-  },
-  subscriptionRow: {
+  codeActionBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+  },
+  codeActionDivider: {
+    width: 1,
+    backgroundColor: "#F3F4F6",
+  },
+  codeActionText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
+  },
+
+  // Subscription Card
+  subCard: {
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    marginBottom: 24,
+    padding: 16,
+  },
+  subRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
-  subscriptionInfo: {
-    flex: 1,
+  subStatusLabel: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#111827",
   },
-  subscriptionSubtext: {
-    color: "#666",
+  subStatusDetail: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
     marginTop: 2,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  subscriptionButton: {
-    borderRadius: 8,
-  },
-  subscriptionWarningBanner: {
-    backgroundColor: "#FFF3E0",
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-    marginBottom: 8,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  subscriptionWarningTitle: {
-    fontWeight: "bold",
-    color: "#E65100",
-    marginBottom: 2,
-  },
-  subscriptionWarningText: {
-    color: "#BF360C",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  subscriptionErrorBanner: {
-    backgroundColor: "#FFEBEE",
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-    marginBottom: 8,
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  subscriptionErrorTitle: {
-    fontWeight: "bold",
-    color: "#C62828",
-    marginBottom: 2,
-  },
-  subscriptionErrorText: {
-    color: "#B71C1C",
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  paymentIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#F3E5F5",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  permissionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-  },
-  permissionInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  permissionSubtext: {
-    color: "#666",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  permissionStatus: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  permissionBadge: {
+  subPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
+    borderRadius: 20,
+    marginLeft: 8,
   },
-  logoutButton: {
-    margin: 16,
-    marginTop: 8,
-    borderRadius: 8,
-    borderColor: "#F44336",
+  subPillText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 12,
   },
-  footer: {
+  subWarningBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 10,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: WARN_ORANGE,
+    marginBottom: 12,
+  },
+  subWarningText: {
+    flex: 1,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#92400E",
+    lineHeight: 18,
+  },
+  subErrorBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: DANGER_RED,
+    marginBottom: 12,
+  },
+  subErrorText: {
+    flex: 1,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#B91C1C",
+    lineHeight: 18,
+  },
+  subActionBtn: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 24,
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 11,
   },
-  footerText: {
-    color: "#999",
+  subActionBtnText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#fff",
+  },
+
+  // Menu card
+  menuCard: {
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    marginBottom: 20,
+    overflow: "hidden",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  menuIconContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuLabel: {
+    flex: 1,
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#111827",
+  },
+  divider: {
+    marginLeft: 66,
+    backgroundColor: "#F3F4F6",
+  },
+
+  // Logout
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  logoutText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: DANGER_RED,
+  },
+
+  // Footer
+  version: {
+    textAlign: "center",
+    color: "#9CA3AF",
+    marginTop: 16,
+    marginBottom: 8,
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+  },
+
+  // Dialog
+  dialogBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dialogBtnText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#374151",
   },
   dialogInput: {
     backgroundColor: "#fff",

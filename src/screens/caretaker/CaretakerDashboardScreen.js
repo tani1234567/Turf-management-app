@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { Text, Surface, Card, Chip, Divider, Badge } from "react-native-paper";
+import { Text, Surface, Divider, Badge } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
@@ -18,7 +18,14 @@ import {
 import { getTodayBookingsForCaretaker } from "../../services/firebase/firestore";
 import { useNotifications } from "../../hooks";
 
-const CARETAKER_COLOR = "#FF9800";
+const CARETAKER_ORANGE = "#F97316";
+const CARETAKER_DARK   = "#EA580C";
+const PALE_ORANGE      = "#FFF7ED";
+const NAVY_ORANGE      = "#7C2D12";
+const SUCCESS_GREEN    = "#22C55E";
+const WARN_AMBER       = "#F59E0B";
+const DANGER_RED       = "#EF4444";
+const MANAGER_BLUE     = "#3B82F6";
 
 export default function CaretakerDashboardScreen({ navigation }) {
   const user = useSelector(selectUser);
@@ -39,29 +46,17 @@ export default function CaretakerDashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const today = new Date();
-
-  const formatDate = () => {
-    return today.toLocaleDateString("en-IN", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    });
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning,";
+    if (h < 17) return "Good afternoon,";
+    return "Good evening,";
   };
 
   const fetchDashboardData = async () => {
-    console.log("CaretakerDashboard - fetchDashboardData called");
-    console.log("CaretakerDashboard - assignedTurfId:", assignedTurfId);
-    console.log("CaretakerDashboard - user:", user);
-
     if (!assignedTurfId) {
-      console.log("CaretakerDashboard - No assignedTurfId, checking user.assignedTurfId");
-      // Try to get from user object directly
       const userTurfId = user?.assignedTurfId;
-      console.log("CaretakerDashboard - user.assignedTurfId:", userTurfId);
-
       if (!userTurfId) {
-        console.error("CaretakerDashboard - No turf assigned to this caretaker");
         setLoading(false);
         Alert.alert(
           "No Turf Assigned",
@@ -70,22 +65,16 @@ export default function CaretakerDashboardScreen({ navigation }) {
         );
         return;
       }
-
-      // Use the user's assignedTurfId directly
       try {
         const result = await getTodayBookingsForCaretaker(userTurfId);
-        console.log("CaretakerDashboard - Result:", result);
-
         if (result.success) {
           setTurfName(result.turfName || "Unknown Turf");
           setBookings(result.bookings || []);
           calculateStats(result.bookings || []);
         } else {
-          console.error("Error fetching bookings:", result.message);
           Alert.alert("Error", result.message || "Failed to load dashboard data");
         }
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
         Alert.alert("Error", "Failed to load dashboard data. Please try again.");
       } finally {
         setLoading(false);
@@ -94,20 +83,15 @@ export default function CaretakerDashboardScreen({ navigation }) {
     }
 
     try {
-      console.log("CaretakerDashboard - Fetching bookings for turf:", assignedTurfId);
       const result = await getTodayBookingsForCaretaker(assignedTurfId);
-      console.log("CaretakerDashboard - Result:", result);
-
       if (result.success) {
         setTurfName(result.turfName || "Unknown Turf");
         setBookings(result.bookings || []);
         calculateStats(result.bookings || []);
       } else {
-        console.error("Error fetching bookings:", result.message);
         Alert.alert("Error", result.message || "Failed to load dashboard data");
       }
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
       Alert.alert("Error", "Failed to load dashboard data. Please try again.");
     } finally {
       setLoading(false);
@@ -119,30 +103,24 @@ export default function CaretakerDashboardScreen({ navigation }) {
     const inProgress = bookingsList.filter((b) => b.status === "in_progress").length;
     const pending = bookingsList.filter((b) => b.status === "pending").length;
 
-    // Count bookings with pending payment (not fully paid)
     const pendingPayment = bookingsList.filter((b) => {
       if (b.status === "cancelled" || b.status === "rejected") return false;
       const payment = b.payment || {};
       return !payment.isFullyPaid && !payment.remainingPaid;
     }).length;
 
-    // Calculate cash collection (completed bookings with cash/on-ground payment)
     const totalCashCollection = bookingsList
       .filter((b) => b.status === "completed")
       .reduce((sum, b) => {
         const payment = b.payment || {};
-        // Use onGround.cashAmount (V2.1 schema) or payment.cashAmount (legacy)
         return sum + (payment.onGround?.cashAmount || payment.cashAmount || 0);
       }, 0);
 
-    // Calculate online collection (advance payments + on-ground online)
     const totalOnlineCollection = bookingsList
       .filter((b) => b.status === "completed")
       .reduce((sum, b) => {
         const payment = b.payment || {};
-        // Advance amount paid via UPI
         const advancePaid = payment.advance?.status === "verified" ? (payment.advanceAmount || 0) : 0;
-        // On-ground online payments
         const onlineOnGround = payment.onGround?.onlineAmount || payment.onlineAmount || 0;
         return sum + advancePaid + onlineOnGround;
       }, 0);
@@ -159,7 +137,6 @@ export default function CaretakerDashboardScreen({ navigation }) {
   };
 
   useEffect(() => {
-    console.log("CaretakerDashboard - useEffect triggered");
     fetchDashboardData();
   }, [assignedTurfId, user?.assignedTurfId]);
 
@@ -171,37 +148,22 @@ export default function CaretakerDashboardScreen({ navigation }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "completed":
-        return "#4CAF50";
-      case "in_progress":
-        return "#2196F3";
-      case "pending":
-        return "#FF9800";
-      case "confirmed":
-        return "#00BCD4";
-      default:
-        return "#999999";
+      case "completed":   return SUCCESS_GREEN;
+      case "in_progress": return MANAGER_BLUE;
+      case "pending":     return CARETAKER_ORANGE;
+      case "confirmed":   return MANAGER_BLUE;
+      default:            return "#9CA3AF";
     }
   };
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case "in_progress":
-        return "In Progress";
-      case "pending":
-        return "Pending";
-      case "confirmed":
-        return "Confirmed";
-      case "completed":
-        return "Completed";
-      default:
-        return status;
+      case "in_progress": return "In Progress";
+      case "pending":     return "Pending";
+      case "confirmed":   return "Confirmed";
+      case "completed":   return "Completed";
+      default:            return status;
     }
-  };
-
-  const formatTime = (time) => {
-    if (!time) return "";
-    return time;
   };
 
   const getNextBookings = () => {
@@ -223,6 +185,23 @@ export default function CaretakerDashboardScreen({ navigation }) {
 
   const nextBookings = getNextBookings();
 
+  // KPI config
+  const kpiCards = [
+    { id: "completed", label: "Completed", value: String(stats.completed), icon: "calendar-check", color: SUCCESS_GREEN },
+    { id: "pendingPay", label: "Pending Payment", value: String(stats.pendingPayment), icon: "clock-alert-outline", color: CARETAKER_ORANGE },
+    { id: "inProgress", label: "In Progress", value: String(stats.inProgress), icon: "progress-clock", color: MANAGER_BLUE },
+    { id: "total", label: "Total Bookings", value: String(stats.total), icon: "calendar-month", color: "#8B5CF6" },
+  ];
+
+  // Quick actions config
+  const quickActions = [
+    { id: "payment", label: "Collect Payment", icon: "cash", color: SUCCESS_GREEN, onPress: () => {} },
+    { id: "complete", label: "Mark Complete", icon: "check-circle", color: MANAGER_BLUE, onPress: () => {} },
+    { id: "extend", label: "Extend Time", icon: "clock-plus-outline", color: CARETAKER_ORANGE, onPress: () => {} },
+    { id: "issue", label: "Report Issue", icon: "alert-circle", color: DANGER_RED, onPress: () => navigation.navigate("MaintenanceLog") },
+    { id: "expenses", label: "Expenses", icon: "cash-register", color: "#8B5CF6", onPress: () => navigation.navigate("ExpenseTracking") },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -231,377 +210,231 @@ export default function CaretakerDashboardScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[CARETAKER_COLOR]}
+            colors={[CARETAKER_ORANGE]}
           />
         }
       >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text variant="bodyMedium" style={styles.dateText}>
-              {formatDate()}
-            </Text>
-            <Text variant="headlineSmall" style={styles.greeting}>
-              Hello, {user?.name || "Caretaker"}
-            </Text>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.userName}>{user?.name || "Caretaker"}</Text>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <TouchableOpacity
               onPress={() => navigation.navigate("Notifications")}
-              style={{ position: "relative" }}
+              style={styles.iconBtn}
             >
-              <MaterialCommunityIcons name="bell-outline" size={26} color="#666" />
+              <MaterialCommunityIcons name="bell-outline" size={22} color="#374151" />
               {unreadCount > 0 && (
-                <Badge
-                  size={18}
-                  style={{
-                    position: "absolute",
-                    top: -4,
-                    right: -6,
-                    backgroundColor: "#F44336",
-                  }}
-                >
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </Badge>
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
               )}
             </TouchableOpacity>
-            <Surface style={styles.avatarContainer} elevation={2}>
+            <View style={styles.avatarBtn}>
               <MaterialCommunityIcons
                 name="account-hard-hat"
-                size={28}
-                color={CARETAKER_COLOR}
+                size={22}
+                color={CARETAKER_ORANGE}
               />
-            </Surface>
+            </View>
           </View>
         </View>
 
-        {/* Assigned Turf Card */}
-        <Surface style={styles.turfCard} elevation={2}>
-          <View style={styles.turfCardContent}>
-            <MaterialCommunityIcons
-              name="soccer-field"
-              size={32}
-              color="#4CAF50"
-            />
-            <View style={styles.turfInfo}>
-              <Text variant="bodySmall" style={styles.turfLabel}>
-                Assigned Turf
-              </Text>
-              <Text variant="titleLarge" style={styles.turfName}>
-                {turfName || "Loading..."}
-              </Text>
-            </View>
-          </View>
-        </Surface>
-
-        {/* Quick Stats */}
-        <View style={styles.statsGrid}>
-          <Surface style={styles.statCard} elevation={1}>
-            <MaterialCommunityIcons
-              name="calendar-check"
-              size={24}
-              color="#4CAF50"
-            />
-            <Text variant="headlineMedium" style={[styles.statValue, { color: "#4CAF50" }]}>
-              {stats.completed}
-            </Text>
-            <Text variant="bodySmall" style={styles.statLabel}>
-              Completed
-            </Text>
-          </Surface>
-
-          <Surface style={styles.statCard} elevation={1}>
-            <MaterialCommunityIcons
-              name="clock-alert-outline"
-              size={24}
-              color="#FF9800"
-            />
-            <Text variant="headlineMedium" style={[styles.statValue, { color: "#FF9800" }]}>
-              {stats.pendingPayment}
-            </Text>
-            <Text variant="bodySmall" style={styles.statLabel}>
-              Pending Payment
-            </Text>
-          </Surface>
+        {/* KPI Cards */}
+        <View style={styles.kpiGrid}>
+          {kpiCards.map((kpi) => (
+            <Surface key={kpi.id} style={styles.kpiCard} elevation={2}>
+              <View style={[styles.kpiAccentBar, { backgroundColor: kpi.color }]} />
+              <View style={styles.kpiBody}>
+                <View style={[styles.kpiIconContainer, { backgroundColor: `${kpi.color}18` }]}>
+                  <MaterialCommunityIcons name={kpi.icon} size={20} color={kpi.color} />
+                </View>
+                <Text style={[styles.kpiValue, { color: kpi.color }]}>
+                  {kpi.value}
+                </Text>
+                <Text style={styles.kpiLabel}>{kpi.label}</Text>
+              </View>
+            </Surface>
+          ))}
         </View>
 
         {/* Today's Earnings */}
         <Surface style={styles.earningsCard} elevation={2}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Today's Earnings
-          </Text>
-          <Divider style={styles.divider} />
+          <View style={styles.sectionTitleRow}>
+            <View style={[styles.sectionTitleAccent, { backgroundColor: CARETAKER_ORANGE }]} />
+            <Text style={styles.sectionTitleText}>TODAY'S EARNINGS</Text>
+          </View>
 
           <View style={styles.earningsRow}>
             <View style={styles.earningsItem}>
-              <View style={styles.earningsIconContainer}>
-                <MaterialCommunityIcons name="cash" size={28} color="#4CAF50" />
+              <View style={[styles.earningsIconContainer, { backgroundColor: `${SUCCESS_GREEN}15` }]}>
+                <MaterialCommunityIcons name="cash" size={24} color={SUCCESS_GREEN} />
               </View>
-              <View style={styles.earningsInfo}>
-                <Text variant="bodySmall" style={styles.earningsLabel}>
-                  Cash Collection
-                </Text>
-                <Text variant="headlineSmall" style={[styles.earningsValue, { color: "#4CAF50" }]}>
-                  ₹{stats.totalCashCollection}
-                </Text>
-              </View>
+              <Text style={styles.earningsLabel}>Cash</Text>
+              <Text style={[styles.earningsValue, { color: SUCCESS_GREEN }]}>
+                ₹{stats.totalCashCollection}
+              </Text>
             </View>
 
             <View style={styles.earningsDivider} />
 
             <View style={styles.earningsItem}>
-              <View style={styles.earningsIconContainer}>
-                <MaterialCommunityIcons name="credit-card" size={28} color="#2196F3" />
+              <View style={[styles.earningsIconContainer, { backgroundColor: `${MANAGER_BLUE}15` }]}>
+                <MaterialCommunityIcons name="credit-card" size={24} color={MANAGER_BLUE} />
               </View>
-              <View style={styles.earningsInfo}>
-                <Text variant="bodySmall" style={styles.earningsLabel}>
-                  Online Collection
-                </Text>
-                <Text variant="headlineSmall" style={[styles.earningsValue, { color: "#2196F3" }]}>
-                  ₹{stats.totalOnlineCollection}
-                </Text>
-              </View>
+              <Text style={styles.earningsLabel}>Online</Text>
+              <Text style={[styles.earningsValue, { color: MANAGER_BLUE }]}>
+                ₹{stats.totalOnlineCollection}
+              </Text>
             </View>
-          </View>
 
-          <Divider style={styles.divider} />
+            <View style={styles.earningsDivider} />
 
-          <View style={styles.totalEarningsRow}>
-            <Text variant="titleMedium" style={styles.totalEarningsLabel}>
-              Total Collection
-            </Text>
-            <Text variant="headlineMedium" style={styles.totalEarningsValue}>
-              ₹{stats.totalCashCollection + stats.totalOnlineCollection}
-            </Text>
+            <View style={styles.earningsItem}>
+              <View style={[styles.earningsIconContainer, { backgroundColor: `${CARETAKER_ORANGE}15` }]}>
+                <MaterialCommunityIcons name="currency-inr" size={24} color={CARETAKER_ORANGE} />
+              </View>
+              <Text style={styles.earningsLabel}>Total</Text>
+              <Text style={[styles.earningsValue, { color: CARETAKER_ORANGE }]}>
+                ₹{stats.totalCashCollection + stats.totalOnlineCollection}
+              </Text>
+            </View>
           </View>
         </Surface>
 
         {/* Today's Bookings Overview */}
-        <Text variant="titleMedium" style={styles.sectionHeader}>
-          Today's Bookings
-        </Text>
-        <View style={styles.bookingStatsRow}>
-          <Chip
-            icon="calendar-today"
-            style={styles.chip}
-            textStyle={styles.chipText}
-          >
-            Total: {stats.total}
-          </Chip>
-          <Chip
-            icon="progress-clock"
-            style={styles.chip}
-            textStyle={styles.chipText}
-          >
-            In Progress: {stats.inProgress}
-          </Chip>
-          <Chip
-            icon="clock-outline"
-            style={styles.chip}
-            textStyle={styles.chipText}
-          >
-            Pending: {stats.pending}
-          </Chip>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Today's Bookings</Text>
+          <View style={styles.pillsRow}>
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>Total: {stats.total}</Text>
+            </View>
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>In Progress: {stats.inProgress}</Text>
+            </View>
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>Pending: {stats.pending}</Text>
+            </View>
+          </View>
         </View>
 
         {/* Quick Actions */}
-        <Text variant="titleMedium" style={styles.sectionHeader}>
-          Quick Actions
-        </Text>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          <TouchableOpacity style={styles.actionCard}>
-            <Surface style={styles.actionCardSurface} elevation={1}>
-              <MaterialCommunityIcons name="cash" size={32} color="#4CAF50" />
-              <Text variant="bodySmall" style={styles.actionText}>
-                Collect Payment
-              </Text>
-            </Surface>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionCard}>
-            <Surface style={styles.actionCardSurface} elevation={1}>
-              <MaterialCommunityIcons
-                name="check-circle"
-                size={32}
-                color="#2196F3"
-              />
-              <Text variant="bodySmall" style={styles.actionText}>
-                Mark Complete
-              </Text>
-            </Surface>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.actionCard}>
-            <Surface style={styles.actionCardSurface} elevation={1}>
-              <MaterialCommunityIcons
-                name="clock-plus-outline"
-                size={32}
-                color="#FF9800"
-              />
-              <Text variant="bodySmall" style={styles.actionText}>
-                Extend Time
-              </Text>
-            </Surface>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate("MaintenanceLog")}
-          >
-            <Surface style={styles.actionCardSurface} elevation={1}>
-              <MaterialCommunityIcons
-                name="alert-circle"
-                size={32}
-                color="#F44336"
-              />
-              <Text variant="bodySmall" style={styles.actionText}>
-                Report Issue
-              </Text>
-            </Surface>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => navigation.navigate("ExpenseTracking")}
-          >
-            <Surface style={styles.actionCardSurface} elevation={1}>
-              <MaterialCommunityIcons
-                name="cash-register"
-                size={32}
-                color="#9C27B0"
-              />
-              <Text variant="bodySmall" style={styles.actionText}>
-                Expenses
-              </Text>
-            </Surface>
-          </TouchableOpacity>
+          {quickActions.map((action) => (
+            <TouchableOpacity
+              key={action.id}
+              style={styles.actionItem}
+              onPress={action.onPress}
+              activeOpacity={0.7}
+            >
+              <Surface style={styles.actionIconContainer} elevation={1}>
+                <View
+                  style={[
+                    styles.actionIconCircle,
+                    { backgroundColor: `${action.color}15` },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={action.icon}
+                    size={24}
+                    color={action.color}
+                  />
+                </View>
+              </Surface>
+              <Text style={styles.actionLabel}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* Upcoming Bookings */}
-        <Text variant="titleMedium" style={styles.sectionHeader}>
-          Upcoming Bookings
-        </Text>
+        <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
         {nextBookings.length > 0 ? (
-          nextBookings.map((booking, index) => (
-            <TouchableOpacity
-              key={booking.id || index}
-              onPress={() => navigation.navigate("PaymentCollection", { booking })}
-            >
-              <Card style={styles.bookingCard}>
-                <Card.Content>
-                <View style={styles.bookingHeader}>
-                  <View style={styles.bookingTimeContainer}>
-                    <MaterialCommunityIcons
-                      name="clock-outline"
-                      size={20}
-                      color={CARETAKER_COLOR}
-                    />
-                    <Text variant="titleMedium" style={styles.bookingTime}>
-                      {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
-                    </Text>
-                  </View>
-                  <Chip
-                    style={[
-                      styles.statusChip,
-                      { backgroundColor: getStatusColor(booking.status) + "20" },
-                    ]}
-                    textStyle={[
-                      styles.statusChipText,
-                      { color: getStatusColor(booking.status) },
-                    ]}
-                  >
-                    {getStatusLabel(booking.status)}
-                  </Chip>
-                </View>
-
-                <View style={styles.bookingDetails}>
-                  <View style={styles.bookingRow}>
-                    <MaterialCommunityIcons
-                      name="account"
-                      size={16}
-                      color="#666"
-                    />
-                    <Text variant="bodyMedium" style={styles.bookingDetailText}>
-                      {booking.userName || "Unknown User"}
-                    </Text>
+          nextBookings.map((booking, index) => {
+            const statusColor = getStatusColor(booking.status);
+            return (
+              <TouchableOpacity
+                key={booking.id || index}
+                onPress={() => navigation.navigate("PaymentCollection", { booking })}
+              >
+                <Surface
+                  style={[styles.bookingCard, { borderLeftColor: statusColor }]}
+                  elevation={2}
+                >
+                  <View style={styles.bookingHeader}>
+                    <View style={styles.bookingTimeContainer}>
+                      <MaterialCommunityIcons name="clock-outline" size={18} color={statusColor} />
+                      <Text style={styles.bookingTime}>
+                        {booking.startTime} - {booking.endTime}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+                      <Text style={[styles.statusPillText, { color: statusColor }]}>
+                        {getStatusLabel(booking.status)}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.bookingRow}>
-                    <MaterialCommunityIcons
-                      name="soccer"
-                      size={16}
-                      color="#666"
-                    />
-                    <Text variant="bodyMedium" style={styles.bookingDetailText}>
-                      {booking.sport || "N/A"}
-                    </Text>
+                  <View style={styles.bookingDetails}>
+                    <View style={styles.bookingRow}>
+                      <MaterialCommunityIcons name="account" size={14} color="#9CA3AF" />
+                      <Text style={styles.bookingDetailText}>
+                        {booking.userName || "Unknown User"}
+                      </Text>
+                    </View>
+                    <View style={styles.bookingRow}>
+                      <MaterialCommunityIcons name="soccer" size={14} color="#9CA3AF" />
+                      <Text style={styles.bookingDetailText}>{booking.sport || "N/A"}</Text>
+                    </View>
+                    <View style={styles.bookingRow}>
+                      <MaterialCommunityIcons name="map-marker" size={14} color="#9CA3AF" />
+                      <Text style={styles.bookingDetailText}>{booking.groundName || "N/A"}</Text>
+                    </View>
                   </View>
 
-                  <View style={styles.bookingRow}>
-                    <MaterialCommunityIcons
-                      name="map-marker"
-                      size={16}
-                      color="#666"
-                    />
-                    <Text variant="bodyMedium" style={styles.bookingDetailText}>
-                      {booking.groundName || "N/A"}
-                    </Text>
-                  </View>
-                </View>
+                  <View style={styles.bookingFooter}>
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.priceLabel}>Total:</Text>
+                      <Text style={styles.priceValue}>
+                        ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
+                      </Text>
+                    </View>
 
-                <View style={styles.bookingFooter}>
-                  <View style={styles.priceContainer}>
-                    <Text variant="bodySmall" style={styles.priceLabel}>
-                      Total:
-                    </Text>
-                    <Text variant="titleMedium" style={styles.priceValue}>
-                      ₹{booking.totalAmount || booking.payment?.slotAmount || 0}
-                    </Text>
+                    {booking.payment?.isFullyPaid || booking.payment?.remainingPaid ? (
+                      <View style={styles.paidPill}>
+                        <MaterialCommunityIcons name="check-circle" size={12} color={SUCCESS_GREEN} />
+                        <Text style={[styles.payPillText, { color: SUCCESS_GREEN }]}>Paid</Text>
+                      </View>
+                    ) : booking.payment?.advance?.status === "verified" ? (
+                      <View style={styles.duePill}>
+                        <Text style={[styles.payPillText, { color: CARETAKER_ORANGE }]}>
+                          Due: ₹{booking.payment?.remainingAmount || 0}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.duePill}>
+                        <Text style={[styles.payPillText, { color: CARETAKER_ORANGE }]}>
+                          Pending: ₹{booking.payment?.remainingAmount ?? (booking.totalAmount || booking.payment?.slotAmount || 0)}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-
-                  {booking.payment?.isFullyPaid || booking.payment?.remainingPaid ? (
-                    <Chip
-                      icon="check-circle"
-                      style={styles.paidChip}
-                      textStyle={styles.paidChipText}
-                    >
-                      Paid
-                    </Chip>
-                  ) : booking.payment?.advance?.status === "verified" ? (
-                    <Chip
-                      icon="cash-clock"
-                      style={styles.unpaidChip}
-                      textStyle={styles.unpaidChipText}
-                    >
-                      Due: ₹{booking.payment?.remainingAmount || 0}
-                    </Chip>
-                  ) : (
-                    <Chip
-                      icon="clock-outline"
-                      style={styles.unpaidChip}
-                      textStyle={styles.unpaidChipText}
-                    >
-                      Pending: ₹{booking.payment?.remainingAmount ?? (booking.totalAmount || booking.payment?.slotAmount || 0)}
-                    </Chip>
-                  )}
-                </View>
-              </Card.Content>
-            </Card>
-            </TouchableOpacity>
-          ))
+                </Surface>
+              </TouchableOpacity>
+            );
+          })
         ) : (
-          <Card style={styles.emptyCard}>
-            <Card.Content style={styles.emptyState}>
-              <MaterialCommunityIcons
-                name="calendar-blank"
-                size={48}
-                color="#ccc"
-              />
-              <Text variant="bodyMedium" style={styles.emptyText}>
-                No upcoming bookings
-              </Text>
-            </Card.Content>
-          </Card>
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="calendar-blank" size={36} color={CARETAKER_ORANGE} />
+            </View>
+            <Text style={styles.emptyTitle}>No upcoming bookings</Text>
+            <Text style={styles.emptySubtext}>You're all caught up for today</Text>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -611,97 +444,148 @@ export default function CaretakerDashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFBEB",
   },
   scrollContent: {
     padding: 16,
     paddingBottom: 32,
   },
+
+  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 20,
+    paddingVertical: 4,
   },
   headerLeft: {
     flex: 1,
   },
-  dateText: {
-    color: "#666",
-  },
   greeting: {
-    fontWeight: "bold",
-    color: "#333",
-    marginTop: 4,
+    fontSize: 13,
+    color: "#6B7280",
+    fontFamily: "Ubuntu-Regular",
   },
-  avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FFF3E0",
+  userName: {
+    fontSize: 22,
+    fontFamily: "Ubuntu-Bold",
+    color: NAVY_ORANGE,
+    letterSpacing: -0.3,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notifBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: DANGER_RED,
     justifyContent: "center",
     alignItems: "center",
   },
-  turfCard: {
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#fff",
+  notifBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PALE_ORANGE,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: CARETAKER_ORANGE + "40",
+  },
+
+  // KPI Grid
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
     marginBottom: 16,
   },
-  turfCardContent: {
-    flexDirection: "row",
+  kpiCard: {
+    width: "47.5%",
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    overflow: "hidden",
+  },
+  kpiAccentBar: {
+    height: 4,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+  kpiBody: {
+    padding: 14,
     alignItems: "center",
   },
-  turfInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  turfLabel: {
-    color: "#666",
-    marginBottom: 4,
-  },
-  turfName: {
-    fontWeight: "bold",
-    color: "#333",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: "#fff",
+  kpiIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
     alignItems: "center",
-  },
-  statValue: {
-    fontWeight: "bold",
-    marginTop: 8,
-  },
-  statLabel: {
-    color: "#666",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  earningsCard: {
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontWeight: "600",
-    color: "#333",
     marginBottom: 8,
   },
-  divider: {
-    marginVertical: 12,
+  kpiValue: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 24,
+    letterSpacing: -0.5,
+  },
+  kpiLabel: {
+    color: "#6B7280",
+    marginTop: 4,
+    textAlign: "center",
+    fontSize: 11,
+    fontFamily: "Ubuntu-Regular",
+  },
+
+  // Earnings Card
+  earningsCard: {
+    borderRadius: 14,
+    backgroundColor: "#fff",
+    padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: CARETAKER_ORANGE,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+    gap: 8,
+  },
+  sectionTitleAccent: {
+    width: 3,
+    height: 14,
+    borderRadius: 2,
+  },
+  sectionTitleText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 11,
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
   earningsRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
     alignItems: "center",
   },
   earningsItem: {
@@ -709,164 +593,210 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   earningsIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#f5f5f5",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
-  },
-  earningsInfo: {
-    alignItems: "center",
+    marginBottom: 6,
   },
   earningsLabel: {
-    color: "#666",
-    marginBottom: 4,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 2,
   },
   earningsValue: {
-    fontWeight: "bold",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 18,
   },
   earningsDivider: {
     width: 1,
     height: 60,
-    backgroundColor: "#E0E0E0",
+    backgroundColor: "#F3F4F6",
   },
-  totalEarningsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalEarningsLabel: {
-    fontWeight: "600",
-    color: "#333",
-  },
-  totalEarningsValue: {
-    fontWeight: "bold",
-    color: CARETAKER_COLOR,
-  },
+
+  // Section Header
   sectionHeader: {
-    fontWeight: "600",
     marginBottom: 12,
-    color: "#333",
   },
-  bookingStatsRow: {
+  sectionTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: NAVY_ORANGE,
+    letterSpacing: 0.1,
+    marginBottom: 10,
+  },
+  pillsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 20,
+    gap: 6,
   },
-  chip: {
-    backgroundColor: "#E3F2FD",
+  pill: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  chipText: {
+  pillText: {
+    fontFamily: "Ubuntu-Regular",
     fontSize: 12,
-    color: "#1976D2",
+    color: "#374151",
   },
+
+  // Quick Actions Grid
   actionsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginHorizontal: -4,
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  actionCard: {
-    width: "48%",
-    padding: 4,
+  actionItem: {
+    width: "33.33%",
+    alignItems: "center",
+    paddingVertical: 10,
   },
-  actionCardSurface: {
-    padding: 16,
-    borderRadius: 12,
+  actionIconContainer: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
     backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  actionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    justifyContent: "center",
     alignItems: "center",
   },
-  actionText: {
-    marginTop: 8,
-    color: "#666",
+  actionLabel: {
+    marginTop: 6,
+    color: "#374151",
     textAlign: "center",
+    fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
   },
+
+  // Booking Cards
   bookingCard: {
-    marginBottom: 12,
-    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderLeftWidth: 4,
   },
   bookingHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   bookingTimeContainer: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
   },
   bookingTime: {
-    fontWeight: "600",
-    color: "#333",
-    marginLeft: 8,
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#111827",
   },
-  statusChip: {
-    height: 28,
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  statusChipText: {
-    fontSize: 12,
-    fontWeight: "600",
+  statusPillText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
   },
   bookingDetails: {
-    marginBottom: 12,
+    marginBottom: 10,
+    gap: 4,
   },
   bookingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    gap: 6,
   },
   bookingDetailText: {
-    color: "#666",
-    marginLeft: 8,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#6B7280",
   },
   bookingFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "#F3F4F6",
   },
   priceContainer: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
   },
   priceLabel: {
-    color: "#666",
-    marginRight: 8,
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
   },
   priceValue: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#111827",
   },
-  paidChip: {
-    backgroundColor: "#E8F5E9",
-    height: 28,
+  paidPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  paidChipText: {
-    color: "#4CAF50",
-    fontSize: 12,
+  duePill: {
+    backgroundColor: PALE_ORANGE,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
   },
-  unpaidChip: {
-    backgroundColor: "#FFF3E0",
-    height: 28,
+  payPillText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
   },
-  unpaidChipText: {
-    color: "#FF9800",
-    fontSize: 12,
-  },
-  emptyCard: {
-    borderRadius: 12,
-  },
+
+  // Empty state
   emptyState: {
     alignItems: "center",
-    padding: 24,
+    paddingVertical: 32,
   },
-  emptyText: {
-    color: "#999",
-    marginTop: 8,
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: PALE_ORANGE,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#374151",
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 13,
+    color: "#9CA3AF",
   },
 });

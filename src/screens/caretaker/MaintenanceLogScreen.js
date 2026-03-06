@@ -763,7 +763,7 @@ export default function MaintenanceLogScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFBEB",
   },
   header: {
     flexDirection: "row",
@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   segmentedButtons: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFBEB",
   },
   content: {
     flex: 1,
@@ -867,7 +867,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#FFFBEB",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
