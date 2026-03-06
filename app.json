@@ -14,8 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.playgrid.app",
-      "googleServicesFile": "./GoogleService-Info.plist",
+      "bundleIdentifier": "com.tanmaydevil.Turf1701",
+      "googleServicesFile": "./",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
