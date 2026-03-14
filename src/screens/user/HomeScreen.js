@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
   View,
   StyleSheet,
@@ -27,12 +28,16 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useSelector } from "react-redux";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { selectUser } from "../../store/slices/authSlice";
+import {
+  selectWishlistIds,
+  loadWishlist,
+  toggleWishlistItem,
+} from "../../store/slices/wishlistSlice";
 import { queryDocuments } from "../../services/firebase/firestore";
 import { useNotifications } from "../../hooks";
 import { FONTS } from "../../constants/theme";
@@ -312,7 +317,9 @@ const getPriceRangeFromGrounds = (grounds) => {
 };
 
 export default function HomeScreen({ navigation }) {
+  const dispatch = useDispatch();
   const user = useSelector(selectUser);
+  const favorites = useSelector(selectWishlistIds);
   const { unreadCount } = useNotifications();
 
   // Search state
@@ -339,7 +346,6 @@ export default function HomeScreen({ navigation }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [favorites, setFavorites] = useState([]); // Array of turf IDs
 
   // Location filter state
   const [locationModalVisible, setLocationModalVisible] = useState(false);
@@ -505,7 +511,7 @@ export default function HomeScreen({ navigation }) {
     }
   }, [selectedSport, priceRange, minRating, selectedAmenities, selectedAreas, maxDistance, userCoords, page]);
 
-  // Load saved areas and favorites from AsyncStorage on mount
+  // Load saved areas from AsyncStorage on mount, and wishlist from Firestore
   useEffect(() => {
     (async () => {
       try {
@@ -513,31 +519,28 @@ export default function HomeScreen({ navigation }) {
         if (savedAreas) {
           setSelectedAreas(JSON.parse(savedAreas));
         }
-        const savedFavorites = await AsyncStorage.getItem("favoriteTurfs");
-        if (savedFavorites) {
-          setFavorites(JSON.parse(savedFavorites));
-        }
       } catch (e) {
-        console.log("Error loading saved data:", e);
+        console.log("Error loading saved areas:", e);
       }
     })();
   }, []);
 
-  // Toggle favorite status
-  const toggleFavorite = useCallback(async (turfId) => {
-    setFavorites((prev) => {
-      const newFavorites = prev.includes(turfId)
-        ? prev.filter((id) => id !== turfId)
-        : [...prev, turfId];
+  // Load wishlist from Firestore when user is available
+  useEffect(() => {
+    if (user?.userId) {
+      dispatch(loadWishlist(user.userId));
+    }
+  }, [user?.userId]);
 
-      // Save to AsyncStorage
-      AsyncStorage.setItem("favoriteTurfs", JSON.stringify(newFavorites)).catch((e) =>
-        console.log("Error saving favorites:", e)
-      );
-
-      return newFavorites;
-    });
-  }, []);
+  // Toggle wishlist status
+  const toggleFavorite = useCallback(
+    (turfId) => {
+      if (user?.userId) {
+        dispatch(toggleWishlistItem({ userId: user.userId, turfId }));
+      }
+    },
+    [user?.userId]
+  );
 
   // Request location permission and auto-detect nearest area
   useEffect(() => {

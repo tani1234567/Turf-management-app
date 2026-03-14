@@ -14,6 +14,7 @@ import {
   selectUserRole,
 } from "../store/slices/authSlice";
 import { setCompany, clearCompany } from "../store/slices/companySlice";
+import { clearWishlist } from "../store/slices/wishlistSlice";
 import { getDocument } from "../services/firebase/firestore";
 
 // Import appropriate auth based on platform
@@ -128,6 +129,7 @@ export const useAuth = (options = {}) => {
       await signOutFunc();
       dispatch(logoutAction());
       dispatch(clearCompany());
+      dispatch(clearWishlist());
     } catch (err) {
       dispatch(setError(err.message));
     }

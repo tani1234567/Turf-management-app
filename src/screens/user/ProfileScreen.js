@@ -32,6 +32,7 @@ const USER_COLOR = "#4CAF50";
 const MENU_ITEMS = [
   { id: "edit", icon: "account-edit", label: "Edit Profile", color: "#4CAF50" },
   { id: "bookings", icon: "calendar-text", label: "Booking History", color: "#2196F3" },
+  { id: "wishlist", icon: "heart-outline", label: "Wishlist", color: "#E91E63" },
   { id: "notifications", icon: "bell", label: "Notifications", color: "#FF9800" },
   { id: "help", icon: "help-circle", label: "Help & Support", color: "#607D8B" },
   { id: "about", icon: "information", label: "About", color: "#795548" },
@@ -257,6 +258,9 @@ export default function ProfileScreen({ navigation }) {
         break;
       case "bookings":
         navigation.navigate("Bookings");
+        break;
+      case "wishlist":
+        navigation.navigate("Wishlist");
         break;
       case "notifications":
         navigation.navigate("Notifications");

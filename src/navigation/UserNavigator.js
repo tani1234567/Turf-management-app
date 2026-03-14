@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HomeScreen from "../screens/user/HomeScreen";
 import SearchScreen from "../screens/user/SearchScreen";
 import BookingsScreen from "../screens/user/BookingsScreen";
+import WishlistScreen from "../screens/user/WishlistScreen";
 import ChatListScreen from "../screens/user/ChatListScreen";
 import ProfileScreen from "../screens/user/ProfileScreen";
 
@@ -188,6 +189,13 @@ export default function UserNavigator() {
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="Wishlist"
+        component={WishlistScreen}
         options={{
           presentation: "card",
         }}

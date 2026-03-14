@@ -3,6 +3,7 @@ import authReducer from "./slices/authSlice";
 import bookingReducer from "./slices/bookingSlice";
 import companyReducer from "./slices/companySlice";
 import ownerReducer from "./slices/ownerSlice";
+import wishlistReducer from "./slices/wishlistSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     booking: bookingReducer,
     company: companyReducer,
     owner: ownerReducer,
+    wishlist: wishlistReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

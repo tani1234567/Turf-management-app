@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
   View,
   StyleSheet,
@@ -23,9 +24,11 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useSelector } from "react-redux";
-
 import { selectUser } from "../../store/slices/authSlice";
+import {
+  selectIsWishlisted,
+  toggleWishlistItem,
+} from "../../store/slices/wishlistSlice";
 import { getDocument, queryDocuments } from "../../services/firebase/firestore";
 import { getOrCreateChat } from "../../services/firebase/chat";
 import { getReviewsForTurf } from "../../services/firebase/reviews";
@@ -155,7 +158,9 @@ const getPricingRanges = (grounds) => {
 
 export default function TurfDetailScreen({ navigation, route }) {
   const { turfId } = route.params || {};
+  const dispatch = useDispatch();
   const user = useSelector(selectUser);
+  const isFavorite = useSelector(selectIsWishlisted(turfId));
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // State
@@ -164,7 +169,6 @@ export default function TurfDetailScreen({ navigation, route }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isFavorite, setIsFavorite] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Fetch turf details
@@ -240,8 +244,9 @@ export default function TurfDetailScreen({ navigation, route }) {
 
   // Handle favorite toggle
   const toggleFavorite = () => {
-    setIsFavorite(!isFavorite);
-    // TODO: Save to user's favorites in Firestore
+    if (user?.userId && turfId) {
+      dispatch(toggleWishlistItem({ userId: user.userId, turfId }));
+    }
   };
 
   // Handle get directions

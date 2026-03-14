@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Text,
   Image,
+  ScrollView,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -42,6 +44,7 @@ export default function LoginScreen({ navigation }) {
   const recaptchaVerifier = useRef(null);
   const recaptchaContainerRef = useRef(null);
 
+  const phoneInputRef = useRef(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoadingState] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -202,6 +205,9 @@ export default function LoginScreen({ navigation }) {
     const cleaned = text.replace(/\D/g, "").slice(0, 10);
     setPhoneNumber(cleaned);
     if (errorMessage) setErrorMessage("");
+    if (cleaned.length === 10) {
+      Keyboard.dismiss();
+    }
   };
 
   const isDisabled = loading || phoneNumber.length !== 10 || !recaptchaReady;
@@ -220,6 +226,11 @@ export default function LoginScreen({ navigation }) {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         {/* Hero Section */}
         <View style={styles.hero}>
           <View style={styles.logoWrapper}>
@@ -248,10 +259,15 @@ export default function LoginScreen({ navigation }) {
 
           {/* Phone Input Row */}
           <View style={styles.phoneRow}>
-            <View style={styles.countryBadge}>
+            <TouchableOpacity
+              style={styles.countryBadge}
+              onPress={() => phoneInputRef.current?.focus()}
+              activeOpacity={0.8}
+            >
               <Text style={styles.countryBadgeText}>+91</Text>
-            </View>
+            </TouchableOpacity>
             <TextInput
+              ref={phoneInputRef}
               style={[
                 styles.phoneInput,
                 phoneFocused && styles.phoneInputFocused,
@@ -303,6 +319,7 @@ export default function LoginScreen({ navigation }) {
             <Text style={styles.termsLink}>Privacy Policy</Text>
           </Text>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -315,6 +332,9 @@ const styles = StyleSheet.create({
   },
   keyboardView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   hero: {
     height: SCREEN_HEIGHT * 0.38,
@@ -370,9 +390,9 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 28,
     paddingTop: 32,
+    paddingBottom: 48,
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    marginBottom: -40,
   },
   welcomeTitle: {
     fontFamily: "Ubuntu-Bold",
