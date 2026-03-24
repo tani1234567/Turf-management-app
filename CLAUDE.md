@@ -35,6 +35,8 @@ There is no test runner or linter configured in this project.
 - `ManagerNavigator` — Bottom tabs: Dashboard, Bookings, Calendar, Chat, Settings
 - `OwnerNavigator` — Bottom tabs: Dashboard, Turfs, Team, Settings
 - `CaretakerNavigator` — Bottom tabs: Dashboard, Calendar, Profile (checks turf assignment first)
+- `AdminNavigator` — Full admin panel with tabs: Dashboard, Companies, Users, Bookings, and a side-drawer for system tools
+- `OperationsModeNavigator` — Owner switching into an operations view (manager-like tabs: Bookings, Calendar, Chat)
 
 Each role navigator uses a Tab Navigator nested inside a Stack Navigator. Tab screens are the primary views; stack screens are modal/detail overlays pushed on top.
 
@@ -52,12 +54,14 @@ Access via `useAppDispatch()` and `useAppSelector()` hooks.
 
 All Firestore operations go through service modules, not called directly from screens:
 - `firestore.js` — Generic CRUD: `getDocument`, `addDocument`, `updateDocument`, `queryDocuments`, `subscribeToDocument`
+- `auth.js` — Firebase Auth operations (phone OTP, sign-out, user profile)
 - `booking.js` — Slot management, booking creation, cancellation
 - `chat.js` — Real-time messaging and price negotiation cards
 - `payments.js` — UPI payment verification and status tracking
 - `subscriptionPayments.js` — Subscription tier handling
 - `reviews.js` — Review CRUD
 - `expenses.js` — Expense tracking
+- `turfImages.js` — Turf image upload/management (Firebase Storage)
 
 **Cross-platform pattern:** Services detect `Platform.OS === "web"` to switch between Firebase Modular SDK (web) and React Native Firebase (native). The `config.js` file initializes the appropriate SDK.
 
@@ -90,9 +94,11 @@ Owner, manager, and caretaker roles require company association. Manager and car
 
 - `priceUtils.js` — Complex pricing calculations with taxes/discounts
 - `slotLockUtils.js` — Slot locking mechanism to prevent double-booking
+- `slotColorUtils.js` — Color coding for slot states (available, locked, booked, etc.)
 - `upiUtils.js` — UPI payment URL formatting and validation
 - `subscriptionPricing.js` — Subscription tier pricing
 - `inviteCodeUtils.js` — Invite code generation and validation
+- `turfEditLogger.js` — Audit logging for turf configuration changes
 
 ## Conventions
 

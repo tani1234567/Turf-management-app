@@ -12,6 +12,7 @@ import CaretakerCalendarScreen from "../screens/caretaker/CaretakerCalendarScree
 import CaretakerProfileScreen from "../screens/caretaker/CaretakerProfileScreen";
 import WaitingForAssignmentScreen from "../screens/caretaker/WaitingForAssignmentScreen";
 import PaymentCollectionScreen from "../screens/caretaker/PaymentCollectionScreen";
+import CaretakerCreateBookingScreen from "../screens/caretaker/CaretakerCreateBookingScreen";
 import MaintenanceLogScreen from "../screens/caretaker/MaintenanceLogScreen";
 import ExpenseTrackingScreen from "../screens/caretaker/ExpenseTrackingScreen";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
@@ -124,6 +125,13 @@ export default function CaretakerNavigator() {
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="CaretakerCreateBooking"
+        component={CaretakerCreateBookingScreen}
         options={{
           headerShown: false,
         }}

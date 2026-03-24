@@ -22,7 +22,7 @@ import { useSelector } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
 import { addReview } from "../../services/firebase/reviews";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
 
 export default function WriteReviewScreen({ navigation, route }) {
   const {
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 12,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#D1FAE5",
     justifyContent: "center",
     alignItems: "center",
   },

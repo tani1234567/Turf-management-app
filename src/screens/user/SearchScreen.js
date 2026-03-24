@@ -21,7 +21,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { queryDocuments } from "../../services/firebase/firestore";
 import { FONTS } from "../../constants/theme";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
+const PAGE_BG = "#F8FAF9";
 
 const SPORTS_FILTERS = [
   { id: "all", label: "All", icon: "apps" },
@@ -343,7 +345,7 @@ export default function SearchScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: PAGE_BG,
   },
   headerWrapper: {
     backgroundColor: "#fff",
@@ -372,15 +374,14 @@ const styles = StyleSheet.create({
   },
   searchbar: {
     marginTop: 12,
-    borderRadius: 12,
+    borderRadius: 24,
     elevation: 0,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F3F4F6",
     borderWidth: 1,
-    borderColor: "#e8e8e8",
-    maxHeight: 40,
+    borderColor: "#E5E7EB",
+    maxHeight: 44,
     alignContent: "center",
     alignItems: "center",
-    
   },
   searchInput: {
     fontSize: 14,
@@ -400,17 +401,22 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     marginRight: 8,
-    backgroundColor: "#fff",
-    height: 32,
+    backgroundColor: EMERALD_PALE,
+    height: "auto",
+    borderRadius: 18,
   },
   filterChipSelected: {
     backgroundColor: USER_COLOR,
   },
   filterText: {
-    color: "#666",
+    color: USER_COLOR,
+    fontFamily: FONTS.medium,
+    fontSize: 13,
   },
   filterTextSelected: {
     color: "#fff",
+    fontFamily: FONTS.medium,
+    fontSize: 13,
   },
   loadingContainer: {
     flex: 1,
@@ -436,15 +442,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardSurface: {
-    borderRadius: 10,
+    borderRadius: 16,
     backgroundColor: "#fff",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#efefef",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 5,
+    borderColor: "#F0F0F0",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   cardRow: {
     flexDirection: "row",
@@ -452,6 +459,9 @@ const styles = StyleSheet.create({
   cardImageContainer: {
     width: 110,
     height: 120,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    overflow: "hidden",
   },
   cardImage: {
     width: "100%",
@@ -491,13 +501,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sportTag: {
-    backgroundColor: "#10B98114",
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
+    backgroundColor: EMERALD_PALE,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   sportTagText: {
-    color: "#10B981",
+    color: USER_COLOR,
     fontFamily: FONTS.medium,
     fontSize: 10,
     textTransform: "capitalize",

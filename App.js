@@ -17,6 +17,7 @@ import { store } from "./src/store";
 import {
   registerNotificationListeners,
   setNavigationRef,
+  handleInitialNotification,
 } from "./src/services/notifications/handlers";
 import { paperTheme } from "./src/constants/paperTheme";
 
@@ -67,6 +68,7 @@ export default function App() {
               ref={navigationRef}
               onReady={() => {
                 setNavigationRef(navigationRef.current);
+                handleInitialNotification();
               }}
             >
               <RootNavigator />

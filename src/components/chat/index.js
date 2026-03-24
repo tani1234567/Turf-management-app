@@ -7,3 +7,4 @@ export { default as BookingCard } from "./BookingCard";
 export { default as LocationCard } from "./LocationCard";
 export { default as NegotiationRequestModal } from "./NegotiationRequestModal";
 export { default as QuickBookModal } from "./QuickBookModal";
+export { default as PaymentRequestCard } from "./PaymentRequestCard";

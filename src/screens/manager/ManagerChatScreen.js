@@ -9,8 +9,9 @@ import {
   Platform,
   KeyboardAvoidingView,
   Linking,
+  Modal,
 } from "react-native";
-import { Text, Avatar, IconButton, ActivityIndicator, Snackbar } from "react-native-paper";
+import { Text, Avatar, IconButton, ActivityIndicator, Snackbar, TextInput, Button, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -24,6 +25,7 @@ import {
   DateSeparator,
   BookingCard,
   LocationCard,
+  PaymentRequestCard,
 } from "../../components/chat";
 import {
   updateNegotiationStatus,
@@ -31,11 +33,16 @@ import {
   sendLocationMessage,
   uploadChatImage,
   sendImageMessage,
+  sendPaymentRequestCard,
+  updatePaymentRequestCardStatus,
 } from "../../services/firebase/chat";
 import {
   createBookingFromNegotiation,
+  createBookingFromNegotiationWithPaymentRequest,
+  updateBookingWithAdvancePayment,
   confirmPendingBooking,
   expireConflictingNegotiations,
+  approveBookingWithoutAdvancePayment,
 } from "../../services/firebase/booking";
 import { getDocument, queryDocuments } from "../../services/firebase/firestore";
 import { COLORS } from "../../constants/theme";
@@ -85,25 +92,45 @@ export default function ManagerChatScreen() {
 
   const [snackbar, setSnackbar] = useState({ visible: false, message: "" });
   const [turfsData, setTurfsData] = useState({});
+  const [companyPaymentConfig, setCompanyPaymentConfig] = useState(null);
 
-  // Load turfs data for location sharing
+  // Advance payment picker state
+  const [advancePicker, setAdvancePicker] = useState({
+    visible: false,
+    card: null,        // negotiation card data
+    messageId: null,
+    amount: "",        // string for TextInput
+    isSending: false,
+    // for "send payment request" on an already-accepted card (no booking creation needed)
+    existingBookingId: null,
+  });
+
+  // Load turfs data and company payment config
   useEffect(() => {
-    const loadTurfsData = async () => {
+    const loadData = async () => {
       if (!user?.companyId) return;
       try {
-        const turfs = await queryDocuments("turfs", [
-          { field: "companyId", operator: "==", value: user.companyId },
+        const [turfs, companyDoc] = await Promise.all([
+          queryDocuments("turfs", [
+            { field: "companyId", operator: "==", value: user.companyId },
+          ]),
+          getDocument("companies", user.companyId),
         ]);
+
         const turfsMap = {};
         turfs.forEach((turf) => {
           turfsMap[turf.turfId || turf.id] = turf;
         });
         setTurfsData(turfsMap);
+
+        if (companyDoc?.paymentConfig) {
+          setCompanyPaymentConfig(companyDoc.paymentConfig);
+        }
       } catch (error) {
-        console.error("Error loading turfs:", error);
+        console.error("Error loading data:", error);
       }
     };
-    loadTurfsData();
+    loadData();
   }, [user?.companyId]);
 
   // Mark as read when screen is focused
@@ -168,19 +195,24 @@ export default function ManagerChatScreen() {
     [chatId, user]
   );
 
-  // Accept negotiation - creates booking with transaction
+  // Accept negotiation — offers two options: approve directly or request advance payment
   const handleAcceptNegotiation = useCallback(
-    async (messageId, card) => {
+    (messageId, card) => {
+      const turf = turfsData[card.turfId];
+      const hasAdvanceConfig = turf?.advancePayment?.isRequired;
+      const suggestedAmount = hasAdvanceConfig
+        ? Math.round((card.requestedPrice * turf.advancePayment.percentage) / 100)
+        : 0;
+
       Alert.alert(
         "Accept Booking Request",
-        `Accept booking for ${card.turfName} at ₹${card.requestedPrice}?\n\nThis will create a confirmed booking.`,
+        `Accept booking for ${card.turfName} at ₹${card.requestedPrice}?`,
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: "Accept & Confirm",
+            text: "Approve Directly",
             onPress: async () => {
               try {
-                // Use transaction to create booking and handle race conditions
                 const result = await createBookingFromNegotiation(
                   card,
                   chatId,
@@ -188,16 +220,10 @@ export default function ManagerChatScreen() {
                   user?.userId,
                   user?.name || "Manager"
                 );
-
                 if (result.success) {
-                  // Expire other conflicting negotiations
                   await expireConflictingNegotiations(
-                    card.turfId,
-                    card.groundId,
-                    card.date,
-                    card.startTime,
-                    card.endTime,
-                    chatId
+                    card.turfId, card.groundId, card.date,
+                    card.startTime, card.endTime, chatId
                   );
                   setSnackbar({ visible: true, message: "Booking confirmed!" });
                 } else {
@@ -206,6 +232,158 @@ export default function ManagerChatScreen() {
               } catch (error) {
                 console.error("Error accepting negotiation:", error);
                 setSnackbar({ visible: true, message: "Failed to accept request" });
+              }
+            },
+          },
+          {
+            text: "Request Advance Payment",
+            onPress: () => {
+              setAdvancePicker({
+                visible: true,
+                card,
+                messageId,
+                amount: suggestedAmount > 0 ? String(suggestedAmount) : "",
+                isSending: false,
+                existingBookingId: null,
+              });
+            },
+          },
+        ]
+      );
+    },
+    [chatId, user?.userId, user?.name, turfsData]
+  );
+
+  // Send payment request for an already-accepted negotiation (user accepted counter-offer)
+  const handleSendPaymentRequest = useCallback(
+    (messageId, card) => {
+      const turf = turfsData[card.turfId];
+      const suggestedAmount = turf?.advancePayment?.isRequired
+        ? Math.round(((card.counterPrice || card.requestedPrice || card.originalPrice) * turf.advancePayment.percentage) / 100)
+        : 0;
+
+      setAdvancePicker({
+        visible: true,
+        card,
+        messageId,
+        amount: suggestedAmount > 0 ? String(suggestedAmount) : "",
+        isSending: false,
+        existingBookingId: card.bookingId || null,
+      });
+    },
+    [turfsData]
+  );
+
+  // Confirm and send the payment request (from the picker modal)
+  const handleConfirmPaymentRequest = useCallback(async () => {
+    const { card, messageId, amount, existingBookingId } = advancePicker;
+    const numAmount = parseFloat(amount);
+    if (!numAmount || numAmount <= 0) {
+      Alert.alert("Invalid Amount", "Please enter a valid advance payment amount.");
+      return;
+    }
+
+    // UPI details come from the company payment config (same as normal booking flow)
+    const upiId = companyPaymentConfig?.upiId || null;
+    const upiHolderName = companyPaymentConfig?.upiHolderName || null;
+    const qrCodeUrl = companyPaymentConfig?.upiQrCode || null;
+    const paymentDeadline = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+
+    setAdvancePicker((prev) => ({ ...prev, isSending: true }));
+
+    try {
+      let bookingId = existingBookingId;
+
+      if (!bookingId) {
+        // Create booking with pending_payment status
+        const result = await createBookingFromNegotiationWithPaymentRequest(
+          card,
+          chatId,
+          messageId,
+          user?.userId,
+          user?.name || "Manager",
+          { advanceAmount: numAmount, upiId, upiHolderName }
+        );
+
+        if (!result.success) {
+          setSnackbar({ visible: true, message: result.message || "Failed to create booking" });
+          setAdvancePicker((prev) => ({ ...prev, isSending: false }));
+          return;
+        }
+
+        bookingId = result.bookingId;
+
+        await expireConflictingNegotiations(
+          card.turfId, card.groundId, card.date,
+          card.startTime, card.endTime, chatId
+        );
+      } else {
+        // Existing booking (e.g. user accepted counter-offer): update its payment fields
+        const totalAmount = card.requestedPrice || card.counterPrice || card.originalPrice || 0;
+        await updateBookingWithAdvancePayment(
+          bookingId,
+          totalAmount,
+          numAmount,
+          { upiId, upiHolderName, paymentDeadline }
+        );
+      }
+
+      // Send the payment request card in chat
+      await sendPaymentRequestCard(chatId, {
+        senderId: user?.userId,
+        senderName: user?.name || "Manager",
+        bookingId,
+        turfId: card.turfId,
+        turfName: card.turfName,
+        groundId: card.groundId,
+        groundName: card.groundName,
+        sport: card.sport,
+        date: card.date,
+        startTime: card.startTime,
+        endTime: card.endTime,
+        totalAmount: card.requestedPrice || card.counterPrice || card.originalPrice,
+        advanceAmount: numAmount,
+        paymentDeadline,
+        upiId,
+        upiHolderName,
+        qrCodeUrl,
+        companyId: card.companyId || user?.companyId,
+      });
+
+      setAdvancePicker({ visible: false, card: null, messageId: null, amount: "", isSending: false, existingBookingId: null });
+      setSnackbar({ visible: true, message: "Payment request sent to customer!" });
+    } catch (error) {
+      console.error("Error sending payment request:", error);
+      setSnackbar({ visible: true, message: "Failed to send payment request" });
+      setAdvancePicker((prev) => ({ ...prev, isSending: false }));
+    }
+  }, [advancePicker, chatId, user, companyPaymentConfig]);
+
+  // Manager: approve booking without advance payment (from PaymentRequestCard)
+  const handleApproveWithoutPayment = useCallback(
+    async (messageId, card) => {
+      Alert.alert(
+        "Approve Without Payment",
+        "Confirm this booking without requiring advance payment?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Approve",
+            onPress: async () => {
+              try {
+                await approveBookingWithoutAdvancePayment(
+                  card.bookingId,
+                  user?.userId,
+                  user?.name || "Manager"
+                );
+                await updatePaymentRequestCardStatus(chatId, messageId, "approved_without_payment", {
+                  respondedBy: user?.userId,
+                  respondedByName: user?.name || "Manager",
+                });
+                setSnackbar({ visible: true, message: "Booking approved!" });
+              } catch (error) {
+                console.error("Error approving without payment:", error);
+                setSnackbar({ visible: true, message: "Failed to approve booking" });
               }
             },
           },
@@ -385,6 +563,19 @@ export default function ManagerChatScreen() {
             onAccept={handleAcceptNegotiation}
             onReject={handleRejectNegotiation}
             onCounter={handleCounterOffer}
+            onSendPaymentRequest={handleSendPaymentRequest}
+          />
+        );
+      }
+
+      // Payment request card
+      if (item.type === "payment_request_card") {
+        return (
+          <PaymentRequestCard
+            message={item}
+            isOwn={isOwn}
+            viewerType="manager"
+            onApproveWithoutPayment={handleApproveWithoutPayment}
           />
         );
       }
@@ -416,6 +607,8 @@ export default function ManagerChatScreen() {
       handleAcceptNegotiation,
       handleRejectNegotiation,
       handleCounterOffer,
+      handleSendPaymentRequest,
+      handleApproveWithoutPayment,
       handleConfirmBooking,
       handleRejectBooking,
       handleShareLocation,
@@ -548,6 +741,87 @@ export default function ManagerChatScreen() {
       >
         {snackbar.message}
       </Snackbar>
+
+      {/* Advance Payment Amount Picker Modal */}
+      <Modal
+        visible={advancePicker.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !advancePicker.isSending && setAdvancePicker((p) => ({ ...p, visible: false }))}
+      >
+        <View style={styles.modalOverlay}>
+          <Surface style={styles.pickerCard} elevation={4}>
+            <View style={styles.pickerHeader}>
+              <MaterialCommunityIcons name="cash-clock" size={22} color={MANAGER_COLOR} />
+              <Text variant="titleMedium" style={styles.pickerTitle}>
+                Request Advance Payment
+              </Text>
+            </View>
+
+            <Text variant="bodySmall" style={styles.pickerSubtitle}>
+              Set the advance amount the customer must pay to confirm this booking. They will have 5 hours to complete the payment.
+            </Text>
+
+            <TextInput
+              mode="outlined"
+              label="Advance Amount (₹)"
+              value={advancePicker.amount}
+              onChangeText={(v) => setAdvancePicker((p) => ({ ...p, amount: v.replace(/[^0-9]/g, "") }))}
+              keyboardType="numeric"
+              left={<TextInput.Affix text="₹" />}
+              style={styles.pickerInput}
+              outlineColor="#E0E0E0"
+              activeOutlineColor={MANAGER_COLOR}
+              disabled={advancePicker.isSending}
+            />
+
+            {advancePicker.card && (
+              <Text variant="bodySmall" style={styles.pickerHint}>
+                Total: ₹{advancePicker.card.requestedPrice || advancePicker.card.counterPrice || advancePicker.card.originalPrice}
+              </Text>
+            )}
+
+            {companyPaymentConfig?.upiId ? (
+              <View style={styles.pickerUpiInfo}>
+                <MaterialCommunityIcons name="bank-outline" size={14} color="#6B7280" />
+                <Text variant="bodySmall" style={styles.pickerUpiText}>
+                  Payment to: {companyPaymentConfig.upiHolderName ? `${companyPaymentConfig.upiHolderName} · ` : ""}{companyPaymentConfig.upiId}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.pickerUpiWarning}>
+                <MaterialCommunityIcons name="alert-outline" size={14} color="#F59E0B" />
+                <Text variant="bodySmall" style={styles.pickerUpiWarningText}>
+                  No UPI configured. Set it up in Payment Settings.
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.pickerActions}>
+              <Button
+                mode="outlined"
+                onPress={() => setAdvancePicker((p) => ({ ...p, visible: false }))}
+                disabled={advancePicker.isSending}
+                style={styles.pickerCancelBtn}
+                textColor={COLORS.textSecondary}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleConfirmPaymentRequest}
+                loading={advancePicker.isSending}
+                disabled={!advancePicker.amount || advancePicker.isSending}
+                buttonColor={MANAGER_COLOR}
+                style={styles.pickerSendBtn}
+                icon="send"
+              >
+                Send Request
+              </Button>
+            </View>
+          </Surface>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -618,5 +892,82 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: 12,
     color: COLORS.textSecondary,
+  },
+  // Advance payment picker modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  pickerCard: {
+    width: "100%",
+    borderRadius: 16,
+    padding: 20,
+    backgroundColor: "#fff",
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  pickerTitle: {
+    fontWeight: "700",
+    color: "#111827",
+  },
+  pickerSubtitle: {
+    color: "#6B7280",
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  pickerInput: {
+    backgroundColor: "#fff",
+    marginBottom: 6,
+  },
+  pickerHint: {
+    color: "#6B7280",
+    marginBottom: 20,
+    textAlign: "right",
+  },
+  pickerActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  pickerCancelBtn: {
+    flex: 1,
+    borderColor: "#E0E0E0",
+  },
+  pickerSendBtn: {
+    flex: 1,
+  },
+  pickerUpiInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 20,
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  pickerUpiText: {
+    color: "#374151",
+    flex: 1,
+  },
+  pickerUpiWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 20,
+    backgroundColor: "#FFFBEB",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  pickerUpiWarningText: {
+    color: "#92400E",
+    flex: 1,
   },
 });

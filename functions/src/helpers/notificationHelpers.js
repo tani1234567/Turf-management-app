@@ -47,6 +47,8 @@ function getNotificationMeta(type, data) {
       return { screen: "ManagerBookings", relatedType: "booking" };
     case "booking_confirmed":
       return { screen: "Bookings", relatedType: "booking" };
+    case "booking_rejected":
+      return { screen: "Bookings", relatedType: "booking" };
     case "booking_reminder":
       return { screen: "Bookings", relatedType: "booking" };
 
@@ -109,7 +111,7 @@ async function sendNotification(userId, notification) {
   // Send FCM push notification
   if (userData.fcmTokens && userData.fcmTokens.length > 0) {
     try {
-      await admin.messaging().sendMulticast({
+      const response = await admin.messaging().sendMulticast({
         tokens: userData.fcmTokens,
         notification: {
           title: notification.title,
@@ -122,6 +124,24 @@ async function sendNotification(userId, notification) {
           ),
         },
       });
+
+      // Remove stale tokens that FCM rejected
+      const staleTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (
+          !resp.success &&
+          resp.error?.code === "messaging/registration-token-not-registered"
+        ) {
+          staleTokens.push(userData.fcmTokens[idx]);
+        }
+      });
+      if (staleTokens.length > 0) {
+        console.log(`[FCM] Removing ${staleTokens.length} stale token(s) for user ${userId}`);
+        const cleanedTokens = userData.fcmTokens.filter((t) => !staleTokens.includes(t));
+        await admin.firestore().collection("users").doc(userId).update({
+          fcmTokens: cleanedTokens,
+        });
+      }
     } catch (error) {
       console.error("FCM send error:", error);
     }

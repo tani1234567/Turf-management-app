@@ -1,9 +1,12 @@
-import React from "react";
-import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Text, Surface, Divider } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
 import { useAuth } from "../../hooks";
+import { selectAssignedTurfId } from "../../store/slices/authSlice";
+import { getDocument, queryDocuments } from "../../services/firebase/firestore";
 
 const CARETAKER_ORANGE = "#F97316";
 const PALE_ORANGE      = "#FFF7ED";
@@ -21,6 +24,46 @@ const MENU_ITEMS = [
 
 export default function CaretakerProfileScreen() {
   const { user, logout } = useAuth();
+  const assignedTurfId = useSelector(selectAssignedTurfId);
+
+  const [turfName, setTurfName] = useState(null);
+  const [totalDays, setTotalDays] = useState(0);
+  const [bookingsHandled, setBookingsHandled] = useState(0);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!assignedTurfId) {
+      setStatsLoading(false);
+      return;
+    }
+
+    const loadProfileData = async () => {
+      try {
+        // Fetch turf name
+        const turf = await getDocument("turfs", assignedTurfId);
+        if (turf) setTurfName(turf.name || "Unknown Turf");
+
+        // Fetch all non-cancelled bookings for this turf
+        const bookings = await queryDocuments("bookings", [
+          { field: "turfId", operator: "==", value: assignedTurfId },
+        ]);
+
+        const active = bookings.filter(
+          (b) => b.status !== "cancelled" && b.status !== "rejected"
+        );
+
+        const uniqueDays = new Set(active.map((b) => b.date).filter(Boolean)).size;
+        setTotalDays(uniqueDays);
+        setBookingsHandled(active.length);
+      } catch (e) {
+        console.error("[CaretakerProfile] Failed to load profile data:", e);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadProfileData();
+  }, [assignedTurfId]);
 
   const MenuItem = ({ item }) => (
     <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
@@ -65,14 +108,22 @@ export default function CaretakerProfileScreen() {
           <Surface style={styles.statCard} elevation={2}>
             <View style={[styles.statAccentBar, { backgroundColor: SUCCESS_GREEN }]} />
             <View style={styles.statBody}>
-              <Text style={[styles.statValue, { color: SUCCESS_GREEN }]}>0</Text>
+              {statsLoading ? (
+                <ActivityIndicator size="small" color={SUCCESS_GREEN} />
+              ) : (
+                <Text style={[styles.statValue, { color: SUCCESS_GREEN }]}>{totalDays}</Text>
+              )}
               <Text style={styles.statLabel}>Total Days</Text>
             </View>
           </Surface>
           <Surface style={styles.statCard} elevation={2}>
             <View style={[styles.statAccentBar, { backgroundColor: MANAGER_BLUE }]} />
             <View style={styles.statBody}>
-              <Text style={[styles.statValue, { color: MANAGER_BLUE }]}>0</Text>
+              {statsLoading ? (
+                <ActivityIndicator size="small" color={MANAGER_BLUE} />
+              ) : (
+                <Text style={[styles.statValue, { color: MANAGER_BLUE }]}>{bookingsHandled}</Text>
+              )}
               <Text style={styles.statLabel}>Bookings Handled</Text>
             </View>
           </Surface>
@@ -88,8 +139,19 @@ export default function CaretakerProfileScreen() {
             <MaterialCommunityIcons name="soccer-field" size={22} color={CARETAKER_ORANGE} />
           </View>
           <View style={styles.turfInfo}>
-            <Text style={styles.noTurfText}>No turf assigned yet</Text>
-            <Text style={styles.noTurfSubtext}>Contact your manager for assignment</Text>
+            {statsLoading ? (
+              <ActivityIndicator size="small" color={CARETAKER_ORANGE} />
+            ) : turfName ? (
+              <>
+                <Text style={styles.noTurfText}>{turfName}</Text>
+                <Text style={styles.noTurfSubtext}>Active assignment</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.noTurfText}>No turf assigned yet</Text>
+                <Text style={styles.noTurfSubtext}>Contact your manager for assignment</Text>
+              </>
+            )}
           </View>
         </Surface>
 

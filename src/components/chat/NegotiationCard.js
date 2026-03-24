@@ -66,6 +66,7 @@ const NegotiationCard = ({
   onCounter,
   onAcceptCounter,
   onRejectCounter,
+  onSendPaymentRequest,
 }) => {
   const card = message.negotiationCard;
   const statusInfo = getStatusInfo(card?.status);
@@ -76,8 +77,10 @@ const NegotiationCard = ({
   const isManager = viewerType === "manager";
   const isPending = card?.status === "pending";
   const isCountered = card?.status === "countered";
+  const isAccepted = card?.status === "accepted";
   const canRespond = isManager && isPending && !isOwn;
   const canRespondToCounter = !isManager && isCountered && isOwn;
+  const canRequestPayment = isManager && isAccepted && !!card?.bookingId && !!onSendPaymentRequest;
 
   const handleAccept = async () => {
     if (!onAccept) return;
@@ -213,7 +216,7 @@ const NegotiationCard = ({
               ₹{card?.requestedPrice}
             </Text>
           </View>
-          {card?.counterPrice && (
+          {!!card?.counterPrice && (
             <View style={styles.priceRow}>
               <Text variant="bodySmall" style={styles.priceLabel}>
                 Counter Offer:
@@ -226,7 +229,7 @@ const NegotiationCard = ({
         </View>
 
         {/* User's message if any */}
-        {card?.message && (
+        {!!card?.message && (
           <View style={styles.messageSection}>
             <Text variant="bodySmall" style={styles.messageLabel}>
               Note:
@@ -352,6 +355,23 @@ const NegotiationCard = ({
                 Decline
               </Button>
             </View>
+          </View>
+        )}
+
+        {/* Manager: send payment request for an accepted negotiation */}
+        {canRequestPayment && (
+          <View style={styles.actionsSection}>
+            <Button
+              mode="outlined"
+              onPress={() => onSendPaymentRequest(message.id, card)}
+              disabled={isLoading}
+              style={styles.paymentRequestButton}
+              icon="cash-clock"
+              compact
+              textColor="#F59E0B"
+            >
+              Send Payment Request
+            </Button>
           </View>
         )}
 
@@ -541,6 +561,9 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: "right",
     marginTop: 8,
+  },
+  paymentRequestButton: {
+    borderColor: "#F59E0B",
   },
 });
 

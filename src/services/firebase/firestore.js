@@ -1049,6 +1049,61 @@ export const getAcademySessionsForDate = async (turfId, date) => {
 };
 
 /**
+ * Auto-reject pending bookings whose date/time slot has passed.
+ * Called silently from booking list screens on mount.
+ *
+ * @param {Array} conditions - Extra Firestore conditions (e.g. turfId or userId filter)
+ * @returns {Promise<number>} - Number of bookings rejected
+ */
+export const autoRejectExpiredPendingBookings = async (conditions = []) => {
+  try {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+    // 1. Pending bookings on dates strictly before today
+    const pastDatePending = await queryDocuments("bookings", [
+      ...conditions,
+      { field: "status", operator: "==", value: "pending" },
+      { field: "date", operator: "<", value: todayStr },
+    ]);
+
+    // 2. Pending bookings on today where the end time has already passed
+    const todayPending = await queryDocuments("bookings", [
+      ...conditions,
+      { field: "status", operator: "==", value: "pending" },
+      { field: "date", operator: "==", value: todayStr },
+    ]);
+    const todayExpired = todayPending.filter(
+      (b) => b.endTime && b.endTime <= nowTime
+    );
+
+    const toReject = [...pastDatePending, ...todayExpired];
+
+    if (toReject.length === 0) return 0;
+
+    const rejectPayload = {
+      status: "rejected",
+      rejectedAt: new Date().toISOString(),
+      rejectionReason: "expired",
+      rejectionNote: "Auto-rejected: booking time slot has passed",
+      updatedAt: new Date().toISOString(),
+    };
+
+    await Promise.all(
+      toReject.map((b) => updateDocument("bookings", b.id, rejectPayload))
+    );
+
+    console.log(`[autoRejectExpiredPendingBookings] Rejected ${toReject.length} stale pending bookings`);
+    return toReject.length;
+  } catch (error) {
+    // Silent — never surface errors to the user for a background cleanup
+    console.error("[autoRejectExpiredPendingBookings] Error:", error);
+    return 0;
+  }
+};
+
+/**
  * Collect payment for a booking
  * @param {string} bookingId - Booking ID
  * @param {object} paymentData - Payment details
@@ -1070,6 +1125,7 @@ export const collectPayment = async (bookingId, paymentData) => {
       cashAmount = 0,
       onlineAmount = 0,
       totalAmount = 0,
+      discountAmount = 0,
       isFullPayment = false,
       isPartialPayment = false,
       partialPaymentNotes = "",
@@ -1101,18 +1157,20 @@ export const collectPayment = async (bookingId, paymentData) => {
 
       // Calculate correct remaining amount
       const currentRemaining = booking.payment?.remainingAmount || (booking.totalAmount || booking.payment?.slotAmount || 0);
-      const newRemaining = isFullPayment ? 0 : currentRemaining - totalAmount;
+      const newRemaining = isFullPayment ? 0 : Math.max(0, currentRemaining - discountAmount - totalAmount);
 
       // Calculate total paid so far (advance + on-ground collections)
       const advancePaid = booking.payment?.advance?.status === "verified" ? (booking.payment?.advanceAmount || 0) : 0;
       const previousOnGroundPaid = booking.payment?.onGround?.totalCollected || 0;
       const newTotalPaid = advancePaid + previousOnGroundPaid + totalAmount;
+      const previousDiscount = booking.payment?.onGround?.discountAmount || 0;
+      const totalDiscount = previousDiscount + discountAmount;
       const slotAmount = booking.totalAmount || booking.payment?.slotAmount || 0;
 
       // Update booking with payment details
       await bookingRef.update({
         "payment.remainingPaid": isFullPayment,
-        "payment.remainingAmount": Math.max(0, newRemaining),
+        "payment.remainingAmount": newRemaining,
         "payment.paymentMethod": paymentMethod,
         "payment.cashAmount": (booking.payment?.cashAmount || 0) + cashAmount,
         "payment.onlineAmount": (booking.payment?.onlineAmount || 0) + onlineAmount,
@@ -1126,13 +1184,14 @@ export const collectPayment = async (bookingId, paymentData) => {
         "payment.onGround.cashAmount": (booking.payment?.onGround?.cashAmount || 0) + cashAmount,
         "payment.onGround.onlineAmount": (booking.payment?.onGround?.onlineAmount || 0) + onlineAmount,
         "payment.onGround.totalCollected": previousOnGroundPaid + totalAmount,
+        "payment.onGround.discountAmount": totalDiscount,
         "payment.onGround.collectedBy": collectedBy,
         "payment.onGround.collectedAt": new Date().toISOString(),
         "payment.onGround.notes": partialPaymentNotes,
         // Update V2.1 aggregate payment fields
         "payment.totalPaid": newTotalPaid,
-        "payment.totalPending": Math.max(0, slotAmount - newTotalPaid),
-        "payment.isFullyPaid": isFullPayment || newTotalPaid >= slotAmount,
+        "payment.totalPending": Math.max(0, slotAmount - newTotalPaid - totalDiscount),
+        "payment.isFullyPaid": isFullPayment || (newTotalPaid + totalDiscount) >= slotAmount,
         status: isFullPayment ? "completed" : booking.status,
         statusHistory: [
           ...(booking.statusHistory || []),
@@ -1179,18 +1238,20 @@ export const collectPayment = async (bookingId, paymentData) => {
 
     // Calculate correct remaining amount
     const currentRemaining = booking.payment?.remainingAmount || (booking.totalAmount || booking.payment?.slotAmount || 0);
-    const newRemaining = isFullPayment ? 0 : currentRemaining - totalAmount;
+    const newRemaining = isFullPayment ? 0 : Math.max(0, currentRemaining - discountAmount - totalAmount);
 
     // Calculate total paid so far (advance + on-ground collections)
     const advancePaid = booking.payment?.advance?.status === "verified" ? (booking.payment?.advanceAmount || 0) : 0;
     const previousOnGroundPaid = booking.payment?.onGround?.totalCollected || 0;
     const newTotalPaid = advancePaid + previousOnGroundPaid + totalAmount;
+    const previousDiscount = booking.payment?.onGround?.discountAmount || 0;
+    const totalDiscount = previousDiscount + discountAmount;
     const slotAmount = booking.totalAmount || booking.payment?.slotAmount || 0;
 
     // Update booking with payment details
     await updateDoc(bookingRef, {
       "payment.remainingPaid": isFullPayment,
-      "payment.remainingAmount": Math.max(0, newRemaining),
+      "payment.remainingAmount": newRemaining,
       "payment.paymentMethod": paymentMethod,
       "payment.cashAmount": (booking.payment?.cashAmount || 0) + cashAmount,
       "payment.onlineAmount": (booking.payment?.onlineAmount || 0) + onlineAmount,
@@ -1204,13 +1265,14 @@ export const collectPayment = async (bookingId, paymentData) => {
       "payment.onGround.cashAmount": (booking.payment?.onGround?.cashAmount || 0) + cashAmount,
       "payment.onGround.onlineAmount": (booking.payment?.onGround?.onlineAmount || 0) + onlineAmount,
       "payment.onGround.totalCollected": previousOnGroundPaid + totalAmount,
+      "payment.onGround.discountAmount": totalDiscount,
       "payment.onGround.collectedBy": collectedBy,
       "payment.onGround.collectedAt": new Date().toISOString(),
       "payment.onGround.notes": partialPaymentNotes,
       // Update V2.1 aggregate payment fields
       "payment.totalPaid": newTotalPaid,
-      "payment.totalPending": Math.max(0, slotAmount - newTotalPaid),
-      "payment.isFullyPaid": isFullPayment || newTotalPaid >= slotAmount,
+      "payment.totalPending": Math.max(0, slotAmount - newTotalPaid - totalDiscount),
+      "payment.isFullyPaid": isFullPayment || (newTotalPaid + totalDiscount) >= slotAmount,
       status: isFullPayment ? "completed" : booking.status,
       statusHistory: [
         ...(booking.statusHistory || []),

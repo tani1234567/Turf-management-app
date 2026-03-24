@@ -15,7 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
 
 export default function BookingSuccessScreen({ navigation, route }) {
   const {

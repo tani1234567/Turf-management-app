@@ -34,7 +34,10 @@ import { getOrCreateChat } from "../../services/firebase/chat";
 import { getReviewsForTurf } from "../../services/firebase/reviews";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
+const EMERALD_DARK = "#059669";
+const PAGE_BG = "#F8FAF9";
 const IMAGE_HEIGHT = 280;
 
 // Amenities icons mapping
@@ -356,19 +359,19 @@ export default function TurfDetailScreen({ navigation, route }) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <MaterialCommunityIcons name="arrow-left" size={24} color="#fff" />
+          <MaterialCommunityIcons name="arrow-left" size={24} color="#111827" />
         </TouchableOpacity>
 
         {/* Action buttons */}
         <View style={styles.imageActions}>
           <TouchableOpacity style={styles.actionButton} onPress={handleShare}>
-            <MaterialCommunityIcons name="share-variant" size={22} color="#fff" />
+            <MaterialCommunityIcons name="share-variant" size={22} color="#111827" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={toggleFavorite}>
             <MaterialCommunityIcons
               name={isFavorite ? "heart" : "heart-outline"}
               size={22}
-              color={isFavorite ? "#FF5252" : "#fff"}
+              color={isFavorite ? "#FF5252" : "#111827"}
             />
           </TouchableOpacity>
         </View>
@@ -815,16 +818,17 @@ export default function TurfDetailScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: PAGE_BG,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: PAGE_BG,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: PAGE_BG,
   },
   loadingText: {
     marginTop: 12,
@@ -865,27 +869,37 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 12,
     left: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.92)",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   imageActions: {
     position: "absolute",
-    top: 15,
+    top: 12,
     right: 16,
     flexDirection: "row",
+    gap: 8,
   },
   actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.92)",
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   dotsContainer: {
     position: "absolute",
@@ -910,6 +924,8 @@ const styles = StyleSheet.create({
   // Section
   section: {
     padding: 16,
+    backgroundColor: "#fff",
+    marginBottom: 8,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -918,8 +934,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontWeight: "600",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#111827",
     marginBottom: 12,
   },
   seeAllText: {
@@ -939,8 +956,9 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   turfName: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 22,
+    color: "#111827",
     marginBottom: 4,
   },
   locationRow: {
@@ -958,10 +976,10 @@ const styles = StyleSheet.create({
   ratingBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF8E1",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
   ratingText: {
     fontSize: 16,
@@ -993,18 +1011,28 @@ const styles = StyleSheet.create({
   sportChip: {
     marginRight: 8,
     marginBottom: 8,
-    backgroundColor: USER_COLOR + "15",
+    backgroundColor: EMERALD_PALE,
+    borderRadius: 20,
   },
   sportChipText: {
     color: USER_COLOR,
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
   },
 
   // Grounds
   groundCard: {
-    padding: 12,
-    borderRadius: 12,
+    padding: 14,
+    borderRadius: 14,
     marginBottom: 12,
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#F0FDF4",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 2,
   },
   groundHeader: {
     flexDirection: "row",
@@ -1050,22 +1078,28 @@ const styles = StyleSheet.create({
 
   // Pricing
   pricingCard: {
-    borderRadius: 12,
+    borderRadius: 14,
     overflow: "hidden",
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#F0FDF4",
   },
   pricingRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   pricingLabel: {
-    color: "#333",
+    fontFamily: "Ubuntu-Regular",
+    color: "#4B5563",
+    fontSize: 14,
   },
   pricingValue: {
-    fontWeight: "600",
+    fontFamily: "Ubuntu-Bold",
     color: USER_COLOR,
+    fontSize: 15,
   },
   pricingDivider: {
     marginHorizontal: 12,
@@ -1084,19 +1118,21 @@ const styles = StyleSheet.create({
   amenityItem: {
     width: "25%",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 18,
   },
   amenityIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: USER_COLOR + "15",
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: EMERALD_PALE,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   amenityLabel: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: "#4B5563",
     textAlign: "center",
   },
 
@@ -1206,34 +1242,45 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 16,
   },
   ctaContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
-    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 28,
   },
   ctaLabel: {
-    color: "#666",
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#9CA3AF",
   },
   ctaPrice: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 22,
+    color: USER_COLOR,
   },
   ctaButton: {
-    borderRadius: 8,
+    borderRadius: 12,
+    paddingHorizontal: 4,
   },
   ctaButtons: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   chatButton: {
     borderColor: USER_COLOR,
-    borderWidth: 1,
+    borderWidth: 1.5,
     margin: 0,
+    borderRadius: 24,
   },
 });

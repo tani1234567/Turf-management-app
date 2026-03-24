@@ -22,7 +22,8 @@ import {
 import { getDocument } from "../../services/firebase/firestore";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 2;
 
 export default function WishlistScreen({ navigation }) {
@@ -275,13 +276,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 8,
     left: 8,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    backgroundColor: "rgba(16,185,129,0.85)",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   sportChipText: {
-    fontFamily: "Ubuntu-Regular",
+    fontFamily: "Ubuntu-Medium",
     fontSize: 10,
     color: "#fff",
     textTransform: "capitalize",
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
   },
   priceText: {
     fontFamily: "Ubuntu-Bold",
-    fontSize: 12,
+    fontSize: 13,
     color: USER_COLOR,
   },
   perHour: {

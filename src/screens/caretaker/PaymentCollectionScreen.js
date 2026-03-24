@@ -37,6 +37,7 @@ export default function PaymentCollectionScreen({ route, navigation }) {
   const [partialPaymentNotes, setPartialPaymentNotes] = useState("");
   const [isPartialPayment, setIsPartialPayment] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState("");
 
   // Calculate amounts
   const normalizeAmount = (value) => {
@@ -88,21 +89,24 @@ export default function PaymentCollectionScreen({ route, navigation }) {
       ? Math.max(normalizeAmount(remainingAmount), 0)
       : Math.max(totalAmount - advancePaid, 0);
 
+  const discount = Math.min(parseFloat(discountAmount) || 0, amountDue);
+  const effectiveAmountDue = Math.max(amountDue - discount, 0);
+
   useEffect(() => {
     // Pre-fill full amount in cash by default
-    setCashAmount(amountDue.toString());
-  }, [amountDue]);
+    setCashAmount(effectiveAmountDue.toString());
+  }, [effectiveAmountDue]);
 
   const handlePaymentMethodChange = (method) => {
     setPaymentMethod(method);
 
     // Auto-fill amounts based on method
     if (method === "cash") {
-      setCashAmount(amountDue.toString());
+      setCashAmount(effectiveAmountDue.toString());
       setOnlineAmount("");
     } else if (method === "online") {
       setCashAmount("");
-      setOnlineAmount(amountDue.toString());
+      setOnlineAmount(effectiveAmountDue.toString());
     } else {
       // both - clear for manual entry
       setCashAmount("");
@@ -120,18 +124,18 @@ export default function PaymentCollectionScreen({ route, navigation }) {
       return false;
     }
 
-    if (total > amountDue) {
+    if (total > effectiveAmountDue) {
       Alert.alert(
         "Error",
-        `Total payment (₹${total}) exceeds amount due (₹${amountDue})`
+        `Total payment (₹${total}) exceeds amount due (₹${effectiveAmountDue})`
       );
       return false;
     }
 
-    if (total < amountDue && !isPartialPayment) {
+    if (total < effectiveAmountDue && !isPartialPayment) {
       Alert.alert(
         "Partial Payment",
-        `Total payment (₹${total}) is less than amount due (₹${amountDue}). Do you want to accept partial payment?`,
+        `Total payment (₹${total}) is less than amount due (₹${effectiveAmountDue}). Do you want to accept partial payment?`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -157,14 +161,15 @@ export default function PaymentCollectionScreen({ route, navigation }) {
     const cash = parseFloat(cashAmount) || 0;
     const online = parseFloat(onlineAmount) || 0;
     const totalCollected = cash + online;
-    const isFullPayment = totalCollected === amountDue;
+    const isFullPayment = totalCollected >= effectiveAmountDue;
+
+    const confirmLines = [`Cash: ₹${cash}`, `Online: ₹${online}`];
+    if (discount > 0) confirmLines.push(`Discount: -₹${discount}`);
+    confirmLines.push(`\n${isFullPayment ? "Full payment" : "Partial payment"}`);
 
     Alert.alert(
       "Confirm Payment Collection",
-      `Collect payment of ₹${totalCollected}?\n\n` +
-        `Cash: ₹${cash}\n` +
-        `Online: ₹${online}\n\n` +
-        `${isFullPayment ? "Full payment" : "Partial payment"}`,
+      `Collect payment of ₹${totalCollected}?\n\n` + confirmLines.join("\n"),
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -176,6 +181,7 @@ export default function PaymentCollectionScreen({ route, navigation }) {
                 cashAmount: cash,
                 onlineAmount: online,
                 totalAmount: totalCollected,
+                discountAmount: discount,
                 isFullPayment,
                 isPartialPayment: !isFullPayment,
                 partialPaymentNotes: isPartialPayment ? partialPaymentNotes : "",
@@ -425,6 +431,39 @@ export default function PaymentCollectionScreen({ route, navigation }) {
               </View>
             )}
 
+            {/* On-Ground Discount */}
+            <View style={styles.amountRow}>
+              <Text variant="bodyMedium" style={styles.amountLabel}>
+                On-Ground Discount
+              </Text>
+              <View style={styles.discountInputWrapper}>
+                <Text style={styles.discountMinus}>-₹</Text>
+                <TextInput
+                  mode="flat"
+                  value={discountAmount}
+                  onChangeText={(v) => {
+                    setDiscountAmount(v);
+                    // Reset to full effective amount when discount changes
+                    if (paymentMethod === "cash") {
+                      const d = Math.min(parseFloat(v) || 0, amountDue);
+                      setCashAmount(Math.max(amountDue - d, 0).toString());
+                      setOnlineAmount("");
+                    } else if (paymentMethod === "online") {
+                      const d = Math.min(parseFloat(v) || 0, amountDue);
+                      setOnlineAmount(Math.max(amountDue - d, 0).toString());
+                      setCashAmount("");
+                    }
+                  }}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  dense
+                  style={styles.discountInput}
+                  underlineColor={CARETAKER_COLOR}
+                  activeUnderlineColor={CARETAKER_COLOR}
+                />
+              </View>
+            </View>
+
             <Divider style={styles.divider} />
 
             <View style={styles.amountRow}>
@@ -432,7 +471,7 @@ export default function PaymentCollectionScreen({ route, navigation }) {
                 Amount Due
               </Text>
               <Text variant="headlineSmall" style={[styles.amountValue, { color: CARETAKER_COLOR, fontWeight: "bold" }]}>
-                ₹{amountDue}
+                ₹{effectiveAmountDue}
               </Text>
             </View>
           </Surface>
@@ -681,6 +720,23 @@ const styles = StyleSheet.create({
   amountValue: {
     color: "#333",
     fontWeight: "500",
+  },
+  discountInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  discountMinus: {
+    fontSize: 14,
+    color: "#4CAF50",
+    fontWeight: "600",
+    marginRight: 2,
+  },
+  discountInput: {
+    width: 80,
+    backgroundColor: "transparent",
+    fontSize: 14,
+    height: 36,
+    color: "#4CAF50",
   },
   inputContainer: {
     marginBottom: 16,

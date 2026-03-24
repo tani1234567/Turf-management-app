@@ -67,7 +67,10 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
+const EMERALD_DARK = "#059669";
+const PAGE_BG = "#F8FAF9";
 const GRID_CONTAINER_WIDTH = SCREEN_WIDTH * 0.9;
 const GRID_GAP = 12;
 const GRID_CARD_WIDTH = (GRID_CONTAINER_WIDTH - GRID_GAP) / 2;
@@ -1078,11 +1081,11 @@ export default function HomeScreen({ navigation }) {
                     <MaterialCommunityIcons
                       name={userCoords ? "information" : "crosshairs-gps"}
                       size={14}
-                      color={userCoords ? "#4CAF50" : "#FF9800"}
+                      color={userCoords ? "#10B981" : "#FF9800"}
                     />
                     <Text variant="bodySmall" style={[
                       styles.distanceHintText,
-                      userCoords && { color: "#4CAF50" }
+                      userCoords && { color: "#10B981" }
                     ]}>
                       {userCoords
                         ? `Filtering turfs within ${maxDistance} km of your location`
@@ -1332,7 +1335,7 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: PAGE_BG,
   },
   loadingContainer: {
     flex: 1,
@@ -1388,7 +1391,7 @@ const styles = StyleSheet.create({
   locationButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#E8F5E9",
+    backgroundColor: EMERALD_PALE,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
@@ -1415,12 +1418,12 @@ const styles = StyleSheet.create({
   },
   searchbar: {
     flex: 1,
-    borderRadius: 12,
-    backgroundColor: "#f5f5f5",
+    borderRadius: 24,
+    backgroundColor: "#F3F4F6",
     elevation: 0,
     borderWidth: 1,
-    borderColor: "#e8e8e8",
-    maxHeight: 40,
+    borderColor: "#E5E7EB",
+    maxHeight: 44,
   },
   searchInput: {
     fontSize: 14,
@@ -1507,7 +1510,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   activeViewButton: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: EMERALD_PALE,
   },
   // ── Turf Card ──────────────────────────────────
   turfCard: {
@@ -1522,16 +1525,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   cardSurface: {
-    borderRadius: 10,
+    borderRadius: 14,
     backgroundColor: "#fff",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#efefef",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    borderColor: "#F0F0F0",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   // Image
@@ -1829,7 +1832,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: EMERALD_PALE,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,

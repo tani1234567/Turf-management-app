@@ -27,10 +27,12 @@ import { updateUserProfile } from "../../store/slices/authSlice";
 import { updateDocument } from "../../services/firebase/firestore";
 import { FONTS } from "../../constants/theme";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
+const PAGE_BG = "#F8FAF9";
 
 const MENU_ITEMS = [
-  { id: "edit", icon: "account-edit", label: "Edit Profile", color: "#4CAF50" },
+  { id: "edit", icon: "account-edit", label: "Edit Profile", color: "#10B981" },
   { id: "bookings", icon: "calendar-text", label: "Booking History", color: "#2196F3" },
   { id: "wishlist", icon: "heart-outline", label: "Wishlist", color: "#E91E63" },
   { id: "notifications", icon: "bell", label: "Notifications", color: "#FF9800" },
@@ -389,7 +391,7 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: PAGE_BG,
   },
   scrollContent: {
     padding: 16,
@@ -415,7 +417,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: EMERALD_PALE,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -442,7 +444,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   roleChip: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: EMERALD_PALE,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,

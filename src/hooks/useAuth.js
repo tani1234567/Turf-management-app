@@ -16,6 +16,7 @@ import {
 import { setCompany, clearCompany } from "../store/slices/companySlice";
 import { clearWishlist } from "../store/slices/wishlistSlice";
 import { getDocument } from "../services/firebase/firestore";
+import { getPushToken, removeFCMToken } from "../services/notifications/setup";
 
 // Import appropriate auth based on platform
 let subscribeToAuthState, signOutFunc;
@@ -126,6 +127,13 @@ export const useAuth = (options = {}) => {
   const logout = useCallback(async () => {
     try {
       dispatch(setLoading(true));
+      // Clean up FCM token before signing out (best-effort)
+      if (Platform.OS !== "web") {
+        try {
+          const token = await getPushToken();
+          if (token && user?.userId) await removeFCMToken(user.userId, token);
+        } catch (_) {}
+      }
       await signOutFunc();
       dispatch(logoutAction());
       dispatch(clearCompany());
@@ -133,7 +141,7 @@ export const useAuth = (options = {}) => {
     } catch (err) {
       dispatch(setError(err.message));
     }
-  }, [dispatch]);
+  }, [dispatch, user]);
 
   // Check if user has specific role
   const hasRole = useCallback(

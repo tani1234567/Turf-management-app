@@ -30,7 +30,8 @@ import {
 import TimeSlotGrid from "../../components/booking/TimeSlotGrid";
 import SlotColorLegend from "../../components/booking/SlotColorLegend";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
 
 // Sport icons mapping
 const SPORT_ICONS = {
@@ -694,9 +695,17 @@ export default function BookingScreen({ navigation, route }) {
 
         {/* Day-of-week headers */}
         <View style={styles.calDayHeaders}>
-          {DAY_LABELS.map((d) => (
-            <Text key={d} style={styles.calDayHeader}>{d}</Text>
-          ))}
+          {DAY_LABELS.map((d, idx) => {
+            const isWeekendHeader = idx === 0 || idx === 6;
+            return (
+              <Text
+                key={d}
+                style={[styles.calDayHeader, isWeekendHeader && styles.calDayHeaderWeekend]}
+              >
+                {d}
+              </Text>
+            );
+          })}
         </View>
 
         {/* Date grid */}
@@ -713,6 +722,7 @@ export default function BookingScreen({ navigation, route }) {
             const isBeyond60 = dateMs > sixtyDaysMs;
             const isDisabled = isPast || isBeyond60;
             const isTodayCell = dateMs === todayMs;
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
             const dateStr = `${year}-${String(monthIdx + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
             const isSelected = selectedDate?.dateString === dateStr;
 
@@ -721,6 +731,7 @@ export default function BookingScreen({ navigation, route }) {
                 <TouchableOpacity
                   style={[
                     styles.calDateBox,
+                    isWeekend && !isDisabled && !isSelected && styles.calCellWeekend,
                     isTodayCell && !isSelected && styles.calCellToday,
                     isSelected && styles.calCellSelected,
                     isDisabled && styles.calCellDisabled,
@@ -731,6 +742,7 @@ export default function BookingScreen({ navigation, route }) {
                 >
                   <Text style={[
                     styles.calDateNum,
+                    isWeekend && !isDisabled && !isSelected && styles.calDateWeekend,
                     isTodayCell && !isSelected && styles.calDateToday,
                     isSelected && styles.calDateSelected,
                     isDisabled && styles.calDateDisabled,
@@ -741,6 +753,26 @@ export default function BookingScreen({ navigation, route }) {
               </View>
             );
           })}
+        </View>
+
+        {/* Calendar legend */}
+        <View style={styles.calLegend}>
+          <View style={styles.calLegendItem}>
+            <View style={[styles.calLegendDot, styles.calLegendDotWeekend]} />
+            <Text style={styles.calLegendLabel}>Weekend</Text>
+          </View>
+          <View style={styles.calLegendItem}>
+            <View style={[styles.calLegendDot, styles.calLegendDotToday]} />
+            <Text style={styles.calLegendLabel}>Today</Text>
+          </View>
+          <View style={styles.calLegendItem}>
+            <View style={[styles.calLegendDot, styles.calLegendDotSelected]} />
+            <Text style={styles.calLegendLabel}>Selected</Text>
+          </View>
+          <View style={styles.calLegendItem}>
+            <View style={[styles.calLegendDot, styles.calLegendDotDisabled]} />
+            <Text style={styles.calLegendLabel}>Unavailable</Text>
+          </View>
         </View>
       </View>
     );
@@ -1226,6 +1258,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#666",
   },
+  calDayHeaderWeekend: {
+    color: "#F59E0B",
+    fontFamily: "Ubuntu-Bold",
+  },
   calGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1249,6 +1285,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+  },
+  calCellWeekend: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+    borderWidth: 1,
   },
   calCellToday: {
     backgroundColor: "#FFFFFF",
@@ -1283,6 +1324,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#000000",
   },
+  calDateWeekend: {
+    color: "#D97706",
+    fontFamily: "Ubuntu-Bold",
+  },
   calDateToday: {
     fontFamily: "Ubuntu-Bold",
     color: "#10B981",
@@ -1294,6 +1339,52 @@ const styles = StyleSheet.create({
   calDateDisabled: {
     fontFamily: "Ubuntu-Regular",
     color: "#CCCCCC",
+  },
+
+  // Calendar legend
+  calLegend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: 16,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+  },
+  calLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  calLegendDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  calLegendDotWeekend: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  calLegendDotToday: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#10B981",
+    borderWidth: 2,
+  },
+  calLegendDotSelected: {
+    backgroundColor: "#10B981",
+    borderColor: "#10B981",
+  },
+  calLegendDotDisabled: {
+    backgroundColor: "#FAFAFA",
+    borderColor: "#E0E0E0",
+    opacity: 0.6,
+  },
+  calLegendLabel: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
   },
 
   // Sport Selection

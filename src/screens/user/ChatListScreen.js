@@ -18,7 +18,8 @@ import { useUserChats } from "../../hooks/useChat";
 import { ChatListItem } from "../../components/chat";
 import { COLORS, FONTS } from "../../constants/theme";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -290,7 +291,7 @@ function EmptyState({ filter, searchQuery }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#F8FAF9",
   },
 
   // Header
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: EMERALD_PALE,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,

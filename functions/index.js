@@ -18,6 +18,7 @@ const academyFunctions = require("./src/academyFunctions");
 const subscriptionFunctions = require("./src/subscriptionFunctions");
 const userCleanupFunctions = require("./src/userCleanupFunctions");
 const fraudPreventionFunctions = require("./src/fraudPreventionFunctions");
+const bookingCleanupFunctions = require("./src/bookingCleanupFunctions");
 
 // Slot Lock Functions
 exports.releaseExpiredSlotLocks = slotLockFunctions.releaseExpiredSlotLocks;
@@ -46,6 +47,9 @@ exports.processSuspendedUserDeletion = userCleanupFunctions.processSuspendedUser
 
 // Fraud Prevention Functions
 exports.cleanupOldTransactions = fraudPreventionFunctions.cleanupOldTransactions;
+
+// Booking Cleanup Functions
+exports.autoRejectExpiredPendingBookings = bookingCleanupFunctions.autoRejectExpiredPendingBookings;
 
 // Subscription Functions
 exports.checkSubscriptionExpiry = subscriptionFunctions.checkSubscriptionExpiry;

@@ -16,7 +16,7 @@ import * as Clipboard from "expo-clipboard";
 import { openUpiApp, getUpiErrorMessage } from "../../utils/upiUtils";
 import { releaseSlotLock } from "../../services/firebase/payments";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
 const TIMER_NORMAL_COLOR = "#FF9800";
 const TIMER_URGENT_COLOR = "#F44336";
 
@@ -29,6 +29,8 @@ export default function UpiPaymentScreen({ navigation, route }) {
     qrCodeUrl,
     turfName,
     lockExpiry,
+    chatId,
+    paymentCardMessageId,
   } = route.params || {};
 
   const [isOpening, setIsOpening] = useState(false);
@@ -193,6 +195,8 @@ export default function UpiPaymentScreen({ navigation, route }) {
       upiHolderName,
       turfName,
       paymentMethod: "upi",
+      chatId: chatId || null,
+      paymentCardMessageId: paymentCardMessageId || null,
     });
   };
 

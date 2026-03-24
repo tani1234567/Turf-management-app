@@ -34,6 +34,7 @@ import {
   updateDocument,
   subscribeToCollection,
   getDocument,
+  autoRejectExpiredPendingBookings,
 } from "../../services/firebase/firestore";
 
 const MANAGER_BLUE = "#3B82F6";
@@ -165,6 +166,11 @@ export default function BookingManagementScreen({ navigation }) {
       setLoading(false);
       return;
     }
+
+    // Silently reject any stale pending bookings for this turf before loading
+    autoRejectExpiredPendingBookings([
+      { field: "turfId", operator: "==", value: selectedTurfId },
+    ]);
 
     setLoading(true);
 

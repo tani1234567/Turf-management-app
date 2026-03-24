@@ -195,9 +195,10 @@ export default function CaretakerDashboardScreen({ navigation }) {
 
   // Quick actions config
   const quickActions = [
+    { id: "quickbook", label: "Quick Booking", icon: "calendar-plus", color: CARETAKER_ORANGE, onPress: () => navigation.navigate("CaretakerCreateBooking") },
     { id: "payment", label: "Collect Payment", icon: "cash", color: SUCCESS_GREEN, onPress: () => {} },
     { id: "complete", label: "Mark Complete", icon: "check-circle", color: MANAGER_BLUE, onPress: () => {} },
-    { id: "extend", label: "Extend Time", icon: "clock-plus-outline", color: CARETAKER_ORANGE, onPress: () => {} },
+    { id: "extend", label: "Extend Time", icon: "clock-plus-outline", color: WARN_AMBER, onPress: () => {} },
     { id: "issue", label: "Report Issue", icon: "alert-circle", color: DANGER_RED, onPress: () => navigation.navigate("MaintenanceLog") },
     { id: "expenses", label: "Expenses", icon: "cash-register", color: "#8B5CF6", onPress: () => navigation.navigate("ExpenseTracking") },
   ];

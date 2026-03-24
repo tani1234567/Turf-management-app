@@ -4,7 +4,7 @@ import { Text, Surface, Button } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
 
 export default function PaymentSubmittedScreen({ navigation, route }) {
   const { bookingId, amount, turfName, transactionId } = route.params || {};
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#D1FAE5",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   stepConnector: {
     width: 2,
     height: 20,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#D1FAE5",
     marginLeft: 13,
     marginVertical: 4,
   },

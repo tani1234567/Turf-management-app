@@ -26,6 +26,7 @@ import {
   LocationCard,
   NegotiationRequestModal,
   QuickBookModal,
+  PaymentRequestCard,
 } from "../../components/chat";
 import {
   updateNegotiationStatus,
@@ -41,7 +42,7 @@ import {
 import { getDocument } from "../../services/firebase/firestore";
 import { COLORS } from "../../constants/theme";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
 
 /**
  * Check if two dates are on the same day
@@ -316,6 +317,25 @@ export default function ChatScreen() {
     [chatId, user]
   );
 
+  // Handle "Pay Now" on a payment request card
+  const handlePayNow = useCallback(
+    (messageId, card) => {
+      navigation.navigate("UpiPayment", {
+        bookingId: card.bookingId,
+        amount: card.advanceAmount,
+        upiId: card.upiId,
+        upiHolderName: card.upiHolderName,
+        qrCodeUrl: card.qrCodeUrl || null,
+        turfName: card.turfName,
+        lockExpiry: card.paymentDeadline,
+        // Extra context so PaymentConfirmation can update the chat card status
+        chatId,
+        paymentCardMessageId: messageId,
+      });
+    },
+    [navigation, chatId]
+  );
+
   // Handle rejecting counter offer
   const handleRejectCounter = useCallback(
     async (messageId, card) => {
@@ -368,6 +388,18 @@ export default function ChatScreen() {
         );
       }
 
+      // Payment request card (from manager)
+      if (item.type === "payment_request_card") {
+        return (
+          <PaymentRequestCard
+            message={item}
+            isOwn={isOwn}
+            viewerType="user"
+            onPayNow={handlePayNow}
+          />
+        );
+      }
+
       // Booking card
       if (item.type === "booking_card") {
         return (
@@ -387,7 +419,7 @@ export default function ChatScreen() {
       // Image message or text message
       return <ChatBubble message={item} isOwn={isOwn} accentColor={USER_COLOR} />;
     },
-    [user?.userId, handleAcceptCounter, handleRejectCounter]
+    [user?.userId, handleAcceptCounter, handleRejectCounter, handlePayNow]
   );
 
   const keyExtractor = useCallback((item) => item.id, []);

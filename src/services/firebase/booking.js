@@ -898,6 +898,303 @@ export const getBooking = async (bookingId) => {
 };
 
 /**
+ * Create a booking from a negotiation card AND set it to "pending_payment"
+ * with a 5-hour advance payment deadline. Mirrors createBookingFromNegotiation
+ * but wires in the advance payment fields.
+ *
+ * @param {object} negotiationCard
+ * @param {string} chatId
+ * @param {string} messageId
+ * @param {string} respondedBy
+ * @param {string} respondedByName
+ * @param {{ advanceAmount: number, upiId: string, upiHolderName: string }} advancePaymentData
+ */
+export const createBookingFromNegotiationWithPaymentRequest = async (
+  negotiationCard,
+  chatId,
+  messageId,
+  respondedBy,
+  respondedByName,
+  advancePaymentData
+) => {
+  const {
+    turfId, turfName, groundId, groundName, sport,
+    date, startTime, endTime, originalPrice, requestedPrice,
+    senderId, senderName, senderPhone, senderEmail, companyId, duration,
+  } = negotiationCard;
+
+  if (!turfId || !groundId || !date || !startTime || !endTime) {
+    return { success: false, message: "Missing required booking information." };
+  }
+
+  const userId = senderId || "unknown_user";
+  const userName = senderName || "User";
+  const userPhone = senderPhone || "";
+  const userEmail = senderEmail || "";
+  const bookingCompanyId = companyId || null;
+  const bookingDuration = duration || calculateDuration(startTime, endTime);
+  const normalizedNewGroundId = normalizeGroundId(groundId);
+  const finalPrice = requestedPrice || originalPrice || 0;
+  const { advanceAmount, upiId, upiHolderName } = advancePaymentData;
+
+  // Payment deadline = 5 hours from now
+  const paymentDeadline = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+
+  const buildBookingData = (tsFunc) => ({
+    userId, userName, userPhone, userEmail,
+    companyId: bookingCompanyId,
+    turfId, turfName: turfName || "Unknown Turf",
+    groundId, groundName: groundName || "Unknown Ground",
+    bookingType: "regular",
+    sport: sport || "Unknown",
+    date, startTime, endTime,
+    timeSlots: [{
+      startTime, endTime,
+      duration: bookingDuration,
+      hourlyRate: originalPrice ? originalPrice / bookingDuration : 0,
+      amount: finalPrice,
+    }],
+    totalDuration: bookingDuration,
+    baseAmount: originalPrice || 0,
+    totalAmount: finalPrice,
+    totalPrice: finalPrice,
+    status: "pending_payment",
+    statusHistory: [
+      { status: "pending", timestamp: new Date(), changedBy: userId, changedByRole: "user", reason: "Booking request created via negotiation" },
+      { status: "pending_payment", timestamp: new Date(), changedBy: respondedBy, changedByRole: "manager", reason: "Advance payment requested via chat" },
+    ],
+    negotiation: {
+      isNegotiated: true,
+      requestedPrice: finalPrice,
+      finalPrice,
+      chatId,
+      negotiationCardId: messageId,
+    },
+    payment: {
+      slotAmount: finalPrice,
+      advanceAmount,
+      remainingAmount: finalPrice - advanceAmount,
+      advancePaid: false,
+      remainingPaid: false,
+      advanceConfig: {
+        isRequired: true,
+        percentage: finalPrice > 0 ? Math.round((advanceAmount / finalPrice) * 100) : 0,
+        paymentTiming: "after_approval",
+        paymentTimeout: 300,
+      },
+      advance: {
+        status: "pending",
+        method: "upi",
+        upiId,
+        upiHolderName,
+        paymentDeadline,
+        submittedAt: null,
+        verification: null,
+        isExpired: false,
+      },
+      totalPaid: 0,
+      totalPending: finalPrice,
+      isFullyPaid: false,
+    },
+    slotLock: {
+      isLocked: true,
+      lockType: "soft",
+      lockedAt: new Date().toISOString(),
+      lockExpiry: paymentDeadline,
+      lockReason: "awaiting_advance_payment",
+    },
+    createdAt: tsFunc(),
+    requestedAt: tsFunc(),
+    updatedAt: tsFunc(),
+  });
+
+  try {
+    if (hasNativeFirestore) {
+      return await nativeFirestore().runTransaction(async (transaction) => {
+        const bookingsRef = nativeFirestore().collection("bookings");
+        const conflictingBookings = await bookingsRef
+          .where("turfId", "==", turfId)
+          .where("date", "==", date)
+          .where("status", "in", ["pending", "confirmed", "in_progress", "pending_payment"])
+          .get();
+
+        const hasConflict = conflictingBookings.docs.some((docRef) => {
+          const booking = docRef.data();
+          if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) return false;
+          return booking.startTime < endTime && booking.endTime > startTime;
+        });
+
+        if (hasConflict) {
+          return { success: false, message: "This time slot is no longer available." };
+        }
+
+        const newBookingRef = bookingsRef.doc();
+        transaction.set(newBookingRef, buildBookingData(() => nativeFirestore.FieldValue.serverTimestamp()));
+        const bookingId = newBookingRef.id;
+
+        const messageRef = nativeFirestore().collection("chats").doc(chatId).collection("messages").doc(messageId);
+        transaction.update(messageRef, {
+          "negotiationCard.status": "accepted",
+          "negotiationCard.respondedBy": respondedBy,
+          "negotiationCard.respondedByName": respondedByName,
+          "negotiationCard.respondedAt": nativeFirestore.FieldValue.serverTimestamp(),
+          "negotiationCard.bookingId": bookingId,
+        });
+
+        const chatRef = nativeFirestore().collection("chats").doc(chatId);
+        transaction.update(chatRef, {
+          "lastMessage.text": "Advance payment requested",
+          hasActiveNegotiation: false,
+          updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
+        });
+
+        return { success: true, bookingId, paymentDeadline };
+      });
+    }
+
+    // Web SDK
+    return await webRunTransaction(db, async (transaction) => {
+      const bookingsRef = collection(db, "bookings");
+      const q = query(
+        bookingsRef,
+        where("turfId", "==", turfId),
+        where("date", "==", date),
+        where("status", "in", ["pending", "confirmed", "in_progress", "pending_payment"])
+      );
+      const conflictingBookings = await getDocs(q);
+
+      const hasConflict = conflictingBookings.docs.some((docSnap) => {
+        const booking = docSnap.data();
+        if (normalizeGroundId(booking.groundId) !== normalizedNewGroundId) return false;
+        return booking.startTime < endTime && booking.endTime > startTime;
+      });
+
+      if (hasConflict) {
+        return { success: false, message: "This time slot is no longer available." };
+      }
+
+      const newBookingRef = doc(collection(db, "bookings"));
+      transaction.set(newBookingRef, buildBookingData(webServerTimestamp));
+      const bookingId = newBookingRef.id;
+
+      const messageRef = doc(db, "chats", chatId, "messages", messageId);
+      transaction.update(messageRef, {
+        "negotiationCard.status": "accepted",
+        "negotiationCard.respondedBy": respondedBy,
+        "negotiationCard.respondedByName": respondedByName,
+        "negotiationCard.respondedAt": webServerTimestamp(),
+        "negotiationCard.bookingId": bookingId,
+      });
+
+      const chatRef = doc(db, "chats", chatId);
+      transaction.update(chatRef, {
+        "lastMessage.text": "Advance payment requested",
+        hasActiveNegotiation: false,
+        updatedAt: webServerTimestamp(),
+      });
+
+      return { success: true, bookingId, paymentDeadline };
+    });
+  } catch (error) {
+    console.error("Error creating booking with payment request:", error);
+    return { success: false, message: "An error occurred. Please try again." };
+  }
+};
+
+/**
+ * Approve a booking (from pending_payment state) without requiring advance payment.
+ * @param {string} bookingId
+ * @param {string} approvedBy
+ * @param {string} approvedByName
+ */
+export const approveBookingWithoutAdvancePayment = async (bookingId, approvedBy, approvedByName) => {
+  try {
+    const updateFields = {
+      status: "confirmed",
+      "payment.advance.status": "not_required",
+      "slotLock.isLocked": true,
+      "slotLock.lockType": "hard",
+      "slotLock.lockExpiry": null,
+      "slotLock.lockReason": "approved_without_advance",
+      confirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (hasNativeFirestore) {
+      await nativeFirestore().collection("bookings").doc(bookingId).update(updateFields);
+      return { success: true };
+    }
+
+    const bookingRef = doc(db, "bookings", bookingId);
+    await updateDoc(bookingRef, updateFields);
+    return { success: true };
+  } catch (error) {
+    console.error("Error approving booking without advance payment:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+/**
+ * Update an existing booking's payment fields when a chat-initiated advance
+ * payment request is sent for a booking that was already created (e.g. user
+ * accepted a counter-offer before the manager requested advance payment).
+ *
+ * @param {string} bookingId
+ * @param {number} totalAmount - booking's total price
+ * @param {number} advanceAmount - requested advance amount
+ * @param {{ upiId, upiHolderName, paymentDeadline }} advancePaymentData
+ */
+export const updateBookingWithAdvancePayment = async (
+  bookingId,
+  totalAmount,
+  advanceAmount,
+  advancePaymentData
+) => {
+  const { upiId, upiHolderName, paymentDeadline } = advancePaymentData;
+  const remainingAmount = totalAmount - advanceAmount;
+  const advancePercentage = totalAmount > 0 ? Math.round((advanceAmount / totalAmount) * 100) : 0;
+
+  const updateFields = {
+    status: "pending_payment",
+    "payment.advanceAmount": advanceAmount,
+    "payment.remainingAmount": remainingAmount,
+    "payment.advancePaid": false,
+    "payment.advanceConfig": {
+      isRequired: true,
+      percentage: advancePercentage,
+      paymentTiming: "after_approval",
+      paymentTimeout: 300, // 5 hours in minutes
+    },
+    "payment.advance.status": "pending",
+    "payment.advance.method": "upi",
+    "payment.advance.upiId": upiId || null,
+    "payment.advance.upiHolderName": upiHolderName || null,
+    "payment.advance.paymentDeadline": paymentDeadline,
+    "payment.advance.submittedAt": null,
+    "payment.advance.verification": null,
+    "slotLock.isLocked": true,
+    "slotLock.lockType": "soft",
+    "slotLock.lockedAt": new Date().toISOString(),
+    "slotLock.lockExpiry": paymentDeadline,
+    "slotLock.lockReason": "awaiting_advance_payment",
+    updatedAt: serverTimestamp(),
+  };
+
+  try {
+    if (hasNativeFirestore) {
+      await nativeFirestore().collection("bookings").doc(bookingId).update(updateFields);
+      return { success: true };
+    }
+    const bookingRef = doc(db, "bookings", bookingId);
+    await updateDoc(bookingRef, updateFields);
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating booking with advance payment:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+/**
  * Calculate duration between two times
  */
 const calculateDuration = (startTime, endTime) => {

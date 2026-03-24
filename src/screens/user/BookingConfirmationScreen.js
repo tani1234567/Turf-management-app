@@ -33,7 +33,8 @@ import {
   formatPrice,
 } from "../../utils/priceUtils";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
 
 export default function BookingConfirmationScreen({ navigation, route }) {
   const {
@@ -560,7 +561,7 @@ export default function BookingConfirmationScreen({ navigation, route }) {
                   <MaterialCommunityIcons
                     name={advancePayment.paymentTiming === "before_approval" ? "clock-alert" : "clock-check"}
                     size={18}
-                    color={advancePayment.paymentTiming === "before_approval" ? "#FF5722" : "#4CAF50"}
+                    color={advancePayment.paymentTiming === "before_approval" ? "#FF5722" : "#10B981"}
                   />
                   <Text variant="bodySmall" style={styles.timingText}>
                     {advancePayment.paymentTiming === "before_approval"
@@ -1031,13 +1032,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   recommendedBadge: {
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#D1FAE5",
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
   },
   recommendedText: {
-    color: "#4CAF50",
+    color: "#10B981",
   },
   warningBox: {
     flexDirection: "row",

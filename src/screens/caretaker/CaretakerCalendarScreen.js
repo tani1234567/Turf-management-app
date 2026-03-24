@@ -12,8 +12,8 @@ import { Text, Surface, Button, Banner } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
-import { selectAssignedTurfId } from "../../store/slices/authSlice";
-import { getBookingsForDateByCaretaker, getAcademySessionsForDate } from "../../services/firebase/firestore";
+import { selectAssignedTurfId, selectUser } from "../../store/slices/authSlice";
+import { getBookingsForDateByCaretaker, getAcademySessionsForDate, updateDocument } from "../../services/firebase/firestore";
 import ExtensionModal from "../../components/caretaker/ExtensionModal";
 
 const CARETAKER_ORANGE = "#F97316";
@@ -34,6 +34,7 @@ const STATUS_COLORS = {
 
 export default function CaretakerCalendarScreen({ navigation }) {
   const assignedTurfId = useSelector(selectAssignedTurfId);
+  const user = useSelector(selectUser);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [bookings, setBookings] = useState([]);
@@ -187,6 +188,35 @@ export default function CaretakerCalendarScreen({ navigation }) {
     navigation.navigate("PaymentCollection", { booking });
   };
 
+  const handleCancelBooking = (booking) => {
+    Alert.alert(
+      "Cancel Booking",
+      `Cancel booking for ${booking.userName}?\nThis cannot be undone.`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateDocument("bookings", booking.id, {
+                status: "cancelled",
+                cancelledAt: new Date().toISOString(),
+                cancelledBy: user?.userId,
+                cancelledByName: user?.name || "Caretaker",
+                cancelledByRole: "caretaker",
+                cancellationReason: "Cancelled by caretaker on customer request",
+              });
+              fetchBookings(selectedDate);
+            } catch (e) {
+              Alert.alert("Error", "Failed to cancel booking. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleExtendTime = (booking) => {
     setSelectedBookingForExtension(booking);
     setExtensionModalVisible(true);
@@ -296,7 +326,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
         </View>
 
         {/* Action Buttons - Only for non-academy bookings */}
-        {!isAcademy && booking.status !== "completed" && (
+        {!isAcademy && booking.status !== "completed" && booking.status !== "no_show" && booking.status !== "cancelled" && (
           <View style={styles.actionsSection}>
             <Button
               mode="outlined"
@@ -331,6 +361,19 @@ export default function CaretakerCalendarScreen({ navigation }) {
             >
               Extend
             </Button>
+            {(booking.status === "confirmed" || booking.status === "pending") && (
+              <Button
+                mode="outlined"
+                icon="close-circle-outline"
+                onPress={() => handleCancelBooking(booking)}
+                style={[styles.actionButton, { borderColor: DANGER_RED }]}
+                textColor={DANGER_RED}
+                compact
+                labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+              >
+                Cancel
+              </Button>
+            )}
           </View>
         )}
       </Surface>
@@ -406,7 +449,10 @@ export default function CaretakerCalendarScreen({ navigation }) {
     );
   };
 
-  const showTodayBookings = isToday(selectedDate);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const isTomorrow = (date) => formatDateString(date) === formatDateString(tomorrow);
+  const showTodayBookings = isToday(selectedDate) || isTomorrow(selectedDate);
 
   return (
     <SafeAreaView style={styles.container}>

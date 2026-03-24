@@ -45,7 +45,9 @@ export default function ExtensionModal({
   const [customMinutes, setCustomMinutes] = useState("");
   const [isChecking, setIsChecking] = useState(false);
   const [isAvailable, setIsAvailable] = useState(null);
-  const [extensionCharge, setExtensionCharge] = useState(0);
+  const [extensionCharge, setExtensionCharge] = useState(null);
+  const [chargeCalculationFailed, setChargeCalculationFailed] = useState(false);
+  const [manualCharge, setManualCharge] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Reset state when modal opens
@@ -55,7 +57,9 @@ export default function ExtensionModal({
       setCustomHours("");
       setCustomMinutes("");
       setIsAvailable(null);
-      setExtensionCharge(0);
+      setExtensionCharge(null);
+      setChargeCalculationFailed(false);
+      setManualCharge("");
     }
   }, [visible]);
 
@@ -81,17 +85,23 @@ export default function ExtensionModal({
     return `${String(newHours).padStart(2, "0")}:${String(newMinutes).padStart(2, "0")}`;
   };
 
-  // Calculate extension charge based on hourly rate
+  // Calculate extension charge based on hourly rate. Returns null if rate cannot be determined.
   const calculateExtensionCharge = () => {
-    if (!booking) return 0;
+    if (!booking) return null;
 
     const extensionDuration = getExtensionDuration();
-    if (extensionDuration <= 0) return 0;
+    if (extensionDuration <= 0) return null;
 
-    // Get hourly rate from booking
-    const hourlyRate = booking.timeSlots?.[0]?.hourlyRate || booking.baseAmount / (booking.totalDuration || 1);
+    const hourlyRate =
+      booking.timeSlots?.[0]?.hourlyRate ||
+      (booking.baseAmount != null && booking.totalDuration
+        ? booking.baseAmount / booking.totalDuration
+        : null);
 
-    return Math.round(hourlyRate * extensionDuration);
+    if (!hourlyRate || !isFinite(hourlyRate) || hourlyRate <= 0) return null;
+
+    const charge = Math.round(hourlyRate * extensionDuration);
+    return isFinite(charge) && charge > 0 ? charge : null;
   };
 
   // Check if extension is possible
@@ -120,6 +130,9 @@ export default function ExtensionModal({
 
     setIsChecking(true);
     setIsAvailable(null);
+    setExtensionCharge(null);
+    setChargeCalculationFailed(false);
+    setManualCharge("");
 
     try {
       const newEndTime = calculateNewEndTime(booking.endTime, extensionDuration);
@@ -161,7 +174,13 @@ export default function ExtensionModal({
 
       if (isActuallyAvailable) {
         const charge = calculateExtensionCharge();
-        setExtensionCharge(charge);
+        if (charge !== null) {
+          setExtensionCharge(charge);
+          setChargeCalculationFailed(false);
+        } else {
+          setExtensionCharge(null);
+          setChargeCalculationFailed(true);
+        }
       } else {
         // Show details about conflicting bookings
         const conflictDetails = actualConflicts
@@ -188,6 +207,15 @@ export default function ExtensionModal({
       return;
     }
 
+    const finalCharge = chargeCalculationFailed
+      ? parseFloat(manualCharge) || 0
+      : extensionCharge;
+
+    if (!finalCharge || finalCharge <= 0) {
+      Alert.alert("Error", "Please enter a valid extension charge amount");
+      return;
+    }
+
     const extensionDuration = getExtensionDuration();
     const newEndTime = calculateNewEndTime(booking.endTime, extensionDuration);
 
@@ -195,7 +223,7 @@ export default function ExtensionModal({
       "Confirm Extension",
       `Extend booking by ${extensionDuration} hour(s)?\n\n` +
         `New End Time: ${newEndTime}\n` +
-        `Extension Charge: ₹${extensionCharge}\n\n` +
+        `Extension Charge: ₹${finalCharge}\n\n` +
         `This will be added to the amount due.`,
       [
         { text: "Cancel", style: "cancel" },
@@ -207,7 +235,7 @@ export default function ExtensionModal({
               const extensionData = {
                 extensionDuration,
                 newEndTime,
-                extensionCharge,
+                extensionCharge: finalCharge,
                 extendedBy: user?.userId || user?.uid,
                 extendedByName: user?.name || "Caretaker",
                 extendedAt: new Date(),
@@ -246,7 +274,13 @@ export default function ExtensionModal({
 
   const extensionDuration = getExtensionDuration();
   const newEndTime = calculateNewEndTime(booking.endTime, extensionDuration);
-  const previewCharge = isAvailable ? extensionCharge : calculateExtensionCharge();
+  const autoPreviewCharge = calculateExtensionCharge();
+  const previewCharge = isAvailable
+    ? (chargeCalculationFailed ? null : extensionCharge)
+    : autoPreviewCharge;
+  const canConfirm = isAvailable && (
+    chargeCalculationFailed ? (parseFloat(manualCharge) > 0) : (extensionCharge !== null && extensionCharge > 0)
+  );
 
   return (
     <Modal
@@ -418,13 +452,36 @@ export default function ExtensionModal({
                 <Text variant="titleMedium" style={styles.previewLabel}>
                   Extension Charge:
                 </Text>
-                <Text
-                  variant="titleMedium"
-                  style={[styles.previewValue, { color: CARETAKER_COLOR }]}
-                >
-                  ₹{previewCharge}
-                </Text>
+                {chargeCalculationFailed ? (
+                  <TextInput
+                    mode="outlined"
+                    value={manualCharge}
+                    onChangeText={(v) => setManualCharge(v.replace(/[^0-9]/g, ""))}
+                    keyboardType="numeric"
+                    placeholder="Enter amount"
+                    dense
+                    style={styles.chargeInput}
+                    outlineColor="#E0E0E0"
+                    activeOutlineColor={CARETAKER_COLOR}
+                    left={<TextInput.Affix text="₹" />}
+                  />
+                ) : (
+                  <Text
+                    variant="titleMedium"
+                    style={[styles.previewValue, { color: CARETAKER_COLOR }]}
+                  >
+                    {previewCharge !== null ? `₹${previewCharge}` : "—"}
+                  </Text>
+                )}
               </View>
+              {chargeCalculationFailed && (
+                <View style={styles.chargeWarning}>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={14} color="#F59E0B" />
+                  <Text style={styles.chargeWarningText}>
+                    Could not calculate rate automatically. Please enter the charge manually.
+                  </Text>
+                </View>
+              )}
 
               {/* Availability Status */}
               {isAvailable !== null && (
@@ -473,7 +530,7 @@ export default function ExtensionModal({
                 mode="contained"
                 onPress={handleConfirmExtension}
                 loading={submitting}
-                disabled={!isAvailable || isChecking || submitting}
+                disabled={!canConfirm || isChecking || submitting}
                 style={styles.confirmButton}
                 buttonColor={CARETAKER_COLOR}
                 icon="check"
@@ -622,6 +679,26 @@ const styles = StyleSheet.create({
   },
   previewDivider: {
     marginVertical: 12,
+  },
+  chargeInput: {
+    flex: 1,
+    maxWidth: 140,
+    backgroundColor: "#fff",
+    height: 40,
+  },
+  chargeWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 4,
+  },
+  chargeWarningText: {
+    fontSize: 12,
+    color: "#92400E",
+    flex: 1,
   },
   availabilityStatus: {
     flexDirection: "row",

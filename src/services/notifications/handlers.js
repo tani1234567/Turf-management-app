@@ -69,6 +69,8 @@ function getNavigationTarget(type, data) {
       return { screen: "ManagerBookings", params: { bookingId: data?.bookingId } };
     case "booking_confirmed":
       return { screen: "Bookings", params: { bookingId: data?.bookingId } };
+    case "booking_rejected":
+      return { screen: "Bookings", params: { bookingId: data?.bookingId } };
     case "booking_reminder":
       return { screen: "Bookings", params: { bookingId: data?.bookingId } };
 
@@ -134,6 +136,20 @@ export function handleNotificationResponse(response) {
     } catch (error) {
       console.error("[Notifications] Navigation error:", error);
     }
+  }
+}
+
+/**
+ * Handle cold-start notification tap (app was fully closed when notification arrived)
+ * Call this in NavigationContainer onReady, after setNavigationRef()
+ */
+export async function handleInitialNotification() {
+  if (!Notifications) return;
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (response) handleNotificationResponse(response);
+  } catch (error) {
+    console.error("[Notifications] Error handling initial notification:", error);
   }
 }
 

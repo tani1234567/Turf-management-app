@@ -158,6 +158,8 @@ export default function CreateBookingScreen({ navigation }) {
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [customPriceEnabled, setCustomPriceEnabled] = useState(false);
+  const [customPrice, setCustomPrice] = useState("");
 
   // Data state
   const [grounds, setGrounds] = useState([]);
@@ -554,8 +556,11 @@ export default function CreateBookingScreen({ navigation }) {
         endTime: endTime,
         sport: selectedSport || "general",
         duration: priceBreakdown?.duration || 1,
-        totalPrice: priceBreakdown?.total || 0,
-        totalAmount: priceBreakdown?.total || 0,
+        totalDuration: priceBreakdown?.duration || 1,
+        totalPrice: effectiveTotal,
+        totalAmount: effectiveTotal,
+        baseAmount: effectiveTotal,
+        manualPricing: customPriceEnabled && parseFloat(customPrice) > 0,
 
         // Customer info
         userId: customer?.id || customer?.userId || null,
@@ -572,8 +577,8 @@ export default function CreateBookingScreen({ navigation }) {
         paymentMethod: paymentMethod,
         advanceAmount: advancePayment ? parseFloat(advanceAmount) || 0 : 0,
         balanceAmount: advancePayment
-          ? (priceBreakdown?.total || 0) - (parseFloat(advanceAmount) || 0)
-          : paymentMethod === "pending" ? (priceBreakdown?.total || 0) : 0,
+          ? effectiveTotal - (parseFloat(advanceAmount) || 0)
+          : paymentMethod === "pending" ? effectiveTotal : 0,
 
         // Manager info
         createdBy: user?.userId,
@@ -650,6 +655,8 @@ export default function CreateBookingScreen({ navigation }) {
     setAdvanceAmount("");
     setPaymentMethod("cash");
     setPriceBreakdown(null);
+    setCustomPriceEnabled(false);
+    setCustomPrice("");
   };
 
   // Filter grounds by selected sport
@@ -658,6 +665,11 @@ export default function CreateBookingScreen({ navigation }) {
       ? grounds.filter((g) => g.sports?.includes(selectedSport))
       : grounds;
   }, [grounds, selectedSport]);
+
+  // Effective total: custom override or auto-calculated
+  const effectiveTotal = customPriceEnabled && parseFloat(customPrice) > 0
+    ? parseFloat(customPrice)
+    : (priceBreakdown?.total || 0);
 
   // Navigation validation
   const canProceed = useMemo(() => {
@@ -1202,13 +1214,16 @@ export default function CreateBookingScreen({ navigation }) {
                     Total Amount
                   </Text>
                   <Text variant="headlineMedium" style={styles.totalAmount}>
-                    {formatPrice(priceBreakdown.total)}
+                    {formatPrice(effectiveTotal)}
                   </Text>
+                  {customPriceEnabled && (
+                    <Text style={styles.customPriceNote}>Custom price applied</Text>
+                  )}
                 </Surface>
               )}
 
               {/* Price Breakdown */}
-              {priceBreakdown && priceBreakdown.slots.length > 0 && (
+              {priceBreakdown && priceBreakdown.slots.length > 0 && !customPriceEnabled && (
                 <Surface style={styles.priceBreakdown} elevation={1}>
                   <Text variant="titleSmall" style={styles.priceTitle}>
                     Price Breakdown
@@ -1230,6 +1245,36 @@ export default function CreateBookingScreen({ navigation }) {
                   </View>
                 </Surface>
               )}
+
+              {/* Custom Price Override */}
+              <View style={styles.advanceSection}>
+                <View style={styles.advanceHeader}>
+                  <View>
+                    <Text variant="titleSmall">Custom Price</Text>
+                    <Text style={styles.customPriceSubtitle}>Override calculated amount</Text>
+                  </View>
+                  <Switch
+                    value={customPriceEnabled}
+                    onValueChange={(v) => {
+                      setCustomPriceEnabled(v);
+                      if (!v) setCustomPrice("");
+                    }}
+                    color={MANAGER_BLUE}
+                  />
+                </View>
+                {customPriceEnabled && (
+                  <TextInput
+                    label="Custom Total Amount"
+                    value={customPrice}
+                    onChangeText={(v) => setCustomPrice(v.replace(/[^0-9]/g, ""))}
+                    keyboardType="numeric"
+                    style={styles.advanceInput}
+                    mode="outlined"
+                    left={<TextInput.Affix text="₹ " />}
+                    placeholder={String(priceBreakdown?.total || 0)}
+                  />
+                )}
+              </View>
 
               <Text variant="titleMedium" style={styles.sectionTitle}>
                 Payment Method
@@ -1282,9 +1327,9 @@ export default function CreateBookingScreen({ navigation }) {
                     left={<TextInput.Affix text="₹ " />}
                   />
                 )}
-                {advancePayment && priceBreakdown && advanceAmount && (
+                {advancePayment && advanceAmount && (
                   <Text style={styles.balanceText}>
-                    Balance: {formatPrice(priceBreakdown.total - parseFloat(advanceAmount || 0))}
+                    Balance: {formatPrice(effectiveTotal - parseFloat(advanceAmount || 0))}
                   </Text>
                 )}
               </View>
@@ -1340,7 +1385,7 @@ export default function CreateBookingScreen({ navigation }) {
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryTotalLabel}>Total</Text>
                   <Text style={styles.summaryTotalValue}>
-                    {formatPrice(priceBreakdown?.total || 0)}
+                    {formatPrice(effectiveTotal)}
                   </Text>
                 </View>
                 <View style={styles.statusBadge}>
@@ -2016,6 +2061,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontFamily: "Ubuntu-Medium",
     color: WARN_ORANGE,
+  },
+  customPriceNote: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: MANAGER_BLUE,
+    marginTop: 4,
+  },
+  customPriceSubtitle: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: "#9CA3AF",
+    marginTop: 2,
   },
 
   // Total card

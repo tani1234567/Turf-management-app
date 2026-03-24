@@ -33,12 +33,15 @@ import {
   subscribeToCollection,
   updateDocument,
   queryDocuments,
+  autoRejectExpiredPendingBookings,
 } from "../../services/firebase/firestore";
 import { formatPrice, formatDuration } from "../../utils/priceUtils";
 import { FONTS } from "../../constants/theme";
 import SkeletonBookingList from "../../components/user/SkeletonLoader";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
+const EMERALD_PALE = "#D1FAE5";
+const PAGE_BG = "#F8FAF9";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const TAB_ORDER = ["upcoming", "completed", "cancelled"];
 
@@ -84,8 +87,8 @@ const STATUS_CONFIG = {
   },
   confirmed: {
     label: "Confirmed",
-    color: "#4CAF50",
-    bg: "#E8F5E9",
+    color: "#10B981",
+    bg: "#D1FAE5",
     icon: "check-circle-outline",
   },
   in_progress: {
@@ -481,7 +484,7 @@ const BookingDetailsModal = ({ visible, booking, onDismiss, onCancel, onReview }
               {booking.payment?.advanceAmount > 0 && (
                 <View style={styles.paymentRow}>
                   <Text variant="bodySmall" style={styles.paymentLabel}>Advance Paid</Text>
-                  <Text variant="bodyMedium" style={{ color: "#4CAF50", fontWeight: "500" }}>
+                  <Text variant="bodyMedium" style={{ color: "#10B981", fontWeight: "500" }}>
                     {formatPrice(booking.payment.advanceAmount)}
                   </Text>
                 </View>
@@ -500,12 +503,12 @@ const BookingDetailsModal = ({ visible, booking, onDismiss, onCancel, onReview }
                   compact
                   style={{
                     backgroundColor:
-                      booking.payment?.isFullyPaid ? "#E8F5E9" : "#FFF3E0",
+                      booking.payment?.isFullyPaid ? "#D1FAE5" : "#FFF3E0",
                   }}
                   textStyle={{
                     fontSize: 11,
                     color:
-                      booking.payment?.isFullyPaid ? "#4CAF50" : "#FF9800",
+                      booking.payment?.isFullyPaid ? "#10B981" : "#FF9800",
                   }}
                 >
                   {booking.payment?.isFullyPaid ? "PAID" : (booking.payment?.advance?.status === "verified" ? "ADVANCE PAID" : "PENDING")}
@@ -692,7 +695,7 @@ const CancelBookingModal = ({ visible, booking, onDismiss, onConfirmCancel }) =>
               Refund Policy
             </Text>
             <View style={styles.refundPolicyItem}>
-              <MaterialCommunityIcons name="check-circle" size={16} color="#4CAF50" />
+              <MaterialCommunityIcons name="check-circle" size={16} color="#10B981" />
               <Text variant="bodySmall" style={styles.refundPolicyText}>
                 Free cancellation 24+ hours before
               </Text>
@@ -788,6 +791,11 @@ export default function BookingsScreen({ navigation }) {
       setLoading(false);
       return;
     }
+
+    // Silently reject any stale pending bookings for this user before loading
+    autoRejectExpiredPendingBookings([
+      { field: "userId", operator: "==", value: userId },
+    ]);
 
     setLoading(true);
     const unsubscribe = subscribeToCollection(
@@ -1172,13 +1180,13 @@ export default function BookingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: PAGE_BG,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: PAGE_BG,
   },
   loadingText: {
     marginTop: 12,

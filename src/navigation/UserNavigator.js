@@ -27,7 +27,7 @@ import NotificationsScreen from "../screens/common/NotificationsScreen";
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
 
 function UserTabs() {
   const insets = useSafeAreaInsets();
@@ -38,20 +38,19 @@ function UserTabs() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: USER_COLOR,
-        tabBarInactiveTintColor: "#999",
+        tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopWidth: 1,
-          borderTopColor: "#eee",
+          borderTopColor: "#F0F0F0",
           height: tabBarHeight,
           paddingBottom: insets.bottom + 6,
           paddingTop: 8,
-          // Top shadow
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-          elevation: 8,
+          shadowColor: "#10B981",
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          elevation: 10,
         },
         tabBarLabelStyle: {
           fontSize: 11,

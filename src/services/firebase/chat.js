@@ -1060,3 +1060,146 @@ export const sendLocationMessage = async (chatId, locationData) => {
     throw error;
   }
 };
+
+/**
+ * Send a payment request card from manager to user in chat
+ * @param {string} chatId - Chat ID
+ * @param {object} data - Payment request details
+ * @returns {Promise<string>} - Message ID
+ */
+export const sendPaymentRequestCard = async (chatId, data) => {
+  try {
+    const messageData = {
+      type: "payment_request_card",
+      senderId: data.senderId,
+      senderType: "manager",
+      senderName: data.senderName,
+      paymentRequestCard: {
+        bookingId: data.bookingId,
+        turfId: data.turfId,
+        turfName: data.turfName,
+        groundId: data.groundId || null,
+        groundName: data.groundName || null,
+        sport: data.sport || null,
+        date: data.date || null,
+        startTime: data.startTime || null,
+        endTime: data.endTime || null,
+        totalAmount: data.totalAmount,
+        advanceAmount: data.advanceAmount,
+        paymentDeadline: data.paymentDeadline,
+        upiId: data.upiId || null,
+        upiHolderName: data.upiHolderName || null,
+        qrCodeUrl: data.qrCodeUrl || null,
+        companyId: data.companyId || null,
+        status: "pending", // pending | paid | approved_without_payment | expired
+      },
+      timestamp: serverTimestamp(),
+      read: false,
+    };
+
+    if (hasNativeFirestore) {
+      const messageRef = await nativeFirestore()
+        .collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .add(messageData);
+
+      await nativeFirestore()
+        .collection("chats")
+        .doc(chatId)
+        .update({
+          lastMessage: {
+            text: `Payment request: ₹${data.advanceAmount} for ${data.turfName}`,
+            senderId: data.senderId,
+            senderType: "manager",
+            timestamp: serverTimestamp(),
+            type: "payment_request_card",
+          },
+          "unreadCount.user": incrementValue(1),
+          updatedAt: serverTimestamp(),
+        });
+
+      return messageRef.id;
+    }
+
+    // Web SDK
+    const messagesRef = collection(db, "chats", chatId, "messages");
+    const messageRef = await addDoc(messagesRef, messageData);
+
+    const chatRef = doc(db, "chats", chatId);
+    await updateDoc(chatRef, {
+      lastMessage: {
+        text: `Payment request: ₹${data.advanceAmount} for ${data.turfName}`,
+        senderId: data.senderId,
+        senderType: "manager",
+        timestamp: serverTimestamp(),
+        type: "payment_request_card",
+      },
+      "unreadCount.user": increment(1),
+      updatedAt: serverTimestamp(),
+    });
+
+    return messageRef.id;
+  } catch (error) {
+    console.error("Error sending payment request card:", error);
+    throw error;
+  }
+};
+
+/**
+ * Update payment request card status
+ * @param {string} chatId - Chat ID
+ * @param {string} messageId - Message ID
+ * @param {string} status - New status (paid | approved_without_payment | expired)
+ * @param {object} updateData - Additional update fields
+ */
+export const updatePaymentRequestCardStatus = async (chatId, messageId, status, updateData = {}) => {
+  try {
+    const updates = {
+      "paymentRequestCard.status": status,
+      "paymentRequestCard.respondedAt": serverTimestamp(),
+      ...Object.keys(updateData).reduce((acc, key) => {
+        acc[`paymentRequestCard.${key}`] = updateData[key];
+        return acc;
+      }, {}),
+    };
+
+    const statusText =
+      status === "paid" ? "Payment submitted by user" :
+      status === "approved_without_payment" ? "Booking approved without advance payment" :
+      status === "expired" ? "Payment request expired" :
+      "Payment request updated";
+
+    if (hasNativeFirestore) {
+      await nativeFirestore()
+        .collection("chats")
+        .doc(chatId)
+        .collection("messages")
+        .doc(messageId)
+        .update(updates);
+
+      await nativeFirestore()
+        .collection("chats")
+        .doc(chatId)
+        .update({
+          "lastMessage.text": statusText,
+          updatedAt: serverTimestamp(),
+        });
+
+      return;
+    }
+
+    // Web SDK
+    const messageRef = doc(db, "chats", chatId, "messages", messageId);
+    await updateDoc(messageRef, updates);
+
+    const chatRef = doc(db, "chats", chatId);
+    await updateDoc(chatRef, {
+      "lastMessage.text": statusText,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error updating payment request card status:", error);
+    throw error;
+  }
+};

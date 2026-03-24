@@ -23,8 +23,9 @@ import {
   uploadPaymentProof,
   submitPaymentForVerification,
 } from "../../services/firebase/payments";
+import { updatePaymentRequestCardStatus } from "../../services/firebase/chat";
 
-const USER_COLOR = "#4CAF50";
+const USER_COLOR = "#10B981";
 
 const HELP_APPS = [
   { name: "GPay", icon: "google", color: "#4285F4" },
@@ -39,6 +40,8 @@ export default function PaymentConfirmationScreen({ navigation, route }) {
     upiId,
     upiHolderName,
     turfName,
+    chatId,
+    paymentCardMessageId,
   } = route.params || {};
 
   const [transactionId, setTransactionId] = useState("");
@@ -126,6 +129,15 @@ export default function PaymentConfirmationScreen({ navigation, route }) {
         paidAt: new Date().toISOString(),
         screenshotUrl,
       });
+
+      // If this payment came from a chat payment request card, update its status
+      if (chatId && paymentCardMessageId) {
+        try {
+          await updatePaymentRequestCardStatus(chatId, paymentCardMessageId, "paid");
+        } catch (cardError) {
+          console.warn("Could not update payment request card status:", cardError);
+        }
+      }
 
       // Navigate to success screen
       navigation.replace("PaymentSubmitted", {
@@ -392,7 +404,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderRadius: 12,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#D1FAE5",
     marginBottom: 24,
     gap: 12,
   },
