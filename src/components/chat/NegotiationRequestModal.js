@@ -23,7 +23,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../constants/theme";
 import { subscribeToCollection } from "../../services/firebase/firestore";
-import { calculateBookingPrice } from "../../utils/priceUtils";
+import { calculateBookingPrice, generateOperatingSlots } from "../../utils/priceUtils";
 import {
   computeAllSlotStatuses,
   getActiveLegendItems,
@@ -101,26 +101,6 @@ const getNext14Days = () => {
   return dates;
 };
 
-/**
- * Generate time slots from 6 AM to 11 PM in 30-minute intervals
- */
-const generateTimeSlots = () => {
-  const slots = [];
-  for (let hour = 6; hour <= 22; hour++) {
-    const time = `${String(hour).padStart(2, "0")}:00`;
-    const displayTime = hour > 12 ? `${hour - 12}:00 PM` : hour === 12 ? "12:00 PM" : `${hour}:00 AM`;
-    slots.push({ time, displayTime, hour, minute: 0 });
-    // Add half hour slot
-    const halfTime = `${String(hour).padStart(2, "0")}:30`;
-    const halfDisplayTime = hour > 12 ? `${hour - 12}:30 PM` : hour === 12 ? "12:30 PM" : `${hour}:30 AM`;
-    slots.push({ time: halfTime, displayTime: halfDisplayTime, hour, minute: 30 });
-  }
-  // Add 11 PM
-  slots.push({ time: "23:00", displayTime: "11:00 PM", hour: 23, minute: 0 });
-  return slots;
-};
-
-const TIME_SLOTS = generateTimeSlots();
 
 /**
  * Calculate duration in hours
@@ -183,6 +163,12 @@ const NegotiationRequestModal = ({
 
   // Memoized values
   const dates = useMemo(() => getNext14Days(), []);
+
+  // Dynamic slots respecting selected turf's operating hours for the selected day
+  const timeSlots = useMemo(
+    () => generateOperatingSlots(selectedTurf?.operatingHours, selectedDate?.date || null),
+    [selectedTurf, selectedDate]
+  );
 
   // Cleanup subscriptions helper
   const cleanupSubscriptions = useCallback(() => {
@@ -380,7 +366,7 @@ const NegotiationRequestModal = ({
           }
         : null;
 
-      return computeAllSlotStatuses(TIME_SLOTS, filteredGrounds, {
+      return computeAllSlotStatuses(timeSlots, filteredGrounds, {
         selectedDate: dateObj,
         bookings,
         academySessions,
@@ -573,12 +559,12 @@ const NegotiationRequestModal = ({
       }
 
       // Check for booking conflicts
-      const startIndex = TIME_SLOTS.findIndex((s) => s.time === startTime.time);
-      const endIndex = TIME_SLOTS.findIndex((s) => s.time === endTime.time);
+      const startIndex = timeSlots.findIndex((s) => s.time === startTime.time);
+      const endIndex = timeSlots.findIndex((s) => s.time === endTime.time);
 
       for (let i = startIndex; i < endIndex; i++) {
-        if (isSlotBooked(groundId, groundName, TIME_SLOTS[i].time)) {
-          console.log(`Ground ${groundId} (${groundName}) has booking conflict at ${TIME_SLOTS[i].time}`);
+        if (isSlotBooked(groundId, groundName, timeSlots[i].time)) {
+          console.log(`Ground ${groundId} (${groundName}) has booking conflict at ${timeSlots[i].time}`);
           return false;
         }
       }
@@ -612,8 +598,8 @@ const NegotiationRequestModal = ({
       setEndTime(null);
       setSelectedGround(null); // Reset ground selection when time changes
     } else {
-      const startIndex = TIME_SLOTS.findIndex((s) => s.time === startTime.time);
-      const slotIndex = TIME_SLOTS.findIndex((s) => s.time === slot.time);
+      const startIndex = timeSlots.findIndex((s) => s.time === startTime.time);
+      const slotIndex = timeSlots.findIndex((s) => s.time === slot.time);
 
       if (slotIndex <= startIndex) {
         setStartTime(slot);
@@ -624,12 +610,12 @@ const NegotiationRequestModal = ({
         let targetEndIndex = slotIndex;
         if (slotIndex - startIndex < 2) {
           targetEndIndex = startIndex + 2;
-          if (targetEndIndex >= TIME_SLOTS.length) {
-            targetEndIndex = TIME_SLOTS.length - 1;
+          if (targetEndIndex >= timeSlots.length) {
+            targetEndIndex = timeSlots.length - 1;
           }
         }
 
-        setEndTime(TIME_SLOTS[targetEndIndex]);
+        setEndTime(timeSlots[targetEndIndex]);
         setSelectedGround(null);
       }
     }
@@ -639,14 +625,14 @@ const NegotiationRequestModal = ({
   const validateTimeRange = () => {
     if (!startTime || !endTime) return null;
 
-    const startIndex = TIME_SLOTS.findIndex((s) => s.time === startTime.time);
-    const endIndex = TIME_SLOTS.findIndex((s) => s.time === endTime.time);
+    const startIndex = timeSlots.findIndex((s) => s.time === startTime.time);
+    const endIndex = timeSlots.findIndex((s) => s.time === endTime.time);
 
     for (let i = startIndex; i < endIndex; i++) {
-      const info = slotStatusMap[TIME_SLOTS[i].time];
+      const info = slotStatusMap[timeSlots[i].time];
       if (info && !info.selectable) {
         const msg = SLOT_MESSAGES[info.status] || "One or more slots in your selected range are not available";
-        return `${TIME_SLOTS[i].displayTime}: ${msg}`;
+        return `${timeSlots[i].label}: ${msg}`;
       }
     }
     return null;
@@ -886,7 +872,7 @@ const NegotiationRequestModal = ({
                     Start
                   </Text>
                   <Text variant="titleMedium" style={styles.selectedTimeValue}>
-                    {startTime.displayTime}
+                    {startTime.label}
                   </Text>
                 </View>
                 <MaterialCommunityIcons name="arrow-right" size={24} color="#999" />
@@ -895,7 +881,7 @@ const NegotiationRequestModal = ({
                     End
                   </Text>
                   <Text variant="titleMedium" style={styles.selectedTimeValue}>
-                    {endTime ? endTime.displayTime : "Select"}
+                    {endTime ? endTime.label : "Select"}
                   </Text>
                 </View>
                 {startTime && endTime && (
@@ -911,7 +897,7 @@ const NegotiationRequestModal = ({
 
           {/* Color-coded time slots grid */}
           <TimeSlotGrid
-            timeSlots={TIME_SLOTS.map((s) => ({ ...s, label: s.displayTime }))}
+            timeSlots={timeSlots}
             slotStatusMap={slotStatusMap}
             startTime={startTime}
             endTime={endTime}
@@ -956,7 +942,7 @@ const NegotiationRequestModal = ({
         <View style={styles.summaryRow}>
           <MaterialCommunityIcons name="clock-outline" size={18} color={COLORS.primary} />
           <Text variant="bodyMedium" style={styles.summaryText}>
-            {startTime?.displayTime} - {endTime?.displayTime}
+            {startTime?.label} - {endTime?.label}
           </Text>
         </View>
       </Surface>
@@ -1126,7 +1112,7 @@ const NegotiationRequestModal = ({
           <MaterialCommunityIcons name="clock-outline" size={18} color={COLORS.textSecondary} />
           <Text style={styles.summaryLabel}>Time:</Text>
           <Text style={styles.summaryValue}>
-            {startTime?.displayTime} - {endTime?.displayTime}
+            {startTime?.label} - {endTime?.label}
           </Text>
         </View>
         <View style={styles.summaryDetailRow}>

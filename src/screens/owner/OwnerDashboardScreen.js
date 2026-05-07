@@ -66,6 +66,10 @@ export default function OwnerDashboardScreen({ navigation }) {
         }
       }
 
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
       let totalRevenue = 0;
       let totalBookings = 0;
       for (const turf of turfList) {
@@ -73,12 +77,18 @@ export default function OwnerDashboardScreen({ navigation }) {
         const bookings = await queryDocuments("bookings", [
           { field: "turfId", operator: "==", value: turfId },
         ]);
-        const confirmed = bookings.filter(
-          (b) => b.status === "confirmed" || b.status === "completed"
-        );
+        const confirmed = bookings.filter((b) => {
+          if (b.status !== "confirmed" && b.status !== "completed") return false;
+          const bookingDate = b.date?.toDate ? b.date.toDate() : new Date(b.date);
+          return bookingDate >= monthStart && bookingDate <= monthEnd;
+        });
         totalBookings += confirmed.length;
         totalRevenue += confirmed.reduce(
-          (sum, b) => sum + (b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0),
+          (sum, b) =>
+            sum +
+            (b.payment?.advance?.totalCollected || 0) +
+            (b.payment?.onGround?.totalCollected || 0) +
+            (b.payment?.online?.totalCollected || 0),
           0
         );
       }
@@ -254,6 +264,12 @@ export default function OwnerDashboardScreen({ navigation }) {
             </View>
           </View>
         </Surface>
+
+        {/* KPI Period Label */}
+        <View style={styles.kpiPeriodLabel}>
+          <MaterialCommunityIcons name="calendar-month" size={16} color={OWNER_PURPLE} />
+          <Text style={styles.kpiPeriodText}>This Month</Text>
+        </View>
 
         {/* KPI Grid */}
         <View style={styles.kpiGrid}>
@@ -587,6 +603,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     marginTop: 3,
+  },
+
+  // KPI Period Label
+  kpiPeriodLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  kpiPeriodText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
+    color: OWNER_PURPLE,
   },
 
   // Alert Card (Pending Actions)

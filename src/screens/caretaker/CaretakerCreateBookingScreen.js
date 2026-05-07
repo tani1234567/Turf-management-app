@@ -28,6 +28,7 @@ import {
   setDocument,
   createBookingWithTransaction,
 } from "../../services/firebase/firestore";
+import { generateOperatingSlots } from "../../utils/priceUtils";
 
 const CARETAKER_ORANGE = "#F97316";
 const PALE_ORANGE = "#FFF7ED";
@@ -42,7 +43,7 @@ const formatTimeLabel = (hour, minute) => {
   return `${displayHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
 };
 
-const TIME_SLOTS = (() => {
+const timeSlots = (() => {
   const slots = [];
   for (let hour = 6; hour <= 23; hour++) {
     slots.push({ time: `${hour.toString().padStart(2, "0")}:00`, label: formatTimeLabel(hour, 0) });
@@ -110,6 +111,12 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
 
   const [submitting, setSubmitting] = useState(false);
   const searchTimerRef = useRef(null);
+
+  // Dynamic slots respecting turf operating hours for the selected day
+  const timeSlots = useMemo(
+    () => generateOperatingSlots(turfData?.operatingHours, selectedDate),
+    [turfData, selectedDate]
+  );
 
   // Load turf data
   useEffect(() => {
@@ -527,7 +534,7 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
                 <Surface style={styles.timeHint} elevation={0}>
                   <MaterialCommunityIcons name="information-outline" size={16} color={CARETAKER_ORANGE} />
                   <Text style={styles.timeHintText}>
-                    Start: {TIME_SLOTS.find((s) => s.time === startTime)?.label} — now tap end time
+                    Start: {timeSlots.find((s) => s.time === startTime)?.label} — now tap end time
                   </Text>
                 </Surface>
               )}
@@ -535,7 +542,7 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
                 <Surface style={styles.timeSelected} elevation={1}>
                   <MaterialCommunityIcons name="clock-check-outline" size={18} color={SUCCESS_GREEN} />
                   <Text style={styles.timeSelectedText}>
-                    {TIME_SLOTS.find((s) => s.time === startTime)?.label} → {TIME_SLOTS.find((s) => s.time === endTime)?.label}
+                    {timeSlots.find((s) => s.time === startTime)?.label} → {timeSlots.find((s) => s.time === endTime)?.label}
                   </Text>
                   <TouchableOpacity onPress={() => { setStartTime(null); setEndTime(null); }}>
                     <MaterialCommunityIcons name="close-circle" size={18} color="#9CA3AF" />
@@ -543,7 +550,7 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
                 </Surface>
               )}
               <View style={styles.timeGrid}>
-                {TIME_SLOTS.map((slot) => {
+                {timeSlots.map((slot) => {
                   const slotStyle = getSlotStyle(slot);
                   return (
                     <TouchableOpacity
@@ -566,7 +573,7 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
             <View style={styles.stepContent}>
               <Text style={styles.sectionTitle}>Select Ground</Text>
               <Text style={styles.timeRangeLabel}>
-                {formatDate(selectedDate)} · {TIME_SLOTS.find((s) => s.time === startTime)?.label} – {TIME_SLOTS.find((s) => s.time === endTime)?.label}
+                {formatDate(selectedDate)} · {timeSlots.find((s) => s.time === startTime)?.label} – {timeSlots.find((s) => s.time === endTime)?.label}
               </Text>
 
               {sports.length > 1 && (
@@ -648,7 +655,7 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
                   <MaterialCommunityIcons name="clock-outline" size={16} color="#9CA3AF" />
                   <Text style={styles.summaryLabel}>Time</Text>
                   <Text style={styles.summaryValue}>
-                    {TIME_SLOTS.find((s) => s.time === startTime)?.label} – {TIME_SLOTS.find((s) => s.time === endTime)?.label}
+                    {timeSlots.find((s) => s.time === startTime)?.label} – {timeSlots.find((s) => s.time === endTime)?.label}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>

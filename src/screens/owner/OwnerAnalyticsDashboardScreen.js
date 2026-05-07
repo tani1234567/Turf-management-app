@@ -51,6 +51,20 @@ const getMonthStart = () => {
   return toDateString(d);
 };
 
+const getSixMonthStart = () => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 5);
+  d.setDate(1);
+  return toDateString(d);
+};
+
+const getYearStart = () => {
+  const d = new Date();
+  d.setMonth(0);
+  d.setDate(1);
+  return toDateString(d);
+};
+
 const getDateRange = (range) => {
   const today = getToday();
   switch (range) {
@@ -60,10 +74,27 @@ const getDateRange = (range) => {
       return { start: getWeekStart(), end: today, label: "This Week" };
     case "month":
       return { start: getMonthStart(), end: today, label: "This Month" };
+    case "6months":
+      return { start: getSixMonthStart(), end: today, label: "Last 6 Months" };
+    case "yearly":
+      return { start: getYearStart(), end: today, label: "This Year" };
     default:
       return { start: getMonthStart(), end: today, label: "This Month" };
   }
 };
+
+const RANGE_LABELS = {
+  today: "Today",
+  week: "Week",
+  month: "Month",
+  "6months": "6 Months",
+  yearly: "Yearly",
+};
+
+const getCollectedRevenue = (b) =>
+  (b.payment?.advance?.totalCollected || 0) +
+  (b.payment?.onGround?.totalCollected || 0) +
+  (b.payment?.online?.totalCollected || 0);
 
 const formatCurrency = (amount) => {
   if (amount >= 100000) return `Rs.${(amount / 100000).toFixed(1)}L`;
@@ -203,6 +234,28 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
     setRefreshing(false);
   }, [selectedRange, company]);
 
+  // ── Check if 6month and yearly data is available ──
+  const dataAvailability = useMemo(() => {
+    const oldestBookingDate = bookings.reduce((min, b) => {
+      if (!b.date) return min;
+      return min === null || b.date < min ? b.date : min;
+    }, null);
+
+    if (!oldestBookingDate) return { has6Months: false, hasYearly: false };
+
+    return {
+      has6Months: oldestBookingDate <= getDateRange("6months").start,
+      hasYearly: oldestBookingDate <= getDateRange("yearly").start,
+    };
+  }, [bookings]);
+
+  const rangeOptions = useMemo(() => {
+    const opts = ["today", "week", "month"];
+    if (dataAvailability.has6Months) opts.push("6months");
+    if (dataAvailability.hasYearly) opts.push("yearly");
+    return opts;
+  }, [dataAvailability]);
+
   // ── Filter bookings by date range ──
   const filteredBookings = useMemo(() => {
     return bookings.filter(
@@ -224,10 +277,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
 
   const kpis = useMemo(() => {
     const totalBookings = confirmedBookings.length;
-    const totalRevenue = confirmedBookings.reduce(
-      (sum, b) => sum + (b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0),
-      0
-    );
+    const totalRevenue = confirmedBookings.reduce((sum, b) => sum + getCollectedRevenue(b), 0);
     const avgValue = totalBookings > 0 ? Math.round(totalRevenue / totalBookings) : 0;
 
     // Utilization
@@ -272,7 +322,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
       if (!byTurf[turfId]) {
         byTurf[turfId] = { revenue: 0, bookings: 0 };
       }
-      byTurf[turfId].revenue += (b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0);
+      byTurf[turfId].revenue += getCollectedRevenue(b);
       byTurf[turfId].bookings += 1;
     });
     return Object.entries(byTurf)
@@ -314,7 +364,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
             byManager[mgrId] = { bookings: 0, revenue: 0 };
           }
           byManager[mgrId].bookings += 1;
-          byManager[mgrId].revenue += (b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0);
+          byManager[mgrId].revenue += getCollectedRevenue(b);
         }
       });
     });
@@ -337,8 +387,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
   const revenueTrend = useMemo(() => {
     const byDate = {};
     confirmedBookings.forEach((b) => {
-      const revenue = b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0;
-      byDate[b.date] = (byDate[b.date] || 0) + revenue;
+      byDate[b.date] = (byDate[b.date] || 0) + getCollectedRevenue(b);
     });
     return Object.entries(byDate)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -449,12 +498,16 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
     const pricing = calculateSubscriptionPrice(grounds, 1);
     const monthlySubscriptionCost = pricing.finalAmount;
 
-    // For monthly view, use direct revenue; for week/today, extrapolate
+    // Calculate monthly revenue based on selected range
     let monthlyRevenue = kpis.totalRevenue;
     if (selectedRange === "today") {
       monthlyRevenue = kpis.totalRevenue * 30;
     } else if (selectedRange === "week") {
       monthlyRevenue = kpis.totalRevenue * 4.3;
+    } else if (selectedRange === "6months") {
+      monthlyRevenue = Math.round(kpis.totalRevenue / 6);
+    } else if (selectedRange === "yearly") {
+      monthlyRevenue = Math.round(kpis.totalRevenue / 12);
     }
 
     const roi = monthlySubscriptionCost > 0
@@ -531,9 +584,9 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
       return;
     }
 
-    const header = "Date,Turf,Customer,Sport,Ground,Time,Duration(hrs),Amount,Payment Method,Status";
+    const header = "Date,Turf,Customer,Sport,Ground,Time,Duration(hrs),Amount Collected,Payment Method,Status";
     const rows = confirmedBookings.map((b) => {
-      const amount = b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0;
+      const amount = getCollectedRevenue(b);
       const method = b.payment?.remainingPaymentMethod || b.payment?.paymentMethod || "cash";
       return [
         b.date,
@@ -760,7 +813,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
 
         {/* Date Range Selector */}
         <View style={styles.dateRangeRow}>
-          {["today", "week", "month"].map((range) => (
+          {rangeOptions.map((range) => (
             <TouchableOpacity
               key={range}
               style={[
@@ -775,7 +828,7 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
                   selectedRange === range && styles.dateChipTextActive,
                 ]}
               >
-                {range === "today" ? "Today" : range === "week" ? "Week" : "Month"}
+                {RANGE_LABELS[range] ?? range}
               </Text>
             </TouchableOpacity>
           ))}

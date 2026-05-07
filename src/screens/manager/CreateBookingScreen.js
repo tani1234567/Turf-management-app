@@ -34,6 +34,7 @@ import {
   formatPrice,
   formatDuration,
   isWeekend,
+  generateOperatingSlots,
 } from "../../utils/priceUtils";
 
 const MANAGER_BLUE = "#3B82F6";
@@ -65,7 +66,7 @@ const formatTimeLabel = (hour, minute) => {
   return `${displayHour}:${minute.toString().padStart(2, "0")} ${ampm}`;
 };
 
-const TIME_SLOTS = (() => {
+const timeSlots = (() => {
   const slots = [];
   for (let hour = 6; hour <= 23; hour++) {
     slots.push({
@@ -128,9 +129,10 @@ const normalizeGroundId = (groundId) => {
   return groundId.toLowerCase().replace(/[-_]/g, "");
 };
 
-export default function CreateBookingScreen({ navigation }) {
+export default function CreateBookingScreen({ navigation, route }) {
   const { selectedTurfId, turfData } = useSelectedTurf();
   const user = useAppSelector(selectUser);
+  const prefill = route?.params?.prefill ?? null;
 
   // Step state - New order: Customer -> Time -> Ground -> Payment
   const [currentStep, setCurrentStep] = useState(0);
@@ -144,10 +146,16 @@ export default function CreateBookingScreen({ navigation }) {
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [bookingType, setBookingType] = useState("regular");
 
-  // Time selection state (Step 2 - now before ground)
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [startTime, setStartTime] = useState(null);
-  const [endTime, setEndTime] = useState(null);
+  // Time selection state — pre-filled from calendar selection if available
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (prefill?.date) {
+      const [y, m, d] = prefill.date.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date();
+  });
+  const [startTime, setStartTime] = useState(prefill?.startTime ?? null);
+  const [endTime, setEndTime] = useState(prefill?.endTime ?? null);
 
   // Ground selection state (Step 3 - after time)
   const [selectedGround, setSelectedGround] = useState(null);
@@ -176,6 +184,12 @@ export default function CreateBookingScreen({ navigation }) {
   // Search timer
   const searchTimerRef = useRef(null);
 
+  // Dynamic slots respecting turf operating hours for the selected day
+  const timeSlots = useMemo(
+    () => generateOperatingSlots(turfData?.operatingHours, selectedDate),
+    [turfData, selectedDate]
+  );
+
   // Load grounds from turf data (grounds are embedded in turf document)
   useEffect(() => {
     if (!turfData) {
@@ -196,6 +210,12 @@ export default function CreateBookingScreen({ navigation }) {
       }));
 
       setGrounds(groundsWithIds);
+
+      // Auto-select ground from calendar prefill
+      if (prefill?.groundId) {
+        const match = groundsWithIds.find((g) => g.id === prefill.groundId);
+        if (match) setSelectedGround(match);
+      }
 
       // Extract unique sports from all grounds
       const allSports = new Set();
@@ -940,7 +960,7 @@ export default function CreateBookingScreen({ navigation }) {
                   <View style={styles.timeRangeItem}>
                     <Text style={styles.timeRangeLabel}>Start</Text>
                     <Text style={styles.timeRangeValue}>
-                      {TIME_SLOTS.find((s) => s.time === startTime)?.label || startTime}
+                      {timeSlots.find((s) => s.time === startTime)?.label || startTime}
                     </Text>
                   </View>
                   <MaterialCommunityIcons name="arrow-right" size={20} color="#666" />
@@ -948,7 +968,7 @@ export default function CreateBookingScreen({ navigation }) {
                     <Text style={styles.timeRangeLabel}>End</Text>
                     <Text style={styles.timeRangeValue}>
                       {endTime
-                        ? TIME_SLOTS.find((s) => s.time === endTime)?.label || endTime
+                        ? timeSlots.find((s) => s.time === endTime)?.label || endTime
                         : "Select end time"}
                     </Text>
                   </View>
@@ -956,8 +976,8 @@ export default function CreateBookingScreen({ navigation }) {
                     <View style={styles.durationBadge}>
                       <Text style={styles.durationText}>
                         {formatDuration(
-                          (TIME_SLOTS.findIndex((s) => s.time === endTime) -
-                            TIME_SLOTS.findIndex((s) => s.time === startTime)) * 0.5
+                          (timeSlots.findIndex((s) => s.time === endTime) -
+                            timeSlots.findIndex((s) => s.time === startTime)) * 0.5
                         )}
                       </Text>
                     </View>
@@ -970,7 +990,7 @@ export default function CreateBookingScreen({ navigation }) {
               </Text>
 
               <View style={styles.timeSlotsGrid}>
-                {TIME_SLOTS.map((slot) => {
+                {timeSlots.map((slot) => {
                   const style = getSlotStyle(slot);
                   const isPast = isSlotPast(slot.time);
 
@@ -1012,7 +1032,7 @@ export default function CreateBookingScreen({ navigation }) {
                 <View style={styles.summaryTimeRow}>
                   <MaterialCommunityIcons name="clock-outline" size={20} color={MANAGER_BLUE} />
                   <Text style={styles.summaryTimeText}>
-                    {TIME_SLOTS.find((s) => s.time === startTime)?.label} - {TIME_SLOTS.find((s) => s.time === endTime)?.label}
+                    {timeSlots.find((s) => s.time === startTime)?.label} - {timeSlots.find((s) => s.time === endTime)?.label}
                   </Text>
                 </View>
               </Surface>
@@ -1368,7 +1388,7 @@ export default function CreateBookingScreen({ navigation }) {
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Time</Text>
                   <Text style={styles.summaryValue}>
-                    {TIME_SLOTS.find((s) => s.time === startTime)?.label} - {TIME_SLOTS.find((s) => s.time === endTime)?.label}
+                    {timeSlots.find((s) => s.time === startTime)?.label} - {timeSlots.find((s) => s.time === endTime)?.label}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>

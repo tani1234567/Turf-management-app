@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import storage from "@react-native-firebase/storage";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
@@ -168,7 +169,7 @@ export function canUserBook(user) {
 
 /**
  * Upload payment proof screenshot to Firebase Storage
- * Uses React Native Firebase Storage for proper auth integration
+ * Cross-platform: Uses React Native Firebase Storage (native) or Web SDK (web)
  * @param {string} bookingId - The booking ID
  * @param {string} imageUri - Local URI of the image
  * @returns {Promise<string>} Download URL of uploaded image
@@ -188,14 +189,41 @@ export async function uploadPaymentProof(bookingId, imageUri) {
 
     console.log("Uploading to:", storagePath);
 
-    // Use React Native Firebase Storage
-    const reference = storage().ref(storagePath);
-    await reference.putFile(imageUri);
+    let downloadUrl;
 
-    // Get download URL
-    const downloadUrl = await reference.getDownloadURL();
+    if (Platform.OS === "web") {
+      // Web platform: use fetch + Firebase REST API
+      const token = await currentUser.getIdToken();
+      const bucket = "sowin-power.firebasestorage.app";
+      const encodedPath = encodeURIComponent(storagePath);
+
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?uploadType=media&name=${encodedPath}`;
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": blob.type,
+        },
+        body: blob,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+      }
+
+      downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
+    } else {
+      // Native platform: use React Native Firebase Storage
+      const reference = storage().ref(storagePath);
+      await reference.putFile(imageUri, { cacheControl: "max-age=3600" });
+      downloadUrl = await reference.getDownloadURL();
+    }
+
     console.log("Upload successful, URL:", downloadUrl);
-
     return downloadUrl;
   } catch (error) {
     console.error("Error uploading payment proof:", error);

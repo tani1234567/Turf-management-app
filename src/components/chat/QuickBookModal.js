@@ -18,6 +18,7 @@ import {
 } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../constants/theme";
+import { generateOperatingSlots } from "../../utils/priceUtils";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -48,20 +49,6 @@ const getNext14Days = () => {
     });
   }
   return dates;
-};
-
-/**
- * Generate time slots from 6 AM to 11 PM
- */
-const generateTimeSlots = () => {
-  const slots = [];
-  for (let hour = 6; hour <= 22; hour++) {
-    const time = `${String(hour).padStart(2, "0")}:00`;
-    const displayTime = hour > 12 ? `${hour - 12}:00 PM` : hour === 12 ? "12:00 PM" : `${hour}:00 AM`;
-    slots.push({ time, displayTime });
-  }
-  slots.push({ time: "23:00", displayTime: "11:00 PM" });
-  return slots;
 };
 
 /**
@@ -122,7 +109,12 @@ const QuickBookModal = ({
 
   // Memoized values
   const dates = useMemo(() => getNext14Days(), []);
-  const timeSlots = useMemo(() => generateTimeSlots(), []);
+
+  // Dynamic slots respecting selected turf's operating hours for the selected day
+  const timeSlots = useMemo(
+    () => generateOperatingSlots(selectedTurf?.operatingHours, selectedDate),
+    [selectedTurf, selectedDate]
+  );
 
   // Calculate price based on selection
   const totalPrice = useMemo(() => {
@@ -396,7 +388,7 @@ const QuickBookModal = ({
                       textStyle={selectedStartTime === slot.time ? styles.selectedChipText : styles.timeChipText}
                       compact
                     >
-                      {slot.displayTime}
+                      {slot.label}
                     </Chip>
                   ))}
                 </ScrollView>
@@ -421,7 +413,7 @@ const QuickBookModal = ({
                         textStyle={selectedEndTime === slot.time ? styles.selectedChipText : styles.timeChipText}
                         compact
                       >
-                        {slot.displayTime}
+                        {slot.label}
                       </Chip>
                     ))}
                   </ScrollView>

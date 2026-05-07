@@ -19,6 +19,9 @@ import {
   ProgressBar,
   Switch,
   ActivityIndicator,
+  Portal,
+  Dialog,
+  Searchbar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -30,6 +33,8 @@ import { selectCompany } from "../../store/slices/companySlice";
 import { SPORTS, AMENITIES } from "../../constants/sports";
 import { addDocument, serverTimestamp } from "../../services/firebase/firestore";
 import { uploadTurfImages } from "../../services/firebase/turfImages";
+import { MUMBAI_AREAS } from "../../constants/mumbaiAreas";
+import TimePickerModal from "../../components/TimePickerModal";
 
 const MANAGER_BLUE = "#3B82F6";
 const PALE_BLUE = "#DBEAFE";
@@ -79,6 +84,10 @@ export default function TurfRequestScreen({ navigation }) {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
+  const [area, setArea] = useState("");
+  const [areaSearch, setAreaSearch] = useState("");
+  const [areaModalVisible, setAreaModalVisible] = useState(false);
+  const [selectedZone, setSelectedZone] = useState("All");
   const [coordinates, setCoordinates] = useState({ lat: null, lng: null });
   const [googleMapsLink, setGoogleMapsLink] = useState("");
 
@@ -89,6 +98,8 @@ export default function TurfRequestScreen({ navigation }) {
       return acc;
     }, {})
   );
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [timePickerContext, setTimePickerContext] = useState({ dayId: null, field: null });
 
   // Step 4: Grounds
   const [grounds, setGrounds] = useState([]);
@@ -146,6 +157,17 @@ export default function TurfRequestScreen({ navigation }) {
     });
     setOperatingHours(newHours);
     Alert.alert("Copied", "Operating hours copied to all days.");
+  };
+
+  const openTimePicker = (dayId, field) => {
+    setTimePickerContext({ dayId, field });
+    setTimePickerVisible(true);
+  };
+
+  const handleTimePickerConfirm = (time) => {
+    const { dayId, field } = timePickerContext;
+    updateOperatingHours(dayId, field, time);
+    setTimePickerVisible(false);
   };
 
   const addGround = () => {
@@ -217,6 +239,31 @@ export default function TurfRequestScreen({ navigation }) {
     });
   };
 
+  const extractCoordinatesFromMapsLink = (link) => {
+    if (!link) return null;
+    if (link.includes('maps.app.goo.gl')) return null;
+    const qPattern = /[?&]q=([-\d.]+),([-\d.]+)/;
+    const qMatch = link.match(qPattern);
+    if (qMatch) {
+      return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+    }
+    const atPattern = /@([-\d.]+),([-\d.]+)/;
+    const atMatch = link.match(atPattern);
+    if (atMatch) {
+      return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+    }
+    const coordPattern = /([-\d.]+),([-\d.]+)/;
+    const coordMatch = link.match(coordPattern);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      if (lat >= 18.8 && lat <= 19.5 && lng >= 72.7 && lng <= 73.1) {
+        return { lat, lng };
+      }
+    }
+    return null;
+  };
+
   const validateStep = (step) => {
     switch (step) {
       case 1:
@@ -228,6 +275,14 @@ export default function TurfRequestScreen({ navigation }) {
       case 2:
         if (!city.trim()) {
           Alert.alert("Required", "Please enter a city.");
+          return false;
+        }
+        if (!area.trim()) {
+          Alert.alert("Missing Info", "Area is required");
+          return false;
+        }
+        if (!coordinates.lat || !coordinates.lng) {
+          Alert.alert("Missing Info", "Coordinates are required. Please enter Google Maps link or coordinates manually.");
           return false;
         }
         return true;
@@ -499,25 +554,92 @@ export default function TurfRequestScreen({ navigation }) {
         />
       </View>
 
+      {/* Area Selection */}
+      <Text variant="titleSmall" style={styles.inputLabel}>
+        Area *
+      </Text>
+      <TouchableOpacity
+        style={styles.areaSelector}
+        onPress={() => setAreaModalVisible(true)}
+      >
+        <View style={styles.areaSelectorContent}>
+          <MaterialCommunityIcons
+            name="map-marker"
+            size={20}
+            color={area ? MANAGER_BLUE : "#CCC"}
+          />
+          <Text style={area ? styles.areaSelectorText : styles.areaSelectorPlaceholder}>
+            {area || "Select Mumbai area"}
+          </Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-down" size={22} color={MANAGER_BLUE} />
+      </TouchableOpacity>
+
       <TextInput
         mode="outlined"
         label="Google Maps Link"
         placeholder="Paste Google Maps URL"
         value={googleMapsLink}
-        onChangeText={setGoogleMapsLink}
+        onChangeText={(link) => {
+          setGoogleMapsLink(link);
+          const coords = extractCoordinatesFromMapsLink(link);
+          if (coords) {
+            setCoordinates(coords);
+            Alert.alert("Success", "Coordinates extracted from Google Maps link!");
+          }
+        }}
         style={styles.input}
         left={<TextInput.Icon icon="google-maps" />}
       />
 
-      <Surface style={styles.mapPlaceholder} elevation={1}>
-        <MaterialCommunityIcons name="map-marker" size={48} color="#999" />
-        <Text variant="bodyMedium" style={styles.mapPlaceholderText}>
-          Map integration coming soon
-        </Text>
-        <Text variant="bodySmall" style={styles.mapSubtext}>
-          For now, paste your Google Maps link above
-        </Text>
-      </Surface>
+      {/* Coordinates Display/Input */}
+      <Text variant="titleSmall" style={styles.inputLabel}>
+        Coordinates {coordinates.lat && coordinates.lng ? "✓" : "*"}
+      </Text>
+      {coordinates.lat && coordinates.lng ? (
+        <View style={styles.coordinatesDisplay}>
+          <MaterialCommunityIcons name="map-marker-check" size={20} color={SUCCESS_GREEN} />
+          <Text style={styles.coordinatesText}>
+            {coordinates.lat.toFixed(6)}, {coordinates.lng.toFixed(6)}
+          </Text>
+          <TouchableOpacity onPress={() => setCoordinates({ lat: null, lng: null })}>
+            <MaterialCommunityIcons name="close-circle" size={20} color="#666" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <Surface style={styles.coordinatesInputContainer} elevation={0}>
+          <Text variant="bodySmall" style={styles.coordinatesHint}>
+            Coordinates will be extracted from Google Maps link above
+          </Text>
+          <Text variant="bodySmall" style={styles.coordinatesHint}>
+            Or enter manually:
+          </Text>
+          <View style={styles.manualCoordinatesRow}>
+            <TextInput
+              label="Latitude"
+              value={coordinates.lat?.toString() || ""}
+              onChangeText={(text) => setCoordinates(prev => ({
+                ...prev,
+                lat: parseFloat(text) || null
+              }))}
+              keyboardType="decimal-pad"
+              style={styles.coordinateInput}
+              dense
+            />
+            <TextInput
+              label="Longitude"
+              value={coordinates.lng?.toString() || ""}
+              onChangeText={(text) => setCoordinates(prev => ({
+                ...prev,
+                lng: parseFloat(text) || null
+              }))}
+              keyboardType="decimal-pad"
+              style={styles.coordinateInput}
+              dense
+            />
+          </View>
+        </Surface>
+      )}
     </View>
   );
 
@@ -556,26 +678,28 @@ export default function TurfRequestScreen({ navigation }) {
             <View style={styles.timeRow}>
               <View style={styles.timeInput}>
                 <Text variant="bodySmall" style={styles.timeLabel}>Open</Text>
-                <TextInput
-                  mode="outlined"
-                  value={operatingHours[day.id]?.openTime}
-                  onChangeText={(v) => updateOperatingHours(day.id, "openTime", v)}
-                  placeholder="06:00"
-                  dense
-                  style={styles.timeField}
-                />
+                <TouchableOpacity
+                  style={styles.timeButton}
+                  onPress={() => openTimePicker(day.id, "openTime")}
+                >
+                  <MaterialCommunityIcons name="clock-outline" size={18} color={MANAGER_BLUE} />
+                  <Text style={styles.timeButtonText}>
+                    {operatingHours[day.id]?.openTime}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <Text style={styles.timeSeparator}>to</Text>
               <View style={styles.timeInput}>
                 <Text variant="bodySmall" style={styles.timeLabel}>Close</Text>
-                <TextInput
-                  mode="outlined"
-                  value={operatingHours[day.id]?.closeTime}
-                  onChangeText={(v) => updateOperatingHours(day.id, "closeTime", v)}
-                  placeholder="23:00"
-                  dense
-                  style={styles.timeField}
-                />
+                <TouchableOpacity
+                  style={styles.timeButton}
+                  onPress={() => openTimePicker(day.id, "closeTime")}
+                >
+                  <MaterialCommunityIcons name="clock-outline" size={18} color={MANAGER_BLUE} />
+                  <Text style={styles.timeButtonText}>
+                    {operatingHours[day.id]?.closeTime}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -837,6 +961,112 @@ export default function TurfRequestScreen({ navigation }) {
 
       {renderStepIndicator()}
 
+      {/* Area Selection Modal */}
+      <Portal>
+        <Dialog
+          visible={areaModalVisible}
+          onDismiss={() => setAreaModalVisible(false)}
+          style={styles.areaDialog}
+        >
+          <Dialog.Title>Select Area</Dialog.Title>
+
+          {/* Search */}
+          <View style={styles.areaSearchWrapper}>
+            <Searchbar
+              placeholder="Search areas..."
+              value={areaSearch}
+              onChangeText={setAreaSearch}
+              style={styles.areaSearchbar}
+            />
+          </View>
+
+          {/* Zone Filter */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.zoneFilterContainer}
+            contentContainerStyle={styles.zoneFilterContent}
+          >
+            {["All", "Western", "Central", "South", "Eastern"].map((zone) => (
+              <Chip
+                key={zone}
+                selected={selectedZone === zone}
+                onPress={() => setSelectedZone(zone)}
+                style={[
+                  styles.zoneChip,
+                  selectedZone === zone && styles.selectedZoneChip,
+                ]}
+              >
+                {zone}
+              </Chip>
+            ))}
+          </ScrollView>
+
+          {/* Area List */}
+          <Dialog.ScrollArea style={styles.areaScrollArea}>
+            <ScrollView>
+              {MUMBAI_AREAS
+                .filter(a => {
+                  if (selectedZone !== "All" && a.zone !== selectedZone) return false;
+                  if (areaSearch && !a.name.toLowerCase().includes(areaSearch.toLowerCase())) return false;
+                  return true;
+                })
+                .map((areaItem) => (
+                  <TouchableOpacity
+                    key={areaItem.id}
+                    style={styles.areaItem}
+                    onPress={() => {
+                      setArea(areaItem.name);
+                      setAreaModalVisible(false);
+                      setAreaSearch("");
+                      // Auto-fill coordinates if not set
+                      if (!coordinates.lat || !coordinates.lng) {
+                        setCoordinates({ lat: areaItem.lat, lng: areaItem.lng });
+                        Alert.alert(
+                          "Coordinates Set",
+                          "Area center coordinates have been set. You can update them manually if needed."
+                        );
+                      }
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={area === areaItem.name ? "checkbox-marked-circle" : "map-marker-outline"}
+                      size={20}
+                      color={area === areaItem.name ? MANAGER_BLUE : "#666"}
+                    />
+                    <View style={styles.areaItemContent}>
+                      <Text style={[
+                        styles.areaItemText,
+                        area === areaItem.name && styles.areaItemActive
+                      ]}>
+                        {areaItem.name}
+                      </Text>
+                      <Text style={styles.areaItemZone}>{areaItem.zone}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+          </Dialog.ScrollArea>
+
+          <Dialog.Actions>
+            <Button onPress={() => setAreaModalVisible(false)}>Cancel</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Time Picker Modal */}
+      <TimePickerModal
+        visible={timePickerVisible}
+        onDismiss={() => setTimePickerVisible(false)}
+        onConfirm={handleTimePickerConfirm}
+        initialTime={
+          timePickerContext.dayId && timePickerContext.field
+            ? operatingHours[timePickerContext.dayId]?.[timePickerContext.field] || "06:00"
+            : "06:00"
+        }
+        label={timePickerContext.field === "openTime" ? "Opening Time" : "Closing Time"}
+      />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -1065,6 +1295,23 @@ const styles = StyleSheet.create({
   timeField: {
     backgroundColor: "#fff",
   },
+  timeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  timeButtonText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#3B82F6",
+  },
   timeSeparator: {
     marginHorizontal: 12,
     color: "#666",
@@ -1199,6 +1446,141 @@ const styles = StyleSheet.create({
   noteText: {
     color: "#1565C0",
     flex: 1,
+  },
+  inputLabel: {
+    fontWeight: "bold",
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  areaSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F0F6FF",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "#D0DFEF",
+  },
+  areaSelectorContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  areaSelectorText: {
+    fontSize: 15,
+    color: MANAGER_BLUE,
+    fontWeight: "500",
+  },
+  areaSelectorPlaceholder: {
+    fontSize: 15,
+    color: "#999",
+  },
+  areaDialog: {
+    maxHeight: "80%",
+  },
+  areaSearchWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  areaSearchbar: {
+    backgroundColor: "#F0F6FF",
+    elevation: 0,
+  },
+  zoneFilterContainer: {
+    marginBottom: 8,
+  },
+  zoneFilterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  zoneChip: {
+    backgroundColor: "#F0F6FF",
+  },
+  selectedZoneChip: {
+    backgroundColor: MANAGER_BLUE,
+  },
+  areaScrollArea: {
+    maxHeight: 300,
+    paddingHorizontal: 0,
+  },
+  areaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  areaItemContent: {
+    flex: 1,
+  },
+  areaItemText: {
+    fontSize: 15,
+    color: "#333",
+  },
+  areaItemActive: {
+    color: MANAGER_BLUE,
+    fontFamily: "Ubuntu-Medium",
+  },
+  areaItemZone: {
+    fontSize: 11,
+    color: "#999",
+    marginTop: 2,
+  },
+  coordinatesDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EEF7F1",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: "#C8E6D0",
+  },
+  coordinatesText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    fontFamily: "Ubuntu-Medium",
+  },
+  coordinatesInputContainer: {
+    backgroundColor: "#FFF8E1",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "#F0D872",
+  },
+  coordinatesHint: {
+    color: "#666",
+    marginBottom: 8,
+  },
+  manualCoordinatesRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  coordinateInput: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  mapPlaceholder: {
+    padding: 32,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  mapPlaceholderText: {
+    color: "#999",
+    marginTop: 8,
+  },
+  mapSubtext: {
+    color: "#ccc",
+    marginTop: 4,
   },
   footer: {
     flexDirection: "row",

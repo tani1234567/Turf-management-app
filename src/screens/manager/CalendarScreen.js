@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
+  Animated,
 } from "react-native";
 import {
   Text,
@@ -50,6 +51,20 @@ const STATUS_COLORS = {
   blocked: { bg: "#E5E7EB", color: "#6B7280", label: "Blocked" },
   cancelled: { bg: "#FEE2E2", color: "#EF4444", label: "Cancelled" },
   rejected: { bg: "#FEE2E2", color: "#EF4444", label: "Rejected" },
+};
+
+// Render priority: higher number = rendered on top (higher zIndex)
+const STATUS_PRIORITY = {
+  cancelled: 0,
+  rejected: 1,
+  expired: 2,
+  pending_payment: 3,
+  blocked: 4,
+  pending: 5,
+  academy: 6,
+  completed: 7,
+  confirmed: 8,
+  in_progress: 9,
 };
 
 // Time slots for day view (6 AM to 11 PM)
@@ -171,6 +186,14 @@ export default function CalendarScreen({ navigation }) {
   const [legendVisible, setLegendVisible] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
+
+  // Slot selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectionStart, setSelectionStart] = useState(null); // hour index (0 = 6 AM)
+  const [selectionEnd, setSelectionEnd] = useState(null);
+  const [selectionGroundId, setSelectionGroundId] = useState(null);
+  const selectionBarAnim = useRef(new Animated.Value(0)).current;
+  const lastTapRef = useRef({ time: 0, slotIndex: -1 });
 
   // Subscription ref
   const unsubscribeRef = useRef(null);
@@ -396,6 +419,94 @@ export default function CalendarScreen({ navigation }) {
     return { top: Math.max(0, top), height: Math.max(30, height) };
   };
 
+  // Animate selection bar in/out
+  useEffect(() => {
+    Animated.spring(selectionBarAnim, {
+      toValue: selectionMode ? 1 : 0,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 12,
+    }).start();
+  }, [selectionMode]);
+
+  // Convert hour index to "HH:00" string (index 0 = 6 AM)
+  const idxToTime = (idx) => `${String(idx + 6).padStart(2, "0")}:00`;
+
+  // Check if a 1-hour slot is occupied by an active booking on the given ground
+  const isSlotOccupied = useCallback((slotIndex, groundId, dateStr) => {
+    const slotStart = idxToTime(slotIndex);
+    const slotEnd = idxToTime(slotIndex + 1);
+    return getEventsForDate(dateStr).some((e) => {
+      if (["cancelled", "rejected", "expired"].includes(e.displayStatus)) return false;
+      if (groundId && e.groundId && e.groundId !== groundId) return false;
+      return e.startTime < slotEnd && e.endTime > slotStart;
+    });
+  }, [getEventsForDate]);
+
+  // Check if the selected range has any conflicts
+  const selectionHasConflict = useCallback((start, end, groundId, dateStr) => {
+    for (let i = start; i <= end; i++) {
+      if (isSlotOccupied(i, groundId, dateStr)) return true;
+    }
+    return false;
+  }, [isSlotOccupied]);
+
+  // Handle tapping on a time slot row
+  const handleSlotTap = useCallback((slotIndex, dateStr) => {
+    const DOUBLE_TAP_MS = 300;
+    const now = Date.now();
+    const last = lastTapRef.current;
+
+    if (selectionMode) {
+      // In selection mode: extend/adjust selection anchor
+      setSelectionStart((prev) => Math.min(slotIndex, prev ?? slotIndex));
+      setSelectionEnd((prev) => Math.max(slotIndex, prev ?? slotIndex));
+      return;
+    }
+
+    if (now - last.time < DOUBLE_TAP_MS && last.slotIndex === slotIndex) {
+      // Double-tap: enter selection mode
+      const autoGround =
+        grounds.length === 1
+          ? grounds[0].id
+          : groundFilter !== "all"
+          ? groundFilter
+          : null;
+      setSelectionStart(slotIndex);
+      setSelectionEnd(slotIndex);
+      setSelectionGroundId(autoGround);
+      setSelectionMode(true);
+      lastTapRef.current = { time: 0, slotIndex: -1 };
+    } else {
+      lastTapRef.current = { time: now, slotIndex };
+    }
+  }, [selectionMode, grounds, groundFilter]);
+
+  const clearSelection = useCallback(() => {
+    setSelectionMode(false);
+    setSelectionStart(null);
+    setSelectionEnd(null);
+    setSelectionGroundId(null);
+  }, []);
+
+  const handleBookFromSelection = useCallback((dateStr) => {
+    const start = idxToTime(selectionStart);
+    const end = idxToTime((selectionEnd ?? selectionStart) + 1);
+    clearSelection();
+    navigation.navigate("CreateBooking", {
+      prefill: { date: dateStr, startTime: start, endTime: end, groundId: selectionGroundId },
+    });
+  }, [selectionStart, selectionEnd, selectionGroundId, clearSelection, navigation]);
+
+  const handleBlockFromSelection = useCallback((dateStr) => {
+    const start = idxToTime(selectionStart);
+    const end = idxToTime((selectionEnd ?? selectionStart) + 1);
+    clearSelection();
+    navigation.navigate("BlockSlots", {
+      prefill: { date: dateStr, startTime: start, endTime: end, groundId: selectionGroundId },
+    });
+  }, [selectionStart, selectionEnd, selectionGroundId, clearSelection, navigation]);
+
   // Render view type selector
   const ViewTypeSelector = () => (
     <View style={styles.viewSelector}>
@@ -502,31 +613,121 @@ export default function CalendarScreen({ navigation }) {
     const dateStr = getDateString(selectedDate);
     const events = getEventsForDate(dateStr);
 
+    const normStart = selectionStart ?? 0;
+    const normEnd = selectionEnd ?? normStart;
+    const selTop = normStart * 60;
+    const selHeight = (normEnd - normStart + 1) * 60;
+    const hasConflict =
+      selectionMode &&
+      selectionHasConflict(normStart, normEnd, selectionGroundId, dateStr);
+
     return (
       <ScrollView
         style={styles.dayViewContainer}
+        contentContainerStyle={selectionMode ? { paddingBottom: 200 } : undefined}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[MANAGER_BLUE]} />
         }
       >
-        <View style={styles.timeGrid}>
-          {TIME_SLOTS.map((time) => (
-            <View key={time} style={styles.timeRow}>
-              <Text style={styles.timeLabel}>{formatTime(time)}</Text>
-              <View style={styles.timeSlotLine} />
-            </View>
-          ))}
+        {/* Hint shown when not in selection mode */}
+        {!selectionMode && (
+          <View style={styles.selectionHint}>
+            <MaterialCommunityIcons name="gesture-double-tap" size={14} color="#9CA3AF" />
+            <Text style={styles.selectionHintText}>Double-tap an empty slot to select</Text>
+          </View>
+        )}
 
-          {/* Render bookings */}
+        <View style={styles.timeGrid}>
+          {TIME_SLOTS.map((time, slotIndex) => {
+            const occupied =
+              selectionMode && isSlotOccupied(slotIndex, selectionGroundId, dateStr);
+            const inSelection =
+              selectionMode && slotIndex >= normStart && slotIndex <= normEnd;
+
+            return (
+              <TouchableOpacity
+                key={time}
+                activeOpacity={1}
+                style={[
+                  styles.timeRow,
+                  selectionMode && styles.timeRowSelectable,
+                  occupied && styles.timeRowOccupied,
+                ]}
+                onPress={() => {
+                  if (selectionMode) {
+                    if (!occupied) handleSlotTap(slotIndex, dateStr);
+                  } else {
+                    handleSlotTap(slotIndex, dateStr);
+                  }
+                }}
+              >
+                <Text style={styles.timeLabel}>{formatTime(time)}</Text>
+                <View
+                  style={[
+                    styles.timeSlotLine,
+                    inSelection && { backgroundColor: "transparent" },
+                  ]}
+                />
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Selection overlay */}
+          {selectionMode && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.selectionOverlay,
+                {
+                  top: selTop,
+                  height: selHeight,
+                  backgroundColor: hasConflict
+                    ? "rgba(239,68,68,0.15)"
+                    : "rgba(59,130,246,0.15)",
+                  borderColor: hasConflict ? DANGER_RED : MANAGER_BLUE,
+                },
+              ]}
+            >
+              <View style={styles.selectionOverlayHandleRow}>
+                <View
+                  style={[
+                    styles.selectionOverlayHandle,
+                    { backgroundColor: hasConflict ? DANGER_RED : MANAGER_BLUE },
+                  ]}
+                />
+              </View>
+              <Text
+                style={[
+                  styles.selectionOverlayLabel,
+                  { color: hasConflict ? DANGER_RED : MANAGER_BLUE },
+                ]}
+              >
+                {`${formatTime(idxToTime(normStart))} – ${formatTime(idxToTime(normEnd + 1))}`}
+              </Text>
+              {hasConflict && (
+                <Text style={styles.selectionConflictLabel}>Booking exists</Text>
+              )}
+              <View style={styles.selectionOverlayHandleRow}>
+                <View
+                  style={[
+                    styles.selectionOverlayHandle,
+                    { backgroundColor: hasConflict ? DANGER_RED : MANAGER_BLUE },
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
           <View style={styles.eventsContainer}>
             {events.map((event, index) => {
               const position = getBookingStyle(event);
+              const priority = STATUS_PRIORITY[event.displayStatus] ?? 5;
               return (
                 <View
                   key={event.id || index}
                   style={[
                     styles.eventWrapper,
-                    { top: position.top, height: position.height },
+                    { top: position.top, height: position.height, zIndex: priority },
                   ]}
                 >
                   <BookingBlock booking={event} />
@@ -536,13 +737,109 @@ export default function CalendarScreen({ navigation }) {
           </View>
         </View>
 
-        {events.length === 0 && (
+        {events.length === 0 && !selectionMode && (
           <View style={styles.noEventsDay}>
             <MaterialCommunityIcons name="calendar-blank" size={48} color="#ccc" />
             <Text style={styles.noEventsText}>No bookings for this day</Text>
           </View>
         )}
       </ScrollView>
+    );
+  };
+
+  // Selection action bar
+  const SelectionBar = () => {
+    const dateStr = getDateString(selectedDate);
+    const normStart = selectionStart ?? 0;
+    const normEnd = selectionEnd ?? normStart;
+    const durationHrs = normEnd - normStart + 1;
+    const hasConflict = selectionHasConflict(normStart, normEnd, selectionGroundId, dateStr);
+
+    const translateY = selectionBarAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [160, 0],
+    });
+
+    return (
+      <Animated.View style={[styles.selectionBar, { transform: [{ translateY }] }]}>
+        {/* Summary row */}
+        <View style={styles.selectionBarHeader}>
+          <View style={styles.selectionBarInfo}>
+            <MaterialCommunityIcons name="clock-outline" size={15} color={MANAGER_BLUE} />
+            <Text style={styles.selectionBarTime}>
+              {`${formatTime(idxToTime(normStart))} – ${formatTime(idxToTime(normEnd + 1))}`}
+            </Text>
+            <View style={styles.selectionBarDot} />
+            <Text style={styles.selectionBarDuration}>
+              {durationHrs}h
+            </Text>
+          </View>
+          <TouchableOpacity onPress={clearSelection} style={styles.selectionBarClose}>
+            <MaterialCommunityIcons name="close" size={18} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Ground picker (only when multiple grounds) */}
+        {grounds.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.selectionGroundRow}
+            contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
+          >
+            {grounds.map((g) => (
+              <TouchableOpacity
+                key={g.id}
+                style={[
+                  styles.selectionGroundChip,
+                  selectionGroundId === g.id && styles.selectionGroundChipActive,
+                ]}
+                onPress={() => setSelectionGroundId(g.id)}
+              >
+                <Text
+                  style={[
+                    styles.selectionGroundChipText,
+                    selectionGroundId === g.id && styles.selectionGroundChipTextActive,
+                  ]}
+                >
+                  {g.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {hasConflict && (
+          <View style={styles.selectionConflictBanner}>
+            <MaterialCommunityIcons name="alert-circle" size={14} color={DANGER_RED} />
+            <Text style={styles.selectionConflictBannerText}>
+              A booking already exists in this slot
+            </Text>
+          </View>
+        )}
+
+        {/* Action buttons */}
+        <View style={styles.selectionBarActions}>
+          <TouchableOpacity
+            style={styles.selectionBlockBtn}
+            onPress={() => handleBlockFromSelection(dateStr)}
+          >
+            <MaterialCommunityIcons name="lock-outline" size={16} color={WARN_ORANGE} />
+            <Text style={styles.selectionBlockBtnText}>Block</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.selectionBookBtn,
+              hasConflict && styles.selectionBookBtnDisabled,
+            ]}
+            disabled={hasConflict}
+            onPress={() => handleBookFromSelection(dateStr)}
+          >
+            <MaterialCommunityIcons name="calendar-plus" size={16} color="#fff" />
+            <Text style={styles.selectionBookBtnText}>Create Booking</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     );
   };
 
@@ -914,21 +1211,24 @@ export default function CalendarScreen({ navigation }) {
         </View>
       ) : (
         <>
-          {viewType === VIEW_TYPES.DAY && <DayView />}
-          {viewType === VIEW_TYPES.WEEK && <WeekView />}
-          {viewType === VIEW_TYPES.MONTH && <MonthView />}
+          {viewType === VIEW_TYPES.DAY && DayView()}
+          {viewType === VIEW_TYPES.WEEK && WeekView()}
+          {viewType === VIEW_TYPES.MONTH && MonthView()}
         </>
       )}
 
-      {/* Quick action FAB */}
-      <FAB
-        icon="plus"
-        style={styles.fab}
-        onPress={() => {
-          navigation.navigate("CreateBooking");
-        }}
-        label="New Booking"
-      />
+      {/* Quick action FAB — hidden in selection mode */}
+      {!selectionMode && (
+        <FAB
+          icon="plus"
+          style={styles.fab}
+          onPress={() => navigation.navigate("CreateBooking")}
+          label="New Booking"
+        />
+      )}
+
+      {/* Slot selection action bar */}
+      {selectionMode && <SelectionBar />}
 
       {/* Dialogs */}
       <LegendDialog />
@@ -1349,6 +1649,199 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     textAlign: "center",
     lineHeight: 20,
+  },
+
+  // Slot selection hint
+  selectionHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+    backgroundColor: "#F9FAFB",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  selectionHintText: {
+    fontSize: 11,
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
+  },
+
+  // Pressable time rows
+  timeRowSelectable: {
+    backgroundColor: "rgba(59,130,246,0.03)",
+  },
+  timeRowOccupied: {
+    opacity: 0.5,
+  },
+
+  // Selection overlay (absolutely positioned on timeGrid)
+  selectionOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    borderWidth: 1.5,
+    borderRadius: 8,
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    zIndex: 20,
+  },
+  selectionOverlayHandleRow: {
+    alignItems: "center",
+  },
+  selectionOverlayHandle: {
+    width: 28,
+    height: 3,
+    borderRadius: 2,
+    opacity: 0.6,
+  },
+  selectionOverlayLabel: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 13,
+    textAlign: "center",
+    marginVertical: 2,
+  },
+  selectionConflictLabel: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 11,
+    color: DANGER_RED,
+    textAlign: "center",
+  },
+
+  // Selection action bar
+  selectionBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 16,
+    zIndex: 100,
+  },
+  selectionBarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  selectionBarInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  selectionBarTime: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 15,
+    color: "#111827",
+  },
+  selectionBarDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#9CA3AF",
+  },
+  selectionBarDuration: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  selectionBarClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectionGroundRow: {
+    marginBottom: 12,
+    maxHeight: 36,
+  },
+  selectionGroundChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+  },
+  selectionGroundChipActive: {
+    borderColor: MANAGER_BLUE,
+    backgroundColor: PALE_BLUE,
+  },
+  selectionGroundChipText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  selectionGroundChipTextActive: {
+    color: MANAGER_BLUE,
+  },
+  selectionConflictBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: DANGER_RED,
+  },
+  selectionConflictBannerText: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 12,
+    color: DANGER_RED,
+  },
+  selectionBarActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  selectionBlockBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: WARN_ORANGE,
+    backgroundColor: "#FFFBEB",
+  },
+  selectionBlockBtnText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: WARN_ORANGE,
+  },
+  selectionBookBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: MANAGER_BLUE,
+  },
+  selectionBookBtnDisabled: {
+    backgroundColor: "#9CA3AF",
+  },
+  selectionBookBtnText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: "#fff",
   },
 
   // FAB

@@ -298,6 +298,57 @@ export function getSlotHourlyRate(timeStr, ground, weekend = false) {
   return getRate(dayPricing[period.key], pricing.allDayRate || 0);
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Operating Hours → Time Slot Generator
+// ──────────────────────────────────────────────────────────────────────────────
+
+const _DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+const _fmtLabel = (h, m) => {
+  const period = h >= 12 ? "PM" : "AM";
+  const dh = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${dh}:${m.toString().padStart(2, "0")} ${period}`;
+};
+
+/**
+ * Generate 30-min time slots respecting turf operating hours for a given day.
+ * Returns array of { time, hour, minute, label }.
+ * Falls back to 06:00–23:00 when operatingHours/date not provided.
+ * Returns [] if the turf is closed on that day (isOpen === false).
+ *
+ * @param {object} operatingHours  turf.operatingHours keyed by lowercase day name
+ * @param {string|Date} date       "YYYY-MM-DD" string or Date object
+ */
+export const generateOperatingSlots = (operatingHours, date) => {
+  let openMins = 6 * 60;   // default 06:00
+  let closeMins = 23 * 60; // default 23:00
+
+  if (operatingHours && date) {
+    const d = date instanceof Date
+      ? date
+      : new Date(String(date).length === 10 ? date + "T00:00:00" : date);
+    const dayKey = _DAY_KEYS[d.getDay()];
+    const dayHours = operatingHours[dayKey];
+    if (dayHours) {
+      if (!dayHours.isOpen) return [];
+      const [oh, om] = (dayHours.openTime  || "06:00").split(":").map(Number);
+      const [ch, cm] = (dayHours.closeTime || "23:00").split(":").map(Number);
+      openMins  = oh * 60 + (om || 0);
+      closeMins = ch * 60 + (cm || 0);
+    }
+  }
+
+  const slots = [];
+  for (let mins = openMins; mins <= closeMins; mins += 30) {
+    const hour   = Math.floor(mins / 60);
+    const minute = mins % 60;
+    if (hour > 23) break;
+    const time = `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+    slots.push({ time, hour, minute, label: _fmtLabel(hour, minute) });
+  }
+  return slots;
+};
+
 export default {
   isWeekend,
   timeToMinutes,
@@ -309,4 +360,5 @@ export default {
   calculateBookingPrice,
   calculateExtensionPrice,
   getSlotHourlyRate,
+  generateOperatingSlots,
 };

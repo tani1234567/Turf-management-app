@@ -36,6 +36,7 @@ import { MUMBAI_AREAS } from "../../constants/mumbaiAreas";
 import { getDocument, updateDocument, serverTimestamp } from "../../services/firebase/firestore";
 import { logTurfEdit, detectTurfChanges } from "../../utils/turfEditLogger";
 import { uploadTurfImages, isRemoteImageUri } from "../../services/firebase/turfImages";
+import TimePickerModal from "../../components/TimePickerModal";
 
 const OWNER_COLOR = "#9C27B0";
 const TOTAL_STEPS = 5;
@@ -104,6 +105,8 @@ export default function EditTurfScreen({ navigation, route }) {
       return acc;
     }, {})
   );
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
+  const [timePickerContext, setTimePickerContext] = useState({ dayId: null, field: null });
 
   // Step 4: Grounds
   const [grounds, setGrounds] = useState([]);
@@ -249,6 +252,17 @@ export default function EditTurfScreen({ navigation, route }) {
     });
     setOperatingHours(newHours);
     Alert.alert("Copied", "Operating hours copied to all days.");
+  };
+
+  const openTimePicker = (dayId, field) => {
+    setTimePickerContext({ dayId, field });
+    setTimePickerVisible(true);
+  };
+
+  const handleTimePickerConfirm = (time) => {
+    const { dayId, field } = timePickerContext;
+    updateOperatingHours(dayId, field, time);
+    setTimePickerVisible(false);
   };
 
   const addGround = () => {
@@ -726,10 +740,17 @@ export default function EditTurfScreen({ navigation, route }) {
         style={styles.areaSelector}
         onPress={() => setAreaModalVisible(true)}
       >
-        <Text style={area ? styles.areaSelectorText : styles.areaSelectorPlaceholder}>
-          {area || "Select Mumbai area"}
-        </Text>
-        <MaterialCommunityIcons name="chevron-down" size={20} color="#666" />
+        <View style={styles.areaSelectorContent}>
+          <MaterialCommunityIcons
+            name="map-marker"
+            size={20}
+            color={area ? OWNER_COLOR : "#CCC"}
+          />
+          <Text style={area ? styles.areaSelectorText : styles.areaSelectorPlaceholder}>
+            {area || "Select Mumbai area"}
+          </Text>
+        </View>
+        <MaterialCommunityIcons name="chevron-down" size={22} color={OWNER_COLOR} />
       </TouchableOpacity>
 
       <TextInput
@@ -747,7 +768,7 @@ export default function EditTurfScreen({ navigation, route }) {
       </Text>
       {coordinates.lat && coordinates.lng ? (
         <View style={styles.coordinatesDisplay}>
-          <MaterialCommunityIcons name="map-marker-check" size={20} color="#4CAF50" />
+          <MaterialCommunityIcons name="map-marker-check" size={20} color="#22C55E" />
           <Text style={styles.coordinatesText}>
             {coordinates.lat.toFixed(6)}, {coordinates.lng.toFixed(6)}
           </Text>
@@ -830,24 +851,28 @@ export default function EditTurfScreen({ navigation, route }) {
             <View style={styles.timeRow}>
               <View style={styles.timeInput}>
                 <Text variant="bodySmall" style={styles.timeLabel}>Open</Text>
-                <TextInput
-                  mode="outlined"
-                  value={operatingHours[day.id]?.openTime}
-                  onChangeText={(v) => updateOperatingHours(day.id, "openTime", v)}
-                  dense
-                  style={styles.timeField}
-                />
+                <TouchableOpacity
+                  style={styles.timeButton}
+                  onPress={() => openTimePicker(day.id, "openTime")}
+                >
+                  <MaterialCommunityIcons name="clock-outline" size={18} color={OWNER_COLOR} />
+                  <Text style={styles.timeButtonText}>
+                    {operatingHours[day.id]?.openTime}
+                  </Text>
+                </TouchableOpacity>
               </View>
               <Text style={styles.timeSeparator}>to</Text>
               <View style={styles.timeInput}>
                 <Text variant="bodySmall" style={styles.timeLabel}>Close</Text>
-                <TextInput
-                  mode="outlined"
-                  value={operatingHours[day.id]?.closeTime}
-                  onChangeText={(v) => updateOperatingHours(day.id, "closeTime", v)}
-                  dense
-                  style={styles.timeField}
-                />
+                <TouchableOpacity
+                  style={styles.timeButton}
+                  onPress={() => openTimePicker(day.id, "closeTime")}
+                >
+                  <MaterialCommunityIcons name="clock-outline" size={18} color={OWNER_COLOR} />
+                  <Text style={styles.timeButtonText}>
+                    {operatingHours[day.id]?.closeTime}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1173,6 +1198,19 @@ export default function EditTurfScreen({ navigation, route }) {
         </Dialog>
       </Portal>
 
+      {/* Time Picker Modal */}
+      <TimePickerModal
+        visible={timePickerVisible}
+        onDismiss={() => setTimePickerVisible(false)}
+        onConfirm={handleTimePickerConfirm}
+        initialTime={
+          timePickerContext.dayId && timePickerContext.field
+            ? operatingHours[timePickerContext.dayId]?.[timePickerContext.field] || "06:00"
+            : "06:00"
+        }
+        label={timePickerContext.field === "openTime" ? "Opening Time" : "Closing Time"}
+      />
+
       {renderStepIndicator()}
 
       <KeyboardAvoidingView
@@ -1396,6 +1434,23 @@ const styles = StyleSheet.create({
   timeField: {
     backgroundColor: "#fff",
   },
+  timeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#9C27B0",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  timeButtonText: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    color: "#9C27B0",
+  },
   timeSeparator: {
     marginHorizontal: 12,
     color: "#666",
@@ -1515,6 +1570,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     marginBottom: 16,
+  },
+  areaSelectorContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
   },
   areaSelectorText: {
     fontSize: 15,

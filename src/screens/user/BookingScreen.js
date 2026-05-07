@@ -21,7 +21,7 @@ import { useSelector } from "react-redux";
 
 import { selectUser } from "../../store/slices/authSlice";
 import { queryDocuments, getDocument, subscribeToCollection } from "../../services/firebase/firestore";
-import { getSlotHourlyRate, calculateBookingPrice } from "../../utils/priceUtils";
+import { getSlotHourlyRate, calculateBookingPrice, generateOperatingSlots } from "../../utils/priceUtils";
 import {
   computeAllSlotStatuses,
   getActiveLegendItems,
@@ -45,35 +45,11 @@ const SPORT_ICONS = {
   default: "trophy",
 };
 
-// Generate time slots from 6 AM to 11 PM in 30-minute intervals
-const generateTimeSlots = () => {
-  const slots = [];
-  for (let hour = 6; hour <= 23; hour++) {
-    slots.push({
-      time: `${hour.toString().padStart(2, "0")}:00`,
-      hour,
-      minute: 0,
-      label: formatTime(hour, 0),
-    });
-    if (hour < 23) {
-      slots.push({
-        time: `${hour.toString().padStart(2, "0")}:30`,
-        hour,
-        minute: 30,
-        label: formatTime(hour, 30),
-      });
-    }
-  }
-  return slots;
-};
-
 const formatTime = (hour, minute) => {
   const period = hour >= 12 ? "PM" : "AM";
   const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
   return `${displayHour}:${minute.toString().padStart(2, "0")} ${period}`;
 };
-
-const TIME_SLOTS = generateTimeSlots();
 
 
 const BOOKING_STEPS = [
@@ -286,10 +262,16 @@ export default function BookingScreen({ navigation, route }) {
     );
   }, [grounds, selectedSport]);
 
+  // Dynamic time slots respecting turf's operating hours for the selected day
+  const timeSlots = useMemo(
+    () => generateOperatingSlots(turf?.operatingHours, selectedDate?.dateString || null),
+    [turf, selectedDate]
+  );
+
   // Compute slot statuses for the time grid (aggregate across all grounds for selected sport)
   const slotStatusMap = useMemo(
     () =>
-      computeAllSlotStatuses(TIME_SLOTS, filteredGrounds, {
+      computeAllSlotStatuses(timeSlots, filteredGrounds, {
         selectedDate,
         bookings,
         academySessions,
@@ -454,16 +436,16 @@ export default function BookingScreen({ navigation, route }) {
     if (isGroundAcademyBlocked(ground.id)) return false;
 
     // Then check for booking conflicts
-    const startIndex = TIME_SLOTS.findIndex(s => s.time === startTime.time);
-    const endIndex = TIME_SLOTS.findIndex(s => s.time === endTime.time);
+    const startIndex = timeSlots.findIndex(s => s.time === startTime.time);
+    const endIndex = timeSlots.findIndex(s => s.time === endTime.time);
 
     for (let i = startIndex; i < endIndex; i++) {
-      if (isSlotBooked(ground.id, TIME_SLOTS[i])) {
+      if (isSlotBooked(ground.id, timeSlots[i])) {
         return false;
       }
     }
     return true;
-  }, [startTime, endTime, isSlotBooked, isGroundBlocked, isGroundAcademyBlocked]);
+  }, [startTime, endTime, timeSlots, isSlotBooked, isGroundBlocked, isGroundAcademyBlocked]);
 
   // Handle time slot selection — all slots are tappable regardless of status
   const handleTimeSlotPress = (slot) => {
@@ -473,8 +455,8 @@ export default function BookingScreen({ navigation, route }) {
       setEndTime(null);
     } else {
       // Complete selection
-      const startIndex = TIME_SLOTS.findIndex(s => s.time === startTime.time);
-      const slotIndex = TIME_SLOTS.findIndex(s => s.time === slot.time);
+      const startIndex = timeSlots.findIndex(s => s.time === startTime.time);
+      const slotIndex = timeSlots.findIndex(s => s.time === slot.time);
 
       if (slotIndex <= startIndex) {
         // If clicked before start, make this the new start
@@ -485,12 +467,12 @@ export default function BookingScreen({ navigation, route }) {
         let targetEndIndex = slotIndex;
         if (slotIndex - startIndex < 2) {
           targetEndIndex = startIndex + 2;
-          if (targetEndIndex >= TIME_SLOTS.length) {
-            targetEndIndex = TIME_SLOTS.length - 1;
+          if (targetEndIndex >= timeSlots.length) {
+            targetEndIndex = timeSlots.length - 1;
           }
         }
 
-        setEndTime(TIME_SLOTS[targetEndIndex]);
+        setEndTime(timeSlots[targetEndIndex]);
       }
     }
   };
@@ -500,9 +482,9 @@ export default function BookingScreen({ navigation, route }) {
     if (!startTime) return false;
     if (!endTime) return slot.time === startTime.time;
 
-    const slotIndex = TIME_SLOTS.findIndex(s => s.time === slot.time);
-    const startIndex = TIME_SLOTS.findIndex(s => s.time === startTime.time);
-    const endIndex = TIME_SLOTS.findIndex(s => s.time === endTime.time);
+    const slotIndex = timeSlots.findIndex(s => s.time === slot.time);
+    const startIndex = timeSlots.findIndex(s => s.time === startTime.time);
+    const endIndex = timeSlots.findIndex(s => s.time === endTime.time);
 
     return slotIndex >= startIndex && slotIndex < endIndex;
   };
@@ -522,15 +504,15 @@ export default function BookingScreen({ navigation, route }) {
   const validateTimeRange = () => {
     if (!startTime || !endTime) return null;
 
-    const startIndex = TIME_SLOTS.findIndex(s => s.time === startTime.time);
-    const endIndex = TIME_SLOTS.findIndex(s => s.time === endTime.time);
+    const startIndex = timeSlots.findIndex(s => s.time === startTime.time);
+    const endIndex = timeSlots.findIndex(s => s.time === endTime.time);
 
     // Check each slot in the booked range (end slot is the boundary, not included)
     for (let i = startIndex; i < endIndex; i++) {
-      const info = slotStatusMap[TIME_SLOTS[i].time];
+      const info = slotStatusMap[timeSlots[i].time];
       if (info && !info.selectable) {
         const msg = SLOT_MESSAGES[info.status] || "One or more slots in your selected range are not available";
-        return `${TIME_SLOTS[i].label}: ${msg}`;
+        return `${timeSlots[i].label}: ${msg}`;
       }
     }
     return null;
@@ -867,8 +849,8 @@ export default function BookingScreen({ navigation, route }) {
             {startTime && endTime && (
               <View style={styles.durationBadge}>
                 <Text style={styles.durationText}>
-                  {((TIME_SLOTS.findIndex(s => s.time === endTime.time) -
-                    TIME_SLOTS.findIndex(s => s.time === startTime.time)) * 0.5).toFixed(1)}h
+                  {((timeSlots.findIndex(s => s.time === endTime.time) -
+                    timeSlots.findIndex(s => s.time === startTime.time)) * 0.5).toFixed(1)}h
                 </Text>
               </View>
             )}
@@ -878,7 +860,7 @@ export default function BookingScreen({ navigation, route }) {
 
       {/* Color-coded time slots grid */}
       <TimeSlotGrid
-        timeSlots={TIME_SLOTS}
+        timeSlots={timeSlots}
         slotStatusMap={slotStatusMap}
         startTime={startTime}
         endTime={endTime}

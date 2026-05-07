@@ -15,6 +15,7 @@ import {
 } from "../store/slices/authSlice";
 import { setCompany, clearCompany } from "../store/slices/companySlice";
 import { clearWishlist } from "../store/slices/wishlistSlice";
+import { clearOwnerState } from "../store/slices/ownerSlice";
 import { getDocument } from "../services/firebase/firestore";
 import { getPushToken, removeFCMToken } from "../services/notifications/setup";
 
@@ -138,6 +139,7 @@ export const useAuth = (options = {}) => {
       dispatch(logoutAction());
       dispatch(clearCompany());
       dispatch(clearWishlist());
+      dispatch(clearOwnerState());
     } catch (err) {
       dispatch(setError(err.message));
     }

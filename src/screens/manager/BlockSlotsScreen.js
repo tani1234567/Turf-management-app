@@ -164,18 +164,25 @@ const normalizeGroundId = (groundId) => {
   return groundId.toLowerCase().replace(/[-_]/g, "");
 };
 
-export default function BlockSlotsScreen({ navigation }) {
+export default function BlockSlotsScreen({ navigation, route }) {
   const { selectedTurfId, turfData } = useSelectedTurf();
   const user = useAppSelector(selectUser);
+  const prefill = route?.params?.prefill ?? null;
 
   // View mode: 'create' or 'list'
-  const [viewMode, setViewMode] = useState("list");
+  const [viewMode, setViewMode] = useState(prefill ? "create" : "list");
 
   // Block type
   const [blockType, setBlockType] = useState(BLOCK_TYPES.SINGLE);
 
   // Date selection
-  const [startDate, setStartDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(() => {
+    if (prefill?.date) {
+      const [y, m, d] = prefill.date.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date();
+  });
   const [endDate, setEndDate] = useState(new Date());
   const [recurringDays, setRecurringDays] = useState([]);
   const [recurringEndDate, setRecurringEndDate] = useState(() => {
@@ -189,8 +196,8 @@ export default function BlockSlotsScreen({ navigation }) {
   const [allGrounds, setAllGrounds] = useState(false);
 
   // Time selection
-  const [startTime, setStartTime] = useState(null);
-  const [endTime, setEndTime] = useState(null);
+  const [startTime, setStartTime] = useState(prefill?.startTime ?? null);
+  const [endTime, setEndTime] = useState(prefill?.endTime ?? null);
   const [allDay, setAllDay] = useState(false);
 
   // Reason
@@ -223,6 +230,13 @@ export default function BlockSlotsScreen({ navigation }) {
       id: g.id || `ground_${index}`,
     }));
     setGrounds(groundsWithIds);
+
+    if (prefill?.groundId && !selectedGround) {
+      const match = groundsWithIds.find(
+        (g) => normalizeGroundId(g.id) === normalizeGroundId(prefill.groundId)
+      );
+      if (match) setSelectedGround(match);
+    }
   }, [turfData]);
 
   // Subscribe to existing blocked slots

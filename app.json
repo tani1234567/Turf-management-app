@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -33,19 +33,23 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-   "@react-native-firebase/app",
-   "@react-native-firebase/auth",
-   "expo-font",
-   "expo-notifications",
-    [
-      "expo-build-properties",
-      {
-        "ios": {
-          "useFrameworks": "static"
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "expo-font",
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
         }
-      }
-    ]
-  ],
+      ],
+      [
+        "expo-splash-screen",
+        {}
+      ]
+],
     "extra": {
       "eas": {
         "projectId": "ec328dec-2c39-49b5-88ec-9be2c9350cae"

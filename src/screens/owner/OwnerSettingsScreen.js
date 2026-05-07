@@ -20,8 +20,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector, useDispatch } from "react-redux";
 import * as Clipboard from "expo-clipboard";
 
-import { selectUser } from "../../store/slices/authSlice";
+import { selectUser, updateUserProfile } from "../../store/slices/authSlice";
 import { useAuth } from "../../hooks/useAuth";
+import { updateDocument } from "../../services/firebase/firestore";
 import {
   selectCompany,
   selectInviteCode,
@@ -107,6 +108,11 @@ export default function OwnerSettingsScreen({ navigation }) {
   const [editCompanyDialogVisible, setEditCompanyDialogVisible] = useState(false);
   const [companyName, setCompanyName] = useState(company?.name || "");
 
+  const [editProfileDialogVisible, setEditProfileDialogVisible] = useState(false);
+  const [editName, setEditName] = useState(user?.name || "");
+  const [editEmail, setEditEmail] = useState(user?.email || "");
+  const [savingProfile, setSavingProfile] = useState(false);
+
   const handleCopyInviteCode = async () => {
     const code = inviteCode?.code || "DEMO1234";
     await Clipboard.setStringAsync(code);
@@ -133,13 +139,47 @@ export default function OwnerSettingsScreen({ navigation }) {
     Alert.alert("Code Regenerated", "Your new invite code is ready to share.");
   };
 
+  const handleUpdateProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert("Error", "Name cannot be empty.");
+      return;
+    }
+    const userId = user?.userId || user?.uid;
+    if (!userId) {
+      Alert.alert("Error", "User session expired. Please log in again.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const updates = { name: editName.trim() };
+      if (editEmail.trim()) updates.email = editEmail.trim();
+      await updateDocument("users", userId, updates);
+      dispatch(updateUserProfile(updates));
+      setEditProfileDialogVisible(false);
+      Alert.alert("Updated", "Your profile has been updated.");
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      Alert.alert("Error", "Failed to update profile. Please try again.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleUpdateCompanyName = async () => {
     if (!companyName.trim()) {
       Alert.alert("Error", "Company name cannot be empty.");
       return;
     }
-    setEditCompanyDialogVisible(false);
-    Alert.alert("Updated", "Company name has been updated.");
+    const companyId = company?.id || company?.companyId;
+    if (!companyId) return;
+    try {
+      await updateDocument("companies", companyId, { name: companyName.trim() });
+      setEditCompanyDialogVisible(false);
+      Alert.alert("Updated", "Company name has been updated.");
+    } catch (error) {
+      console.error("Error updating company:", error);
+      Alert.alert("Error", "Failed to update company name.");
+    }
   };
 
   const handleLogout = () => {
@@ -229,7 +269,14 @@ export default function OwnerSettingsScreen({ navigation }) {
                 <Text style={styles.rolePillText}>Turf Owner</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.editProfileBtn}>
+            <TouchableOpacity
+              style={styles.editProfileBtn}
+              onPress={() => {
+                setEditName(user?.name || "");
+                setEditEmail(user?.email || "");
+                setEditProfileDialogVisible(true);
+              }}
+            >
               <MaterialCommunityIcons name="pencil-outline" size={18} color={OWNER_PURPLE} />
             </TouchableOpacity>
           </View>
@@ -410,6 +457,42 @@ export default function OwnerSettingsScreen({ navigation }) {
 
         <Text style={styles.version}>Turf Management System v2.0</Text>
       </ScrollView>
+
+      {/* Edit Profile Dialog */}
+      <Portal>
+        <Dialog visible={editProfileDialogVisible} onDismiss={() => setEditProfileDialogVisible(false)}>
+          <Dialog.Title>Edit Profile</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              mode="outlined"
+              label="Full Name"
+              value={editName}
+              onChangeText={setEditName}
+              style={styles.dialogInput}
+              autoCapitalize="words"
+            />
+            <TextInput
+              mode="outlined"
+              label="Email (optional)"
+              value={editEmail}
+              onChangeText={setEditEmail}
+              style={[styles.dialogInput, { marginTop: 12 }]}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <TouchableOpacity onPress={() => setEditProfileDialogVisible(false)} style={styles.dialogBtn}>
+              <Text style={styles.dialogBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleUpdateProfile} style={styles.dialogBtn} disabled={savingProfile}>
+              <Text style={[styles.dialogBtnText, { color: OWNER_PURPLE }]}>
+                {savingProfile ? "Saving..." : "Save"}
+              </Text>
+            </TouchableOpacity>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {/* Regenerate Code Dialog */}
       <Portal>
