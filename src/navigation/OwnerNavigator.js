@@ -26,6 +26,7 @@ import PendingTurfRequestsScreen from "../screens/owner/PendingTurfRequestsScree
 import TurfEditLogsScreen from "../screens/owner/TurfEditLogsScreen";
 import OperationsModeNavigator from "../navigation/OperationsModeNavigator";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
+import CustomerPhonebookScreen from "../screens/shared/CustomerPhonebookScreen";
 
 // VerifyPayment still needed from other owner screens (e.g. OwnerDashboard)
 import VerifyPaymentScreen from "../screens/manager/VerifyPaymentScreen";
@@ -236,9 +237,12 @@ export default function OwnerNavigator() {
       <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{
-          presentation: "card",
-        }}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="CustomerPhonebook"
+        component={CustomerPhonebookScreen}
+        options={{ presentation: "card" }}
       />
     </Stack.Navigator>
   );

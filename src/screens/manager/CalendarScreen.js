@@ -489,6 +489,22 @@ export default function CalendarScreen({ navigation }) {
     setSelectionGroundId(null);
   }, []);
 
+  const cancelSlot = useCallback((slotIndex) => {
+    const start = selectionStart ?? slotIndex;
+    const end = selectionEnd ?? slotIndex;
+    if (start === end) {
+      // Only one slot — clear entirely
+      clearSelection();
+    } else if (slotIndex === start) {
+      setSelectionStart(start + 1);
+    } else if (slotIndex === end) {
+      setSelectionEnd(end - 1);
+    } else {
+      // Middle slot — keep the top portion
+      setSelectionEnd(slotIndex - 1);
+    }
+  }, [selectionStart, selectionEnd, clearSelection]);
+
   const handleBookFromSelection = useCallback((dateStr) => {
     const start = idxToTime(selectionStart);
     const end = idxToTime((selectionEnd ?? selectionStart) + 1);
@@ -668,6 +684,15 @@ export default function CalendarScreen({ navigation }) {
                     inSelection && { backgroundColor: "transparent" },
                   ]}
                 />
+                {inSelection && (
+                  <TouchableOpacity
+                    onPress={() => cancelSlot(slotIndex)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.slotCancelBtn}
+                  >
+                    <MaterialCommunityIcons name="cancel" size={22} color={DANGER_RED} />
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -1666,6 +1691,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Ubuntu-Regular",
     color: "#9CA3AF",
+  },
+
+  slotCancelBtn: {
+    paddingHorizontal: 6,
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   // Pressable time rows

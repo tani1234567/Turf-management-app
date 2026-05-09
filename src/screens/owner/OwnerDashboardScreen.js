@@ -188,6 +188,7 @@ export default function OwnerDashboardScreen({ navigation }) {
     { id: "reviews",    icon: "star-outline",            label: "Reviews",      color: "#F59E0B",      onPress: () => navigation.navigate("ReviewManagement") },
     { id: "requests",   icon: "file-document-check-outline", label: "Requests", color: "#00BCD4",      onPress: () => navigation.navigate("PendingTurfRequests") },
     { id: "sub",        icon: "credit-card",             label: "Subscription", color: "#F97316",      onPress: () => navigation.navigate("SubscriptionPayment") },
+    { id: "phonebook",  icon: "book-account",            label: "Contacts",     color: "#10B981",      onPress: () => navigation.navigate("CustomerPhonebook") },
   ];
 
   return (

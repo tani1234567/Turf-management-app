@@ -499,6 +499,13 @@ export default function ManagerDashboardScreen({ navigation }) {
       badge: pendingTurfRequests > 0 ? pendingTurfRequests : null,
       onPress: () => navigation.navigate("TurfRequestsList"),
     },
+    {
+      id: "phonebook",
+      label: "Contacts",
+      icon: "book-account",
+      color: "#10B981",
+      onPress: () => navigation.navigate("CustomerPhonebook"),
+    },
   ];
 
   // --- RENDER ---

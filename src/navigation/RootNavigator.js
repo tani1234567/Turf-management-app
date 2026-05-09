@@ -8,7 +8,6 @@ import UserNavigator from "./UserNavigator";
 import OwnerNavigator from "./OwnerNavigator";
 import ManagerNavigator from "./ManagerNavigator";
 import CaretakerNavigator from "./CaretakerNavigator";
-import AdminNavigator from "./AdminNavigator";
 
 const Stack = createStackNavigator();
 
@@ -24,8 +23,6 @@ function LoadingScreen() {
 // Get main navigator based on user role
 function getMainNavigator(role) {
   switch (role) {
-    case "admin":
-      return AdminNavigator;
     case "owner":
       return OwnerNavigator;
     case "manager":

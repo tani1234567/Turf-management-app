@@ -38,6 +38,12 @@ const SETTINGS_SECTIONS = [
     ],
   },
   {
+    title: "Tools",
+    items: [
+      { id: "phonebook", icon: "book-account", label: "Customer Directory", color: "#10B981" },
+    ],
+  },
+  {
     title: "Account",
     items: [
       { id: "profile", icon: "account-edit", label: "Edit Profile", color: "#607D8B" },
@@ -289,6 +295,9 @@ export default function SettingsScreen() {
         break;
       case "profile":
         setShowEditProfile(true);
+        break;
+      case "phonebook":
+        navigation.navigate("CustomerPhonebook");
         break;
       case "notifications":
         navigation.navigate("Notifications");
