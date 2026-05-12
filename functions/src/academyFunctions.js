@@ -1,5 +1,8 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onCall } = require("firebase-functions/v2/https");
 const { sendNotification } = require("./helpers/notificationHelpers");
 
 const db = admin.firestore();
@@ -164,15 +167,19 @@ async function generateSessionsForAcademy(academyId, academyData) {
  *
  * Trigger: Firestore onCreate on academies/{academyId}
  */
-exports.generateAcademySessions = functions
-  .runWith({ timeoutSeconds: 300, memory: "512MB" })
-  .firestore.document("academies/{academyId}")
-  .onCreate(async (snap, context) => {
-    const academyId = context.params.academyId;
-    const academy = snap.data();
+exports.generateAcademySessions = onDocumentCreated(
+  {
+    document: "academies/{academyId}",
+    timeoutSeconds: 300,
+    memory: "512MB",
+  },
+  async (event) => {
+    const academyId = event.params.academyId;
+    const academy = event.data.data();
     console.log(`Academy ${academyId} created: "${academy.name}"`);
     return generateSessionsForAcademy(academyId, academy);
-  });
+  }
+);
 
 /**
  * Cloud Function: Mark past academy sessions as completed.
@@ -181,10 +188,12 @@ exports.generateAcademySessions = functions
  * Finds all academy_sessions with status "scheduled" where the date is before today,
  * and updates them to "completed".
  */
-exports.markPastSessionsCompleted = functions.pubsub
-  .schedule("0 1 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.markPastSessionsCompleted = onSchedule(
+  {
+    schedule: "0 1 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Marking past academy sessions as completed...");
 
     // Get today in IST as YYYY-MM-DD
@@ -244,10 +253,12 @@ exports.markPastSessionsCompleted = functions.pubsub
  * Finds active academies whose contract.endDate == today + 5 days
  * and sends a notification to the academy creator.
  */
-exports.sendAcademyRenewalReminders = functions.pubsub
-  .schedule("0 9 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.sendAcademyRenewalReminders = onSchedule(
+  {
+    schedule: "0 9 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Checking for academy renewal reminders...");
 
     // Get today + 5 days in IST
@@ -322,10 +333,12 @@ function formatDateForNotification(dateStr) {
  * after sessions are marked completed).
  * Finds active academies whose contract.endDate < today and sets status to "expired".
  */
-exports.expireAcademies = functions.pubsub
-  .schedule("0 2 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.expireAcademies = onSchedule(
+  {
+    schedule: "0 2 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Checking for expired academies...");
 
     const now = new Date();
@@ -382,13 +395,16 @@ exports.expireAcademies = functions.pubsub
  * - On status change to "cancelled": cancel all future scheduled sessions
  * - On renewal (expired -> active): generate new sessions for the updated contract period
  */
-exports.onAcademyStatusChange = functions
-  .runWith({ timeoutSeconds: 300, memory: "512MB" })
-  .firestore.document("academies/{academyId}")
-  .onUpdate(async (change, context) => {
-    const academyId = context.params.academyId;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+exports.onAcademyStatusChange = onDocumentUpdated(
+  {
+    document: "academies/{academyId}",
+    timeoutSeconds: 300,
+    memory: "512MB",
+  },
+  async (event) => {
+    const academyId = event.params.academyId;
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
 
     // Self-healing: if sessions were never generated (onCreate failed), generate them now
     if (afterData.sessionsGenerated === false && afterData.status === "active") {
@@ -460,30 +476,22 @@ exports.onAcademyStatusChange = functions
  * Callable function: Manually trigger session generation for an academy.
  * Used by the manager UI when sessions were not auto-generated.
  */
-exports.manualGenerateSessions = functions
-  .runWith({ timeoutSeconds: 300, memory: "512MB" })
-  .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "Must be logged in to generate sessions."
-      );
+exports.manualGenerateSessions = onCall(
+  { timeoutSeconds: 300, memory: "512MB" },
+  async (request) => {
+    const { auth, data } = request;
+    if (!auth) {
+      throw new Error("Must be logged in to generate sessions.");
     }
 
     const { academyId } = data;
     if (!academyId) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "academyId is required."
-      );
+      throw new Error("academyId is required.");
     }
 
     const academyDoc = await db.collection("academies").doc(academyId).get();
     if (!academyDoc.exists) {
-      throw new functions.https.HttpsError(
-        "not-found",
-        "Academy not found."
-      );
+      throw new Error("Academy not found.");
     }
 
     const academyData = academyDoc.data();

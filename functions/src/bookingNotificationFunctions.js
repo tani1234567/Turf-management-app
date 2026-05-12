@@ -1,5 +1,6 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
 const {
   sendNotification,
   notifyTurfManagers,
@@ -14,9 +15,9 @@ const db = admin.firestore();
  * - payment_verified: User, after manager verifies payment
  * - payment_rejected: User, after manager rejects payment
  */
-exports.onBookingStatusChange = functions.firestore
-  .document("bookings/{bookingId}")
-  .onUpdate(async (change, context) => {
+exports.onBookingStatusChange = onDocumentUpdated("bookings/{bookingId}", async (event) => {
+  const change = event.data;
+  const context = { params: event.params };
     const bookingId = context.params.bookingId;
     const beforeData = change.before.data();
     const afterData = change.after.data();
@@ -83,45 +84,43 @@ exports.onBookingStatusChange = functions.firestore
       });
       console.log(`Sent payment_rejected notification to user ${userId}`);
     }
-
-    return null;
-  });
+});
 
 /**
- * Send notifications when turf requests are created or status changes
+ * Handle turf request creation
+ */
+exports.onTurfRequestCreated = onDocumentCreated("turf_requests/{requestId}", async (event) => {
+  const requestId = event.params.requestId;
+  const afterData = event.data.data();
+
+  const { companyId, requestedBy, requestedByName, turfName } = afterData;
+
+  if (companyId) {
+    const { notifyCompanyOwners } = require("./helpers/notificationHelpers");
+    await notifyCompanyOwners(companyId, {
+      type: "turf_request_created",
+      title: "New Turf Request",
+      body: `${requestedByName || "A manager"} requested to add ${turfName || "a new turf"}.`,
+      data: { requestId },
+    });
+    console.log(`Sent turf_request_created notification for request ${requestId}`);
+  }
+});
+
+/**
+ * Send notifications when turf requests status changes
  * Covers V2.1 notification types:
- * - turf_request_created: Owner, manager requested turf
  * - turf_request_approved: Manager, turf request approved
  * - turf_request_rejected: Manager, turf request rejected
  */
-exports.onTurfRequestChange = functions.firestore
-  .document("turf_requests/{requestId}")
-  .onWrite(async (change, context) => {
-    const requestId = context.params.requestId;
-    const afterData = change.after.exists ? change.after.data() : null;
-    const beforeData = change.before.exists ? change.before.data() : null;
+exports.onTurfRequestChange = onDocumentUpdated("turf_requests/{requestId}", async (event) => {
+  const requestId = event.params.requestId;
+  const afterData = event.data.after.data();
+  const beforeData = event.data.before.data();
 
-    if (!afterData) return null;
+  if (!afterData) return;
 
-    // New turf request created
-    if (!beforeData) {
-      const { companyId, requestedBy, requestedByName, turfName } = afterData;
-
-      if (companyId) {
-        const { notifyCompanyOwners } = require("./helpers/notificationHelpers");
-        await notifyCompanyOwners(companyId, {
-          type: "turf_request_created",
-          title: "New Turf Request",
-          body: `${requestedByName || "A manager"} requested to add ${turfName || "a new turf"}.`,
-          data: { requestId },
-        });
-        console.log(`Sent turf_request_created notification for request ${requestId}`);
-      }
-      return null;
-    }
-
-    // Status change
-    const beforeStatus = beforeData.status;
+  const beforeStatus = beforeData.status;
     const afterStatus = afterData.status;
 
     if (beforeStatus === afterStatus) return null;
@@ -148,19 +147,15 @@ exports.onTurfRequestChange = functions.firestore
       });
       console.log(`Sent turf_request_rejected to ${requestedBy}`);
     }
-
-    return null;
-  });
+});
 
 /**
  * Send notification to turf managers when a new booking is created
  * Covers: booking_request notification type
  */
-exports.onBookingCreated = functions.firestore
-  .document("bookings/{bookingId}")
-  .onCreate(async (snap, context) => {
-    const bookingId = context.params.bookingId;
-    const bookingData = snap.data();
+exports.onBookingCreated = onDocumentCreated("bookings/{bookingId}", async (event) => {
+  const bookingId = event.params.bookingId;
+  const bookingData = event.data.data();
 
     // Only notify for pending bookings (direct bookings, not from negotiations)
     if (bookingData.status !== "pending") {
@@ -184,17 +179,18 @@ exports.onBookingCreated = functions.firestore
     });
 
     console.log(`Sent booking_request notifications for booking ${bookingId}`);
-    return null;
-  });
+});
 
 /**
  * Send booking reminders to users 1-2 hours before their booking
  * Runs every 30 minutes
  */
-exports.sendBookingReminders = functions.pubsub
-  .schedule("every 30 minutes")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.sendBookingReminders = onSchedule(
+  {
+    schedule: "*/30 * * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Starting booking reminder check...");
 
     const now = new Date();

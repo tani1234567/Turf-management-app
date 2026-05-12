@@ -36,6 +36,7 @@ import {
   getDocument,
   autoRejectExpiredPendingBookings,
 } from "../../services/firebase/firestore";
+import { useCashfreePayment } from "../../hooks/useCashfreePayment";
 
 const MANAGER_BLUE = "#3B82F6";
 const PALE_BLUE = "#DBEAFE";
@@ -58,6 +59,16 @@ const STATUS_COLORS = {
   cancelled: "#9CA3AF",
   rejected: "#EF4444",
 };
+
+// Cancellation reasons (for confirmed bookings)
+const CANCEL_REASONS = [
+  { value: "maintenance", label: "Turf under maintenance" },
+  { value: "weather", label: "Severe weather conditions" },
+  { value: "emergency", label: "Emergency closure" },
+  { value: "double_booking", label: "Double booking error" },
+  { value: "facility_issue", label: "Facility issue" },
+  { value: "other", label: "Other reason" },
+];
 
 // Rejection reasons
 const REJECTION_REASONS = [
@@ -130,6 +141,15 @@ export default function BookingManagementScreen({ navigation }) {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [customRejectReason, setCustomRejectReason] = useState("");
+
+  // Cancel confirmed booking dialog state
+  const [cancelDialogVisible, setCancelDialogVisible] = useState(false);
+  const [cancelBookingTarget, setCancelBookingTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [customCancelReason, setCustomCancelReason] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  const { cancelBooking } = useCashfreePayment();
 
   // Conflict warning state
   const [conflictWarnings, setConflictWarnings] = useState({});
@@ -459,6 +479,56 @@ export default function BookingManagementScreen({ navigation }) {
     }
   };
 
+  // Open cancel dialog for confirmed bookings
+  const openCancelDialog = (booking) => {
+    setCancelBookingTarget(booking);
+    setCancelReason("");
+    setCustomCancelReason("");
+    setCancelDialogVisible(true);
+  };
+
+  // Cancel confirmed booking (with optional Cashfree refund)
+  const handleCancelConfirmed = async () => {
+    const finalReason = cancelReason === "other"
+      ? customCancelReason.trim()
+      : CANCEL_REASONS.find((r) => r.value === cancelReason)?.label || cancelReason;
+
+    if (!finalReason) {
+      Alert.alert("Required", "Please select or enter a cancellation reason.");
+      return;
+    }
+
+    setCancelLoading(true);
+    try {
+      const result = await cancelBooking({
+        bookingId: cancelBookingTarget.id,
+        reason: finalReason,
+        cancelledByRole: user?.role || "manager",
+      });
+
+      setCancelDialogVisible(false);
+
+      if (result?.refundInitiated) {
+        Alert.alert(
+          "Booking Cancelled",
+          `Booking cancelled. Advance payment of ₹${result.refundAmount} refund has been initiated. It will reach the customer in 5–7 business days.`
+        );
+      } else if (result?.refundAmount > 0 && !result?.refundInitiated) {
+        Alert.alert(
+          "Booking Cancelled",
+          "Booking cancelled. The advance payment refund could not be initiated automatically. Please process it manually."
+        );
+      } else {
+        Alert.alert("Booking Cancelled", "The booking has been cancelled and the customer has been notified.");
+      }
+    } catch (err) {
+      Alert.alert("Error", err.message || "Failed to cancel booking. Please try again.");
+    } finally {
+      setCancelLoading(false);
+      setCancelBookingTarget(null);
+    }
+  };
+
   // Mark as completed
   const handleComplete = async (booking) => {
     setActionLoading(booking.id);
@@ -622,26 +692,6 @@ export default function BookingManagementScreen({ navigation }) {
         )}
 
         {/* Actions */}
-        {activeTab === "pending" && booking.status === "payment_submitted" && (
-          <>
-            <Divider style={styles.divider} />
-            <View style={[styles.paymentPendingBanner, { backgroundColor: "#EDE9FE" }]}>
-              <MaterialCommunityIcons name="cash-clock" size={16} color="#6D28D9" />
-              <Text style={[styles.paymentPendingText, { color: "#6D28D9" }]}>
-                Payment proof submitted — verification required
-              </Text>
-            </View>
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: "#6D28D9" }]}
-                onPress={() => navigation.navigate("VerifyPayment", { bookingId: booking.id, booking })}
-              >
-                <MaterialCommunityIcons name="credit-card-check" size={16} color="#fff" />
-                <Text style={styles.actionBtnText}>Verify Payment</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
 
         {activeTab === "pending" && booking.status === "awaiting_payment" && (
           <>
@@ -700,13 +750,22 @@ export default function BookingManagementScreen({ navigation }) {
               {isLoading ? (
                 <ActivityIndicator size="small" color={MANAGER_BLUE} />
               ) : (
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: SUCCESS_GREEN }]}
-                  onPress={() => handleComplete(booking)}
-                >
-                  <MaterialCommunityIcons name="check-all" size={16} color="#fff" />
-                  <Text style={styles.actionBtnText}>Mark Completed</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.rejectBtn]}
+                    onPress={() => openCancelDialog(booking)}
+                  >
+                    <MaterialCommunityIcons name="close-circle-outline" size={16} color={DANGER_RED} />
+                    <Text style={[styles.actionBtnText, { color: DANGER_RED }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { backgroundColor: SUCCESS_GREEN }]}
+                    onPress={() => handleComplete(booking)}
+                  >
+                    <MaterialCommunityIcons name="check-all" size={16} color="#fff" />
+                    <Text style={styles.actionBtnText}>Mark Completed</Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           </>
@@ -898,6 +957,70 @@ export default function BookingManagementScreen({ navigation }) {
             <Button onPress={() => setRejectDialogVisible(false)}>Cancel</Button>
             <Button onPress={handleReject} textColor="#F44336">
               Reject
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      {/* Cancel Confirmed Booking Dialog */}
+      <Portal>
+        <Dialog
+          visible={cancelDialogVisible}
+          onDismiss={() => !cancelLoading && setCancelDialogVisible(false)}
+        >
+          <Dialog.Title>Cancel Booking</Dialog.Title>
+          <Dialog.Content>
+            {cancelBookingTarget?.paymentStatus === "paid" && (
+              <View style={styles.refundNotice}>
+                <MaterialCommunityIcons name="cash-refund" size={18} color="#6D28D9" />
+                <Text style={styles.refundNoticeText}>
+                  Advance of ₹{cancelBookingTarget?.payment?.advanceAmount || cancelBookingTarget?.advanceAmount || 0} will be refunded to the customer (5–7 business days).
+                </Text>
+              </View>
+            )}
+            <Text variant="bodyMedium" style={styles.dialogSubtitle}>
+              Select a reason for cancellation:
+            </Text>
+            <RadioButton.Group onValueChange={setCancelReason} value={cancelReason}>
+              {CANCEL_REASONS.map((reason) => (
+                <TouchableOpacity
+                  key={reason.value}
+                  style={styles.radioRow}
+                  onPress={() => setCancelReason(reason.value)}
+                >
+                  <RadioButton value={reason.value} color={DANGER_RED} />
+                  <Text variant="bodyMedium" style={styles.radioLabel}>
+                    {reason.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </RadioButton.Group>
+
+            {cancelReason === "other" && (
+              <RNTextInput
+                style={styles.customReasonInput}
+                placeholder="Enter reason..."
+                value={customCancelReason}
+                onChangeText={setCustomCancelReason}
+                multiline
+                numberOfLines={3}
+              />
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => setCancelDialogVisible(false)}
+              disabled={cancelLoading}
+            >
+              Keep Booking
+            </Button>
+            <Button
+              onPress={handleCancelConfirmed}
+              textColor={DANGER_RED}
+              loading={cancelLoading}
+              disabled={cancelLoading}
+            >
+              Confirm Cancel
             </Button>
           </Dialog.Actions>
         </Dialog>
@@ -1282,5 +1405,21 @@ const styles = StyleSheet.create({
     fontFamily: "Ubuntu-Regular",
     fontSize: 14,
     color: "#111827",
+  },
+  refundNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#F5F3FF",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
+  },
+  refundNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Ubuntu-Regular",
+    color: "#5B21B6",
+    lineHeight: 19,
   },
 });

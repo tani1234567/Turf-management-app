@@ -1,4 +1,4 @@
-import { createSlice } from "@reduxjs/toolkit";
+import { createSlice, createSelector } from "@reduxjs/toolkit";
 
 const initialState = {
   user: null,
@@ -60,10 +60,16 @@ export const selectUserCompanyId = (state) => state.auth.user?.companyId;
 // Owner-specific selectors
 export const selectHasOperationalPermissions = (state) =>
   state.auth.user?.role === 'owner' && state.auth.user?.hasOperationalPermissions === true;
-export const selectManagedTurfIds = (state) => state.auth.user?.managedTurfIds || [];
+export const selectManagedTurfIds = createSelector(
+  (state) => state.auth.user?.managedTurfIds,
+  (managedTurfIds) => managedTurfIds || []
+);
 
 // Manager-specific selectors
-export const selectAssignedTurfIds = (state) => state.auth.user?.assignedTurfIds || [];
+export const selectAssignedTurfIds = createSelector(
+  (state) => state.auth.user?.assignedTurfIds,
+  (assignedTurfIds) => assignedTurfIds || []
+);
 export const selectSelectedTurfId = (state) => state.auth.user?.selectedTurfId;
 
 // Caretaker-specific selectors
@@ -73,13 +79,20 @@ export const selectIsCaretakerAssigned = (state) =>
 
 // Suspension selectors
 export const selectIsSuspended = (state) => state.auth.user?.isSuspended === true;
-export const selectSuspensionInfo = (state) => ({
-  isSuspended: state.auth.user?.isSuspended,
-  suspendedAt: state.auth.user?.suspendedAt,
-  suspendedBy: state.auth.user?.suspendedBy,
-  suspensionReason: state.auth.user?.suspensionReason,
-  canBeDeletedAfter: state.auth.user?.canBeDeletedAfter,
-});
+export const selectSuspensionInfo = createSelector(
+  (state) => state.auth.user?.isSuspended,
+  (state) => state.auth.user?.suspendedAt,
+  (state) => state.auth.user?.suspendedBy,
+  (state) => state.auth.user?.suspensionReason,
+  (state) => state.auth.user?.canBeDeletedAfter,
+  (isSuspended, suspendedAt, suspendedBy, suspensionReason, canBeDeletedAfter) => ({
+    isSuspended,
+    suspendedAt,
+    suspendedBy,
+    suspensionReason,
+    canBeDeletedAfter,
+  })
+);
 
 // Check if user can perform manager tasks (owner with permissions OR manager)
 export const selectCanPerformManagerTasks = (state) => {

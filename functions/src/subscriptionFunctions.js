@@ -1,5 +1,6 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { notifyCompanyOwners } = require("./helpers/notificationHelpers");
 
 const db = admin.firestore();
@@ -14,10 +15,12 @@ const GRACE_PERIOD_DAYS = 7;
  * Finds companies with active subscriptions whose subscriptionEndDate has passed,
  * transitions them to grace_period, and notifies company owners.
  */
-exports.checkSubscriptionExpiry = functions.pubsub
-  .schedule("30 2 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.checkSubscriptionExpiry = onSchedule(
+  {
+    schedule: "30 2 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Checking for expired subscriptions...");
 
     const now = admin.firestore.Timestamp.now();
@@ -78,10 +81,12 @@ exports.checkSubscriptionExpiry = functions.pubsub
  * Finds companies in grace_period whose gracePeriodEndDate has passed,
  * deactivates all subscribed turfs, and sets subscription status to "expired".
  */
-exports.enforceGracePeriod = functions.pubsub
-  .schedule("30 3 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.enforceGracePeriod = onSchedule(
+  {
+    schedule: "30 3 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Enforcing grace period deadlines...");
 
     const now = admin.firestore.Timestamp.now();
@@ -154,10 +159,12 @@ exports.enforceGracePeriod = functions.pubsub
  * Runs daily at 9:00 AM IST.
  * Sends warnings to company owners at 7, 3, and 1 day(s) before subscription expiry.
  */
-exports.sendSubscriptionExpiryWarnings = functions.pubsub
-  .schedule("0 9 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.sendSubscriptionExpiryWarnings = onSchedule(
+  {
+    schedule: "0 9 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Checking for subscription expiry warnings...");
 
     const now = admin.firestore.Timestamp.now();
@@ -241,12 +248,10 @@ exports.sendSubscriptionExpiryWarnings = functions.pubsub
  * - Ensures all subscribed turfs are reactivated (safety net)
  * - Sends confirmation notification to company owners
  */
-exports.onSubscriptionPaymentCompleted = functions.firestore
-  .document("pending_subscription_payments/{paymentId}")
-  .onUpdate(async (change, context) => {
-    const paymentId = context.params.paymentId;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+exports.onSubscriptionPaymentCompleted = onDocumentUpdated("pending_subscription_payments/{paymentId}", async (event) => {
+    const paymentId = event.params.paymentId;
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
 
     // Only handle transition to "completed"
     if (beforeData.status === afterData.status) return null;

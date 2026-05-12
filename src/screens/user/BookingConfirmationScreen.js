@@ -24,7 +24,7 @@ import { useSelector } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
 import { selectCompany } from "../../store/slices/companySlice";
 import { ConfirmationDialog } from "../../components/booking";
-import { createBookingWithTransaction, getDocument } from "../../services/firebase/firestore";
+import { createBookingWithTransaction } from "../../services/firebase/firestore";
 import { canUserBook } from "../../services/firebase/payments";
 import { checkSlotAvailability } from "../../utils/slotLockUtils";
 import {
@@ -56,7 +56,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("upi"); // "upi" or "cash_at_venue"
-  const [companyPaymentConfig, setCompanyPaymentConfig] = useState(null);
 
   // Get advance payment settings from turf
   const advancePayment = turf?.advancePayment || {
@@ -66,23 +65,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
     paymentTimeout: 120,
     allowedMethods: ["upi", "cash_at_venue"],
   };
-
-  // Fetch company payment config if needed
-  useEffect(() => {
-    const fetchCompanyPaymentConfig = async () => {
-      if (advancePayment.isRequired && turf?.companyId) {
-        try {
-          const companyDoc = await getDocument("companies", turf.companyId);
-          if (companyDoc?.paymentConfig) {
-            setCompanyPaymentConfig(companyDoc.paymentConfig);
-          }
-        } catch (error) {
-          console.error("Error fetching company payment config:", error);
-        }
-      }
-    };
-    fetchCompanyPaymentConfig();
-  }, [advancePayment.isRequired, turf?.companyId]);
 
   // Calculate duration in hours
   const duration = useMemo(() => {
@@ -146,20 +128,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
     const banCheck = canUserBook(user);
     if (!banCheck.allowed) {
       Alert.alert("Booking Restricted", banCheck.reason);
-      return;
-    }
-
-    // Check if UPI is selected but not configured
-    if (
-      advancePayment.isRequired &&
-      advancePayment.paymentTiming === "before_approval" &&
-      paymentMethod === "upi" &&
-      !companyPaymentConfig?.upiEnabled
-    ) {
-      Alert.alert(
-        "UPI Not Available",
-        "The turf owner hasn't configured UPI payments. Please select 'Pay at Venue' or contact the turf."
-      );
       return;
     }
 
@@ -316,15 +284,20 @@ export default function BookingConfirmationScreen({ navigation, route }) {
           advancePayment.paymentTiming === "before_approval" &&
           paymentMethod === "upi"
         ) {
-          // Navigate to UPI Payment screen
-          navigation.replace("UpiPayment", {
+          // Navigate to Cashfree automated payment screen
+          navigation.replace("CashfreePayment", {
             bookingId: result.bookingId,
             amount: priceBreakdown.advanceAmount,
-            upiId: companyPaymentConfig?.upiId,
-            upiHolderName: companyPaymentConfig?.upiHolderName,
-            qrCodeUrl: companyPaymentConfig?.upiQrCode,
+            customerPhone: user?.phone || user?.phoneNumber || "",
+            customerName: user?.name || user?.displayName || "",
             turfName: turf?.name || "",
             lockExpiry: softLockExpiry.getTime(),
+            // Pass through for BookingSuccess screen
+            turf,
+            ground,
+            date,
+            startTime,
+            endTime,
           });
         } else {
           // Navigate to success screen
@@ -380,7 +353,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
     navigation,
     advancePayment,
     paymentMethod,
-    companyPaymentConfig,
   ]);
 
   return (
@@ -591,18 +563,11 @@ export default function BookingConfirmationScreen({ navigation, route }) {
                           <View style={styles.radioLabelRow}>
                             <MaterialCommunityIcons name="cellphone" size={20} color="#666" />
                             <Text variant="bodyMedium" style={styles.radioLabel}>
-                              Pay via UPI
+                              Pay Online
                             </Text>
-                            {companyPaymentConfig?.upiEnabled && (
-                              <View style={styles.recommendedBadge}>
-                                <Text variant="labelSmall" style={styles.recommendedText}>
-                                  Recommended
-                                </Text>
-                              </View>
-                            )}
                           </View>
                           <Text variant="bodySmall" style={styles.radioDescription}>
-                            Pay ₹{priceBreakdown.advanceAmount} via GPay, PhonePe, Paytm
+                            Pay ₹{priceBreakdown.advanceAmount} via UPI, Cards or Wallets
                           </Text>
                         </View>
                       </View>
@@ -626,15 +591,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
                     )}
                   </RadioButton.Group>
 
-                  {/* UPI not configured warning */}
-                  {paymentMethod === "upi" && !companyPaymentConfig?.upiEnabled && (
-                    <View style={styles.warningBox}>
-                      <MaterialCommunityIcons name="alert" size={18} color="#FF9800" />
-                      <Text variant="bodySmall" style={styles.warningText}>
-                        UPI payments not available for this turf. Please select 'Pay at Venue'.
-                      </Text>
-                    </View>
-                  )}
                 </View>
               )}
 

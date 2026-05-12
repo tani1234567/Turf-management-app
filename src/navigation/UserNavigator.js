@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Tab screens
 import HomeScreen from "../screens/user/HomeScreen";
-import SearchScreen from "../screens/user/SearchScreen";
+import DiscoverScreen from "../screens/user/DiscoverScreen";
 import BookingsScreen from "../screens/user/BookingsScreen";
 import WishlistScreen from "../screens/user/WishlistScreen";
 import ChatListScreen from "../screens/user/ChatListScreen";
@@ -18,9 +18,7 @@ import BookingScreen from "../screens/user/BookingScreen";
 import BookingConfirmationScreen from "../screens/user/BookingConfirmationScreen";
 import BookingSuccessScreen from "../screens/user/BookingSuccessScreen";
 import ChatScreen from "../screens/user/ChatScreen";
-import UpiPaymentScreen from "../screens/user/UpiPaymentScreen";
-import PaymentConfirmationScreen from "../screens/user/PaymentConfirmationScreen";
-import PaymentSubmittedScreen from "../screens/user/PaymentSubmittedScreen";
+import CashfreePaymentScreen from "../screens/user/CashfreePaymentScreen";
 import WriteReviewScreen from "../screens/user/WriteReviewScreen";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
 
@@ -69,12 +67,12 @@ function UserTabs() {
         }}
       />
       <Tab.Screen
-        name="Search"
-        component={SearchScreen}
+        name="Discover"
+        component={DiscoverScreen}
         options={{
-          tabBarLabel: "Search",
+          tabBarLabel: "Discover",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="magnify" size={size} color={color} />
+            <MaterialCommunityIcons name="compass-outline" size={size} color={color} />
           ),
         }}
       />
@@ -157,22 +155,8 @@ export default function UserNavigator() {
         }}
       />
       <Stack.Screen
-        name="UpiPayment"
-        component={UpiPaymentScreen}
-        options={{
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="PaymentConfirmation"
-        component={PaymentConfirmationScreen}
-        options={{
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="PaymentSubmitted"
-        component={PaymentSubmittedScreen}
+        name="CashfreePayment"
+        component={CashfreePaymentScreen}
         options={{
           presentation: "card",
           gestureEnabled: false,

@@ -2,8 +2,10 @@
  * Cloud Functions for Turf Management System
  */
 
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 
 admin.initializeApp();
 
@@ -19,6 +21,7 @@ const subscriptionFunctions = require("./src/subscriptionFunctions");
 const userCleanupFunctions = require("./src/userCleanupFunctions");
 const fraudPreventionFunctions = require("./src/fraudPreventionFunctions");
 const bookingCleanupFunctions = require("./src/bookingCleanupFunctions");
+const cashfreeFunctions = require("./src/cashfreeFunctions");
 
 // Slot Lock Functions
 exports.releaseExpiredSlotLocks = slotLockFunctions.releaseExpiredSlotLocks;
@@ -51,6 +54,12 @@ exports.cleanupOldTransactions = fraudPreventionFunctions.cleanupOldTransactions
 // Booking Cleanup Functions
 exports.autoRejectExpiredPendingBookings = bookingCleanupFunctions.autoRejectExpiredPendingBookings;
 
+// Cashfree Payment Functions
+exports.createCashfreeOrder = cashfreeFunctions.createCashfreeOrder;
+exports.cancelBookingWithRefund = cashfreeFunctions.cancelBookingWithRefund;
+exports.verifyCashfreeOrder = cashfreeFunctions.verifyCashfreeOrder;
+exports.cashfreeWebhook = cashfreeFunctions.cashfreeWebhook;
+
 // Subscription Functions
 exports.checkSubscriptionExpiry = subscriptionFunctions.checkSubscriptionExpiry;
 exports.enforceGracePeriod = subscriptionFunctions.enforceGracePeriod;
@@ -60,7 +69,7 @@ exports.onSubscriptionPaymentCompleted = subscriptionFunctions.onSubscriptionPay
 /**
  * Test function to verify deployment
  */
-exports.testFunction = functions.https.onRequest((req, res) => {
+exports.testFunction = onRequest((req, res) => {
   res.send("Functions are working!");
 });
 
@@ -75,12 +84,10 @@ const normalizeGroundId = (groundId) => {
 /**
  * Expire conflicting negotiations when a booking is created or confirmed
  */
-exports.onBookingCreatedOrConfirmed = functions.firestore
-  .document("bookings/{bookingId}")
-  .onWrite(async (change, context) => {
-    const bookingId = context.params.bookingId;
-    const afterData = change.after.exists ? change.after.data() : null;
-    const beforeData = change.before.exists ? change.before.data() : null;
+exports.onBookingCreatedOrConfirmed = onDocumentWritten("bookings/{bookingId}", async (event) => {
+    const bookingId = event.params.bookingId;
+    const afterData = event.data.after.exists ? event.data.after.data() : null;
+    const beforeData = event.data.before.exists ? event.data.before.data() : null;
 
     const isNewConfirmedBooking = !beforeData && afterData?.status === "confirmed";
     const statusChangedToConfirmed = beforeData?.status !== "confirmed" && afterData?.status === "confirmed";
@@ -166,10 +173,9 @@ exports.onBookingCreatedOrConfirmed = functions.firestore
 /**
  * Clean up expired negotiations - runs daily at 3 AM IST
  */
-exports.cleanupExpiredNegotiations = functions.pubsub
-  .schedule("0 3 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.cleanupExpiredNegotiations = onSchedule(
+  { schedule: "0 3 * * *", timeZone: "Asia/Kolkata" },
+  async () => {
     console.log("Starting cleanup...");
     const cutoffDate = new Date();
     cutoffDate.setHours(cutoffDate.getHours() - 24);
@@ -205,11 +211,9 @@ exports.cleanupExpiredNegotiations = functions.pubsub
 /**
  * Send notification when maintenance log is created
  */
-exports.onMaintenanceLogCreated = functions.firestore
-  .document("maintenance_logs/{logId}")
-  .onCreate(async (snap, context) => {
-    const logId = context.params.logId;
-    const logData = snap.data();
+exports.onMaintenanceLogCreated = onDocumentCreated("maintenance_logs/{logId}", async (event) => {
+    const logId = event.params.logId;
+    const logData = event.data.data();
 
     console.log(`Maintenance log ${logId} created`);
 
@@ -250,12 +254,10 @@ exports.onMaintenanceLogCreated = functions.firestore
 /**
  * Send notification when maintenance log status changes
  */
-exports.onMaintenanceLogStatusChange = functions.firestore
-  .document("maintenance_logs/{logId}")
-  .onUpdate(async (change, context) => {
-    const logId = context.params.logId;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+exports.onMaintenanceLogStatusChange = onDocumentUpdated("maintenance_logs/{logId}", async (event) => {
+    const logId = event.params.logId;
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
 
     const beforeStatus = beforeData.status;
     const afterStatus = afterData.status;
@@ -304,12 +306,10 @@ exports.onMaintenanceLogStatusChange = functions.firestore
 /**
  * Send notification when negotiation status changes
  */
-exports.onNegotiationStatusChange = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onUpdate(async (change, context) => {
-    const { chatId, messageId } = context.params;
-    const beforeData = change.before.data();
-    const afterData = change.after.data();
+exports.onNegotiationStatusChange = onDocumentUpdated("chats/{chatId}/messages/{messageId}", async (event) => {
+    const { chatId, messageId } = event.params;
+    const beforeData = event.data.before.data();
+    const afterData = event.data.after.data();
 
     if (afterData.type !== "negotiation_card") return null;
 
@@ -370,11 +370,9 @@ exports.onNegotiationStatusChange = functions.firestore
 /**
  * Send notification when a new chat message is sent
  */
-exports.onNewChatMessage = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const { chatId, messageId } = context.params;
-    const messageData = snap.data();
+exports.onNewChatMessage = onDocumentCreated("chats/{chatId}/messages/{messageId}", async (event) => {
+    const { chatId, messageId } = event.params;
+    const messageData = event.data.data();
 
     // Only notify for text messages (not negotiation cards, system messages, etc.)
     if (messageData.type && messageData.type !== "text") {

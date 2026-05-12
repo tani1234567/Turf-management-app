@@ -1,5 +1,5 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const db = admin.firestore();
 
@@ -10,10 +10,12 @@ const db = admin.firestore();
  * Covers both regular pending bookings and chat-negotiation
  * bookings (both stored with status = "pending").
  */
-exports.autoRejectExpiredPendingBookings = functions.pubsub
-  .schedule("0 1 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.autoRejectExpiredPendingBookings = onSchedule(
+  {
+    schedule: "0 1 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     // Build today's date string in YYYY-MM-DD (IST) — dates stored as this format in Firestore
     const nowIST = new Date(
       new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })

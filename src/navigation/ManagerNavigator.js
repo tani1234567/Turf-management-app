@@ -19,7 +19,6 @@ import CreateBookingScreen from "../screens/manager/CreateBookingScreen";
 import BlockSlotsScreen from "../screens/manager/BlockSlotsScreen";
 import ManagerChatScreen from "../screens/manager/ManagerChatScreen";
 import AdvancePaymentSettingsScreen from "../screens/manager/AdvancePaymentSettingsScreen";
-import VerifyPaymentScreen from "../screens/manager/VerifyPaymentScreen";
 import AnalyticsDashboardScreen from "../screens/manager/AnalyticsDashboardScreen";
 import ExpenseTrackingScreen from "../screens/manager/ExpenseTrackingScreen";
 import ReviewManagementScreen from "../screens/manager/ReviewManagementScreen";
@@ -169,13 +168,6 @@ export default function ManagerNavigator() {
       <Stack.Screen
         name="AdvancePaymentSettings"
         component={AdvancePaymentSettingsScreen}
-        options={{
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="VerifyPayment"
-        component={VerifyPaymentScreen}
         options={{
           presentation: "card",
         }}

@@ -881,33 +881,21 @@ export default function BookingsScreen({ navigation }) {
   };
 
   const handlePayment = (booking) => {
-    // Navigate to UPI payment screen for payment-related actions
-    if (booking.status === "awaiting_payment" || booking.status === "payment_rejected") {
-      navigation.navigate("UpiPayment", {
-        bookingId: booking.id,
-        amount: booking.payment?.advanceAmount || 0,
-        upiId: booking.payment?.advance?.upiDetails?.paidToUpiId || "",
-        upiHolderName: "",
-        qrCodeUrl: "",
-        turfName: booking.turfName || "Turf",
-        lockExpiry: booking.payment?.advance?.paymentDeadline
-          ? new Date(booking.payment.advance.paymentDeadline).getTime()
-          : new Date().getTime() + 10 * 60 * 1000,
-      });
-    } else if (booking.status === "pending_payment") {
-      const lockExpiry = booking.slotLock?.lockExpiry
+    const lockExpiry =
+      booking.slotLock?.lockExpiry
         ? new Date(booking.slotLock.lockExpiry).getTime()
+        : booking.payment?.advance?.paymentDeadline
+        ? new Date(booking.payment.advance.paymentDeadline).getTime()
         : new Date().getTime() + 10 * 60 * 1000;
-      navigation.navigate("UpiPayment", {
-        bookingId: booking.id,
-        amount: booking.payment?.advanceAmount || 0,
-        upiId: "",
-        upiHolderName: "",
-        qrCodeUrl: "",
-        turfName: booking.turfName || "Turf",
-        lockExpiry,
-      });
-    }
+
+    navigation.navigate("CashfreePayment", {
+      bookingId: booking.id,
+      amount: booking.payment?.advanceAmount || 0,
+      customerPhone: booking.userPhone || "",
+      customerName: booking.userName || "",
+      turfName: booking.turfName || "Turf",
+      lockExpiry,
+    });
   };
 
   const handleContact = async (booking) => {

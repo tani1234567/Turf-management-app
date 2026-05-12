@@ -1,5 +1,5 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const db = admin.firestore();
 
@@ -12,10 +12,12 @@ const TRANSACTION_RETENTION_DAYS = 90;
  * Removes entries from each company's verifiedTransactions array
  * that are older than 90 days.
  */
-exports.cleanupOldTransactions = functions.pubsub
-  .schedule("0 4 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.cleanupOldTransactions = onSchedule(
+  {
+    schedule: "0 4 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Starting old transaction cleanup...");
 
     const cutoffDate = new Date();

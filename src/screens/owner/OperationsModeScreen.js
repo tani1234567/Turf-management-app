@@ -82,7 +82,6 @@ export default function OperationsModeScreen({ navigation }) {
   // KPIs
   const [pendingCount, setPendingCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
-  const [paymentsToVerify, setPaymentsToVerify] = useState(0);
   const [todayBookingsCount, setTodayBookingsCount] = useState(0);
 
   // Pending bookings
@@ -157,12 +156,6 @@ export default function OperationsModeScreen({ navigation }) {
       );
       setTodayRevenue(revenue);
       setTodayBookingsCount(confirmed.length);
-
-      // Payments to verify
-      const paymentsPending = turfBookings.filter(
-        (b) => b.status === "payment_submitted"
-      );
-      setPaymentsToVerify(paymentsPending.length);
 
       // Current & next booking
       const confirmedSorted = confirmed.sort((a, b) =>
@@ -256,16 +249,6 @@ export default function OperationsModeScreen({ navigation }) {
       color: "#4CAF50",
     },
     {
-      id: "payments",
-      label: "Verify Payments",
-      value: String(paymentsToVerify),
-      icon: "credit-card-check-outline",
-      color: "#2196F3",
-      onPress: paymentsToVerify > 0
-        ? () => navigation.navigate("VerifyPayment", { turfId: selectedTurfId })
-        : undefined,
-    },
-    {
       id: "bookings",
       label: "Today Bookings",
       value: String(todayBookingsCount),
@@ -290,14 +273,6 @@ export default function OperationsModeScreen({ navigation }) {
       icon: "calendar-month",
       color: "#4CAF50",
       onPress: () => navigation.navigate("Calendar", { turfId: selectedTurfId }),
-    },
-    {
-      id: "verify",
-      label: "Verify Pay",
-      icon: "credit-card-check",
-      color: "#FF5722",
-      badge: paymentsToVerify > 0 ? paymentsToVerify : null,
-      onPress: () => navigation.navigate("VerifyPayment", { turfId: selectedTurfId }),
     },
     {
       id: "expenses",

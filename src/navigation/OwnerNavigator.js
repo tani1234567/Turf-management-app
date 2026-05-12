@@ -28,9 +28,6 @@ import OperationsModeNavigator from "../navigation/OperationsModeNavigator";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
 import CustomerPhonebookScreen from "../screens/shared/CustomerPhonebookScreen";
 
-// VerifyPayment still needed from other owner screens (e.g. OwnerDashboard)
-import VerifyPaymentScreen from "../screens/manager/VerifyPaymentScreen";
-
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
@@ -223,13 +220,6 @@ export default function OwnerNavigator() {
       <Stack.Screen
         name="OperationsMode"
         component={OperationsModeNavigator}
-        options={{
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="VerifyPayment"
-        component={VerifyPaymentScreen}
         options={{
           presentation: "card",
         }}

@@ -1,15 +1,17 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { sendNotification } = require("./helpers/notificationHelpers");
 
 /**
  * Release expired soft locks (pending_payment bookings where user didn't complete payment in 10 mins)
  * Runs every 2 minutes
  */
-exports.releaseExpiredSlotLocks = functions.pubsub
-  .schedule("*/2 * * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async (context) => {
+exports.releaseExpiredSlotLocks = onSchedule(
+  {
+    schedule: "*/2 * * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async (context) => {
     const now = admin.firestore.Timestamp.now();
 
     // Find bookings with expired soft locks (pending_payment status)

@@ -320,20 +320,18 @@ export default function ChatScreen() {
   // Handle "Pay Now" on a payment request card
   const handlePayNow = useCallback(
     (messageId, card) => {
-      navigation.navigate("UpiPayment", {
+      navigation.navigate("CashfreePayment", {
         bookingId: card.bookingId,
         amount: card.advanceAmount,
-        upiId: card.upiId,
-        upiHolderName: card.upiHolderName,
-        qrCodeUrl: card.qrCodeUrl || null,
+        customerPhone: user?.phone || user?.phoneNumber || "",
+        customerName: user?.name || user?.displayName || "",
         turfName: card.turfName,
-        lockExpiry: card.paymentDeadline,
-        // Extra context so PaymentConfirmation can update the chat card status
-        chatId,
-        paymentCardMessageId: messageId,
+        lockExpiry: card.paymentDeadline
+          ? new Date(card.paymentDeadline).getTime()
+          : new Date().getTime() + 10 * 60 * 1000,
       });
     },
-    [navigation, chatId]
+    [navigation, user]
   );
 
   // Handle rejecting counter offer

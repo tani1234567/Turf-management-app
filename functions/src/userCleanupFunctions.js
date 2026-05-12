@@ -1,5 +1,5 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 const db = admin.firestore();
 
@@ -16,10 +16,12 @@ const db = admin.firestore();
  * 3. Delete the user document from users collection
  * 4. Log the deletion to admin_logs collection
  */
-exports.processSuspendedUserDeletion = functions.pubsub
-  .schedule("0 2 * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async () => {
+exports.processSuspendedUserDeletion = onSchedule(
+  {
+    schedule: "0 2 * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async () => {
     console.log("Starting suspended user cleanup...");
 
     const now = admin.firestore.Timestamp.now();

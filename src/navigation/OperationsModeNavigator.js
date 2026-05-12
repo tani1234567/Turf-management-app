@@ -22,7 +22,6 @@ import ManagerChatListScreen from "../screens/manager/ManagerChatListScreen";
 import CreateBookingScreen from "../screens/manager/CreateBookingScreen";
 import BlockSlotsScreen from "../screens/manager/BlockSlotsScreen";
 import ManagerChatScreen from "../screens/manager/ManagerChatScreen";
-import VerifyPaymentScreen from "../screens/manager/VerifyPaymentScreen";
 import TurfSelectionScreen from "../screens/manager/TurfSelectionScreen";
 import AnalyticsDashboardScreen from "../screens/manager/AnalyticsDashboardScreen";
 import ExpenseTrackingScreen from "../screens/manager/ExpenseTrackingScreen";
@@ -395,11 +394,6 @@ export default function OperationsModeNavigator() {
       <Stack.Screen
         name="ManagerChatScreen"
         component={ManagerChatScreen}
-        options={{ presentation: "card" }}
-      />
-      <Stack.Screen
-        name="VerifyPayment"
-        component={VerifyPaymentScreen}
         options={{ presentation: "card" }}
       />
       <Stack.Screen

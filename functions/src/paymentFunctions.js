@@ -1,5 +1,5 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const {
   sendNotification,
   notifyTurfManagers,
@@ -10,10 +10,12 @@ const {
  * Check payment timeouts for "awaiting_payment" bookings where user didn't pay in time
  * Runs every 5 minutes
  */
-exports.checkPaymentTimeouts = functions.pubsub
-  .schedule("*/5 * * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async (context) => {
+exports.checkPaymentTimeouts = onSchedule(
+  {
+    schedule: "*/5 * * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async (context) => {
     const now = admin.firestore.Timestamp.now();
 
     // Find bookings awaiting payment with expired deadline
@@ -76,10 +78,12 @@ exports.checkPaymentTimeouts = functions.pubsub
  * Escalates to owner after 2 hours
  * Runs every 30 minutes
  */
-exports.sendPaymentVerificationReminders = functions.pubsub
-  .schedule("*/30 * * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async (context) => {
+exports.sendPaymentVerificationReminders = onSchedule(
+  {
+    schedule: "*/30 * * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async (context) => {
     const thirtyMinsAgo = admin.firestore.Timestamp.fromDate(
       new Date(Date.now() - 30 * 60 * 1000)
     );
@@ -131,10 +135,12 @@ exports.sendPaymentVerificationReminders = functions.pubsub
  * Sends at 60, 30, and 10 minutes before deadline
  * Runs every 10 minutes
  */
-exports.sendPaymentDeadlineReminders = functions.pubsub
-  .schedule("*/10 * * * *")
-  .timeZone("Asia/Kolkata")
-  .onRun(async (context) => {
+exports.sendPaymentDeadlineReminders = onSchedule(
+  {
+    schedule: "*/10 * * * *",
+    timeZone: "Asia/Kolkata",
+  },
+  async (context) => {
     const now = Date.now();
 
     const awaitingPayment = await admin.firestore()
