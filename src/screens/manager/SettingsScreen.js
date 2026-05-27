@@ -34,6 +34,7 @@ const SETTINGS_SECTIONS = [
       { id: "turfs", icon: "soccer-field", label: "My Turfs", color: "#4CAF50" },
       { id: "pricing", icon: "currency-inr", label: "Pricing & Slots", color: "#2196F3" },
       { id: "advancePayment", icon: "cash-clock", label: "Advance Payment", color: "#FF5722" },
+      { id: "holidaySchedule", icon: "calendar-star", label: "Holiday Schedule", color: "#10B981" },
       { id: "caretakers", icon: "account-group", label: "Caretakers", color: "#9C27B0" },
     ],
   },
@@ -292,6 +293,9 @@ export default function SettingsScreen() {
         break;
       case "advancePayment":
         navigation.navigate("TurfSelection", { nextScreen: "AdvancePaymentSettings" });
+        break;
+      case "holidaySchedule":
+        navigation.navigate("TurfSelection", { nextScreen: "HolidaySchedule" });
         break;
       case "profile":
         setShowEditProfile(true);

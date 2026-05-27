@@ -67,6 +67,25 @@ function getNotificationMeta(type, data) {
     case "subscription_reactivated":
       return { screen: "OwnerSettings", relatedType: "subscription" };
 
+    // Support tickets
+    case "ticket_created":
+      return { screen: "Support", relatedType: "support_ticket" };
+    case "ticket_reply":
+    case "ticket_status_changed":
+      return { screen: "TicketDetail", relatedType: "support_ticket" };
+
+    // Disputes
+    case "dispute_created":
+      return { screen: "Support", relatedType: "dispute" };
+    case "dispute_resolved":
+      return { screen: "DisputeDetail", relatedType: "dispute" };
+
+    // Refunds
+    case "refund_initiated":
+    case "refund_completed":
+    case "refund_failed":
+      return { screen: "Support", relatedType: "refund" };
+
     default:
       return { screen: "Dashboard", relatedType: "booking" };
   }
@@ -83,6 +102,9 @@ async function sendNotification(userId, notification) {
 
   const meta = getNotificationMeta(notification.type, notification.data);
   const relatedId =
+    notification.data?.ticketId ||
+    notification.data?.disputeId ||
+    notification.data?.refundId ||
     notification.data?.bookingId ||
     notification.data?.logId ||
     notification.data?.requestId ||
@@ -111,7 +133,8 @@ async function sendNotification(userId, notification) {
   // Send FCM push notification
   if (userData.fcmTokens && userData.fcmTokens.length > 0) {
     try {
-      const response = await admin.messaging().sendMulticast({
+      // sendEachForMulticast uses individual FCM v1 API calls (not deprecated /batch endpoint)
+      const response = await admin.messaging().sendEachForMulticast({
         tokens: userData.fcmTokens,
         notification: {
           title: notification.title,
@@ -123,16 +146,21 @@ async function sendNotification(userId, notification) {
             Object.entries(notification.data || {}).map(([k, v]) => [k, String(v)])
           ),
         },
+        android: {
+          priority: "high",
+        },
       });
+
+      console.log(`[FCM] Sent to ${response.successCount}/${userData.fcmTokens.length} tokens for user ${userId}`);
 
       // Remove stale tokens that FCM rejected
       const staleTokens = [];
       response.responses.forEach((resp, idx) => {
-        if (
-          !resp.success &&
-          resp.error?.code === "messaging/registration-token-not-registered"
-        ) {
-          staleTokens.push(userData.fcmTokens[idx]);
+        if (!resp.success) {
+          console.log(`[FCM] Token ${idx} failed: ${resp.error?.code} - ${resp.error?.message}`);
+          if (resp.error?.code === "messaging/registration-token-not-registered") {
+            staleTokens.push(userData.fcmTokens[idx]);
+          }
         }
       });
       if (staleTokens.length > 0) {
@@ -143,7 +171,7 @@ async function sendNotification(userId, notification) {
         });
       }
     } catch (error) {
-      console.error("FCM send error:", error);
+      console.error("[FCM] Send error:", error.code, error.message);
     }
   }
 }

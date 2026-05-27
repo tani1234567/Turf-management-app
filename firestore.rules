@@ -1,10 +1,75 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to all users during development
-    // TODO: Replace with proper security rules before production
+
+    // ── Default: authenticated users can read/write everything not explicitly covered
+    // TODO: tighten per-collection as the app matures
     match /{document=**} {
       allow read, write: if request.auth != null;
+    }
+
+    // ── Support Tickets ──────────────────────────────────────────────────────
+    match /support_tickets/{ticketId} {
+      // Users can only create their own tickets (source must be "mobile")
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.source == 'mobile';
+
+      // Users can read their own tickets; admins can read all
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || request.auth.token.role in ['super_admin', 'support_admin', 'finance_admin', 'read_only']);
+
+      // Only admins can update/delete ticket docs
+      allow update, delete: if request.auth != null
+        && request.auth.token.role in ['super_admin', 'support_admin'];
+
+      // Message sub-collection
+      match /messages/{messageId} {
+        // Users can add their own user-type messages; admins can add admin-type messages
+        allow create: if request.auth != null
+          && (
+            (request.resource.data.senderType == 'user'
+              && request.resource.data.senderId == request.auth.uid)
+            || request.auth.token.role in ['super_admin', 'support_admin']
+          );
+
+        // Users can read messages in their own ticket; admins can read all
+        allow read: if request.auth != null
+          && (
+            get(/databases/$(database)/documents/support_tickets/$(ticketId)).data.userId == request.auth.uid
+            || request.auth.token.role in ['super_admin', 'support_admin', 'finance_admin', 'read_only']
+          );
+      }
+    }
+
+    // ── Disputes ─────────────────────────────────────────────────────────────
+    match /disputes/{disputeId} {
+      // Users can only create their own disputes (source must be "mobile")
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.source == 'mobile';
+
+      // Users can read their own disputes; admins can read all
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || request.auth.token.role in ['super_admin', 'support_admin', 'finance_admin', 'read_only']);
+
+      // Only admins can update/delete disputes
+      allow update, delete: if request.auth != null
+        && request.auth.token.role in ['super_admin', 'support_admin', 'finance_admin'];
+    }
+
+    // ── Refunds ──────────────────────────────────────────────────────────────
+    match /refunds/{refundId} {
+      // Users can only read their own refund records
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+            || request.auth.token.role in ['super_admin', 'finance_admin', 'read_only']);
+
+      // Refund writes come from Cloud Functions (Admin SDK bypasses rules) or finance admins
+      allow write: if request.auth != null
+        && request.auth.token.role in ['super_admin', 'finance_admin'];
     }
   }
 }

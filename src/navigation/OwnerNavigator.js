@@ -27,6 +27,7 @@ import TurfEditLogsScreen from "../screens/owner/TurfEditLogsScreen";
 import OperationsModeNavigator from "../navigation/OperationsModeNavigator";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
 import CustomerPhonebookScreen from "../screens/shared/CustomerPhonebookScreen";
+import HolidayScheduleScreen from "../screens/manager/HolidayScheduleScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -232,6 +233,11 @@ export default function OwnerNavigator() {
       <Stack.Screen
         name="CustomerPhonebook"
         component={CustomerPhonebookScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="HolidaySchedule"
+        component={HolidayScheduleScreen}
         options={{ presentation: "card" }}
       />
     </Stack.Navigator>

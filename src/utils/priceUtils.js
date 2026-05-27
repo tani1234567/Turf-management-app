@@ -318,23 +318,35 @@ const _fmtLabel = (h, m) => {
  *
  * @param {object} operatingHours  turf.operatingHours keyed by lowercase day name
  * @param {string|Date} date       "YYYY-MM-DD" string or Date object
+ * @param {object} holidaySchedule turf.holidaySchedule keyed by "YYYY-MM-DD" date string
  */
-export const generateOperatingSlots = (operatingHours, date) => {
+export const generateOperatingSlots = (operatingHours, date, holidaySchedule) => {
   let openMins = 6 * 60;   // default 06:00
   let closeMins = 23 * 60; // default 23:00
 
-  if (operatingHours && date) {
+  if (date) {
     const d = date instanceof Date
       ? date
       : new Date(String(date).length === 10 ? date + "T00:00:00" : date);
-    const dayKey = _DAY_KEYS[d.getDay()];
-    const dayHours = operatingHours[dayKey];
-    if (dayHours) {
-      if (!dayHours.isOpen) return [];
-      const [oh, om] = (dayHours.openTime  || "06:00").split(":").map(Number);
-      const [ch, cm] = (dayHours.closeTime || "23:00").split(":").map(Number);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    // Holiday override takes priority — always open with custom hours
+    const holiday = holidaySchedule?.[dateStr];
+    if (holiday) {
+      const [oh, om] = (holiday.openTime || "07:00").split(":").map(Number);
+      const [ch, cm] = (holiday.closeTime || "23:00").split(":").map(Number);
       openMins  = oh * 60 + (om || 0);
       closeMins = ch * 60 + (cm || 0);
+    } else if (operatingHours) {
+      const dayKey = _DAY_KEYS[d.getDay()];
+      const dayHours = operatingHours[dayKey];
+      if (dayHours) {
+        if (!dayHours.isOpen) return [];
+        const [oh, om] = (dayHours.openTime  || "06:00").split(":").map(Number);
+        const [ch, cm] = (dayHours.closeTime || "23:00").split(":").map(Number);
+        openMins  = oh * 60 + (om || 0);
+        closeMins = ch * 60 + (cm || 0);
+      }
     }
   }
 

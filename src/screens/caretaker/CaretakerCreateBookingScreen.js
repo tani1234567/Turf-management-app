@@ -114,7 +114,7 @@ export default function CaretakerCreateBookingScreen({ navigation }) {
 
   // Dynamic slots respecting turf operating hours for the selected day
   const timeSlots = useMemo(
-    () => generateOperatingSlots(turfData?.operatingHours, selectedDate),
+    () => generateOperatingSlots(turfData?.operatingHours, selectedDate, turfData?.holidaySchedule),
     [turfData, selectedDate]
   );
 

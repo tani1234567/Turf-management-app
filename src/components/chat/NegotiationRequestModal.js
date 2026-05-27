@@ -166,7 +166,7 @@ const NegotiationRequestModal = ({
 
   // Dynamic slots respecting selected turf's operating hours for the selected day
   const timeSlots = useMemo(
-    () => generateOperatingSlots(selectedTurf?.operatingHours, selectedDate?.date || null),
+    () => generateOperatingSlots(selectedTurf?.operatingHours, selectedDate?.date || null, selectedTurf?.holidaySchedule),
     [selectedTurf, selectedDate]
   );
 

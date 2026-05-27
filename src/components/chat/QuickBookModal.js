@@ -112,7 +112,7 @@ const QuickBookModal = ({
 
   // Dynamic slots respecting selected turf's operating hours for the selected day
   const timeSlots = useMemo(
-    () => generateOperatingSlots(selectedTurf?.operatingHours, selectedDate),
+    () => generateOperatingSlots(selectedTurf?.operatingHours, selectedDate, selectedTurf?.holidaySchedule),
     [selectedTurf, selectedDate]
   );
 

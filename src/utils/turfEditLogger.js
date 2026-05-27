@@ -171,6 +171,25 @@ export function detectTurfChanges(before, after) {
     }
   }
 
+  // Holiday schedule
+  if (
+    JSON.stringify(before.holidaySchedule || {}) !==
+    JSON.stringify(after.holidaySchedule || {})
+  ) {
+    const beforeDates = Object.keys(before.holidaySchedule || {});
+    const afterDates = Object.keys(after.holidaySchedule || {});
+    const added = afterDates.filter((d) => !beforeDates.includes(d));
+    const removed = beforeDates.filter((d) => !afterDates.includes(d));
+    const parts = [];
+    if (added.length) parts.push(`added: ${added.join(", ")}`);
+    if (removed.length) parts.push(`removed: ${removed.join(", ")}`);
+    changes.push({
+      type: "timing_update",
+      field: "holidaySchedule",
+      summary: parts.length ? `Holiday schedule updated (${parts.join("; ")})` : "Holiday schedule updated",
+    });
+  }
+
   // Advance payment
   if (
     JSON.stringify(before.advancePayment || {}) !==

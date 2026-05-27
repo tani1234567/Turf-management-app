@@ -89,6 +89,22 @@ function getNavigationTarget(type, data) {
     case "subscription_reactivated":
       return { screen: "OwnerSettings", params: { companyId: data?.companyId } };
 
+    // Support tickets
+    case "ticket_created":
+      return { screen: "Support", params: {} };
+    case "ticket_reply":
+    case "ticket_status_changed":
+      return { screen: "TicketDetail", params: { ticketId: data?.ticketId } };
+
+    // Disputes & refunds
+    case "dispute_resolved":
+      return { screen: "DisputeDetail", params: { disputeId: data?.disputeId } };
+    case "dispute_created":
+    case "refund_initiated":
+    case "refund_completed":
+    case "refund_failed":
+      return { screen: "Support", params: {} };
+
     default:
       return null;
   }

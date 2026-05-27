@@ -249,7 +249,6 @@ export default function ProfileScreen({ navigation }) {
 
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
 
   const userId = user?.id || user?.userId || user?.uid;
 
@@ -268,7 +267,7 @@ export default function ProfileScreen({ navigation }) {
         navigation.navigate("Notifications");
         break;
       case "help":
-        setShowHelp(true);
+        navigation.navigate("Support");
         break;
       case "about":
         setShowAbout(true);
@@ -379,10 +378,6 @@ export default function ProfileScreen({ navigation }) {
       <AboutModal
         visible={showAbout}
         onDismiss={() => setShowAbout(false)}
-      />
-      <HelpSupportModal
-        visible={showHelp}
-        onDismiss={() => setShowHelp(false)}
       />
     </SafeAreaView>
   );

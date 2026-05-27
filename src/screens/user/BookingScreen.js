@@ -264,7 +264,7 @@ export default function BookingScreen({ navigation, route }) {
 
   // Dynamic time slots respecting turf's operating hours for the selected day
   const timeSlots = useMemo(
-    () => generateOperatingSlots(turf?.operatingHours, selectedDate?.dateString || null),
+    () => generateOperatingSlots(turf?.operatingHours, selectedDate?.dateString || null, turf?.holidaySchedule),
     [turf, selectedDate]
   );
 

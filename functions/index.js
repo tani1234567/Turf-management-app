@@ -1,3 +1,4 @@
+
 /**
  * Cloud Functions for Turf Management System
  */
@@ -7,7 +8,9 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 
-admin.initializeApp();
+admin.initializeApp({
+  projectId: "sowin-power",
+});
 
 const db = admin.firestore();
 
@@ -22,6 +25,7 @@ const userCleanupFunctions = require("./src/userCleanupFunctions");
 const fraudPreventionFunctions = require("./src/fraudPreventionFunctions");
 const bookingCleanupFunctions = require("./src/bookingCleanupFunctions");
 const cashfreeFunctions = require("./src/cashfreeFunctions");
+const supportFunctions = require("./src/supportFunctions");
 
 // Slot Lock Functions
 exports.releaseExpiredSlotLocks = slotLockFunctions.releaseExpiredSlotLocks;
@@ -60,6 +64,13 @@ exports.cancelBookingWithRefund = cashfreeFunctions.cancelBookingWithRefund;
 exports.verifyCashfreeOrder = cashfreeFunctions.verifyCashfreeOrder;
 exports.cashfreeWebhook = cashfreeFunctions.cashfreeWebhook;
 
+// Support Functions
+exports.onTicketCreated = supportFunctions.onTicketCreated;
+exports.onTicketMessageCreated = supportFunctions.onTicketMessageCreated;
+exports.onTicketStatusChanged = supportFunctions.onTicketStatusChanged;
+exports.onDisputeResolved = supportFunctions.onDisputeResolved;
+exports.onRefundStatusChanged = supportFunctions.onRefundStatusChanged;
+
 // Subscription Functions
 exports.checkSubscriptionExpiry = subscriptionFunctions.checkSubscriptionExpiry;
 exports.enforceGracePeriod = subscriptionFunctions.enforceGracePeriod;
@@ -71,6 +82,88 @@ exports.onSubscriptionPaymentCompleted = subscriptionFunctions.onSubscriptionPay
  */
 exports.testFunction = onRequest((req, res) => {
   res.send("Functions are working!");
+});
+
+/**
+ * Test notification function - send test push notification using direct FCM API
+ * Call with: POST /sendTestNotification with body: { userId: "...", title: "...", body: "..." }
+ */
+exports.sendTestNotification = onRequest(async (req, res) => {
+  try {
+    const { userId, title = "Test Notification", body = "This is a test notification" } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    console.log(`[TEST] Sending test notification to user: ${userId}`);
+
+    const userDoc = await admin.firestore().collection("users").doc(userId).get();
+    const userData = userDoc.data();
+
+    if (!userData) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    console.log(`[TEST] User found. FCM tokens: ${userData.fcmTokens?.length || 0}`);
+
+    if (!userData.fcmTokens || userData.fcmTokens.length === 0) {
+      return res.status(400).json({ error: "User has no FCM tokens registered" });
+    }
+
+    console.log(`[TEST] Attempting to send to all ${userData.fcmTokens.length} tokens...`);
+
+    const messagingService = admin.messaging();
+
+    // Use sendEachForMulticast (v12+) — avoids deprecated /batch endpoint
+    const response = await messagingService.sendEachForMulticast({
+      tokens: userData.fcmTokens,
+      notification: { title, body },
+      data: { type: "test_notification" },
+      android: { priority: "high" },
+    });
+
+    console.log(`[TEST] Result: ${response.successCount} success, ${response.failureCount} failed`);
+    response.responses.forEach((r, i) => {
+      if (!r.success) {
+        console.error(`[TEST] Token ${i} failed: ${r.error?.code}`);
+      } else {
+        console.log(`[TEST] Token ${i} success: ${r.messageId}`);
+      }
+    });
+
+    // Clean up stale tokens
+    const staleTokens = [];
+    response.responses.forEach((r, i) => {
+      if (!r.success && r.error?.code === "messaging/registration-token-not-registered") {
+        staleTokens.push(userData.fcmTokens[i]);
+      }
+    });
+    if (staleTokens.length > 0) {
+      const cleanedTokens = userData.fcmTokens.filter((t) => !staleTokens.includes(t));
+      await admin.firestore().collection("users").doc(userId).update({ fcmTokens: cleanedTokens });
+      console.log(`[TEST] Removed ${staleTokens.length} stale token(s). ${cleanedTokens.length} remaining.`);
+    }
+
+    res.json({
+      success: response.successCount > 0,
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      staleTokensRemoved: staleTokens.length,
+      responses: response.responses.map((r, i) => ({
+        tokenIndex: i,
+        success: r.success,
+        messageId: r.messageId,
+        error: r.error ? { code: r.error.code, message: r.error.message } : null,
+      })),
+    });
+  } catch (error) {
+    console.error("[TEST] Final error:", error.message);
+    res.status(500).json({
+      error: error.message,
+      code: error.code,
+    });
+  }
 });
 
 /**

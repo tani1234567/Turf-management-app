@@ -28,6 +28,7 @@ import TurfRequestsListScreen from "../screens/manager/TurfRequestsListScreen";
 import EditTurfScreen from "../screens/owner/EditTurfScreen";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
 import CustomerPhonebookScreen from "../screens/shared/CustomerPhonebookScreen";
+import HolidayScheduleScreen from "../screens/manager/HolidayScheduleScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -229,6 +230,11 @@ export default function ManagerNavigator() {
       <Stack.Screen
         name="CustomerPhonebook"
         component={CustomerPhonebookScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="HolidaySchedule"
+        component={HolidayScheduleScreen}
         options={{ presentation: "card" }}
       />
     </Stack.Navigator>

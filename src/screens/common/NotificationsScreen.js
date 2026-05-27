@@ -70,6 +70,26 @@ const getNotificationIcon = (type) => {
     case "turf_request_rejected":
       return { icon: "close-octagon", color: "#F44336" };
 
+    // Support tickets
+    case "ticket_created":
+      return { icon: "ticket-confirmation-outline", color: "#2196F3" };
+    case "ticket_reply":
+      return { icon: "message-reply-text", color: "#10B981" };
+    case "ticket_status_changed":
+      return { icon: "ticket-outline", color: "#FF9800" };
+
+    // Disputes & refunds
+    case "dispute_created":
+      return { icon: "alert-circle-outline", color: "#FF9800" };
+    case "dispute_resolved":
+      return { icon: "check-circle-outline", color: "#4CAF50" };
+    case "refund_initiated":
+      return { icon: "cash-refund", color: "#2196F3" };
+    case "refund_completed":
+      return { icon: "cash-check", color: "#4CAF50" };
+    case "refund_failed":
+      return { icon: "cash-remove", color: "#F44336" };
+
     default:
       return { icon: "bell", color: "#757575" };
   }

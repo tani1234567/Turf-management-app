@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Read(//c/Users/Tanmay/Desktop/Turf-Admin/turf-admin-panel/src/app/\\(admin\\)/support/tickets/**)",
+      "Read(//c/Users/Tanmay/Desktop/Turf-Admin/turf-admin-panel/src/app/\\(admin\\)/support/tickets/new/**)"
     ]
   }
 }

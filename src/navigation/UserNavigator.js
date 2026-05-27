@@ -21,6 +21,11 @@ import ChatScreen from "../screens/user/ChatScreen";
 import CashfreePaymentScreen from "../screens/user/CashfreePaymentScreen";
 import WriteReviewScreen from "../screens/user/WriteReviewScreen";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
+import SupportScreen from "../screens/user/SupportScreen";
+import NewTicketScreen from "../screens/user/NewTicketScreen";
+import TicketDetailScreen from "../screens/user/TicketDetailScreen";
+import NewDisputeScreen from "../screens/user/NewDisputeScreen";
+import DisputeDetailScreen from "../screens/user/DisputeDetailScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -182,6 +187,31 @@ export default function UserNavigator() {
         options={{
           presentation: "card",
         }}
+      />
+      <Stack.Screen
+        name="Support"
+        component={SupportScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="NewTicket"
+        component={NewTicketScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="TicketDetail"
+        component={TicketDetailScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="NewDispute"
+        component={NewDisputeScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="DisputeDetail"
+        component={DisputeDetailScreen}
+        options={{ presentation: "card" }}
       />
     </Stack.Navigator>
   );

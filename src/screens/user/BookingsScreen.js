@@ -33,6 +33,7 @@ import {
   subscribeToCollection,
   updateDocument,
   queryDocuments,
+  getDocument,
   autoRejectExpiredPendingBookings,
 } from "../../services/firebase/firestore";
 import { formatPrice, formatDuration } from "../../utils/priceUtils";
@@ -181,7 +182,7 @@ const StatusBadge = ({ status }) => {
 // ──────────────────────────────────────────────
 // BookingCard
 // ──────────────────────────────────────────────
-const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPayment }) => {
+const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPayment, onDispute }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () =>
     Animated.spring(scale, { toValue: 0.975, speed: 20, bounciness: 4, useNativeDriver: true }).start();
@@ -336,6 +337,18 @@ const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPaymen
                   Review
                 </Button>
               )}
+              {isCompleted && (
+                <Button
+                  mode="text"
+                  compact
+                  textColor="#EF4444"
+                  style={styles.actionBtn}
+                  onPress={() => onDispute(booking)}
+                  icon="alert-circle-outline"
+                >
+                  Dispute
+                </Button>
+              )}
               <Button
                 mode="text"
                 compact
@@ -345,6 +358,25 @@ const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPaymen
                 icon="phone-outline"
               >
                 Contact
+              </Button>
+            </View>
+          </>
+        )}
+
+        {/* Dispute button for cancelled bookings */}
+        {isCancelled && (
+          <>
+            <Divider style={styles.cardDivider} />
+            <View style={styles.cardActions}>
+              <Button
+                mode="text"
+                compact
+                textColor="#EF4444"
+                style={styles.actionBtn}
+                onPress={() => onDispute(booking)}
+                icon="alert-circle-outline"
+              >
+                Raise a Dispute
               </Button>
             </View>
           </>
@@ -660,7 +692,14 @@ const CancelBookingModal = ({ visible, booking, onDismiss, onConfirmCancel }) =>
     refundLabel = "No refund (less than 2 hours)";
   }
 
-  const refundAmount = Math.round((booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || 0) * refundPercent / 100);
+  // Calculate refund based on what was actually paid
+  // If advance payment was made, refund only the advance amount (not the full booking)
+  const advancePaid = booking.payment?.advance?.status === "paid" && booking.payment?.advanceAmount > 0;
+  const refundableAmount = advancePaid
+    ? booking.payment.advanceAmount
+    : (booking.totalAmount || booking.totalPrice || booking.payment?.slotAmount || 0);
+
+  const refundAmount = Math.round((refundableAmount * refundPercent) / 100);
 
   const handleCancel = async () => {
     setLoading(true);
@@ -880,6 +919,34 @@ export default function BookingsScreen({ navigation }) {
     });
   };
 
+  const handleDispute = async (booking) => {
+    let companyId = booking.companyId || "";
+    let companyName = booking.companyName || "";
+
+    try {
+      // companyId missing on some booking docs — look it up from the turf
+      if (!companyId && booking.turfId) {
+        const turf = await getDocument("turfs", booking.turfId);
+        companyId = turf?.companyId || "";
+      }
+      // fetch company name once we have the id
+      if (companyId && !companyName) {
+        const company = await getDocument("companies", companyId);
+        companyName = company?.name || "";
+      }
+    } catch (e) {
+      // proceed with whatever we have
+    }
+
+    navigation.navigate("NewDispute", {
+      bookingId: booking.id,
+      companyId,
+      companyName,
+      turfName: booking.turfName || "",
+      turfId: booking.turfId || "",
+    });
+  };
+
   const handlePayment = (booking) => {
     const lockExpiry =
       booking.slotLock?.lockExpiry
@@ -1045,6 +1112,7 @@ export default function BookingsScreen({ navigation }) {
       onReview={handleReview}
       onContact={handleContact}
       onPayment={handlePayment}
+      onDispute={handleDispute}
     />
   );
 

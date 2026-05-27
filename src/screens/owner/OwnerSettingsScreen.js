@@ -58,6 +58,7 @@ const SETTINGS_SECTIONS = [
     title: "Business",
     items: [
       { id: "turfs",      icon: "soccer-field",             label: "Turf Management",       color: "#4CAF50"     },
+      { id: "holiday",    icon: "calendar-star",            label: "Holiday Schedule",       color: "#10B981"     },
       { id: "team",       icon: "account-group",            label: "Team Management",       color: WARN_ORANGE   },
       { id: "sub",        icon: "credit-card",              label: "Subscription",          color: "#F97316"     },
       { id: "analytics",  icon: "chart-bar",                label: "Analytics",             color: "#3B82F6"     },
@@ -208,6 +209,7 @@ export default function OwnerSettingsScreen({ navigation }) {
       case "payments":      navigation.navigate("PaymentSettings"); break;
       case "ops":           navigation.navigate("OperationalSettings"); break;
       case "turfs":         navigation.navigate("Turfs"); break;
+      case "holiday":       navigation.navigate("TurfSelection", { nextScreen: "HolidaySchedule" }); break;
       case "team":          navigation.navigate("Team"); break;
       case "sub":           navigation.navigate("SubscriptionPayment"); break;
       case "analytics":     navigation.navigate("OwnerAnalyticsDashboard"); break;
