@@ -36,6 +36,7 @@ const SETTINGS_SECTIONS = [
       { id: "advancePayment", icon: "cash-clock", label: "Advance Payment", color: "#FF5722" },
       { id: "holidaySchedule", icon: "calendar-star", label: "Holiday Schedule", color: "#10B981" },
       { id: "caretakers", icon: "account-group", label: "Caretakers", color: "#9C27B0" },
+      { id: "coupons", icon: "tag-multiple-outline", label: "Offers & Coupons", color: "#10B981" },
     ],
   },
   {
@@ -299,6 +300,9 @@ export default function SettingsScreen() {
         break;
       case "profile":
         setShowEditProfile(true);
+        break;
+      case "coupons":
+        navigation.navigate("CompanyCouponToggle");
         break;
       case "phonebook":
         navigation.navigate("CustomerPhonebook");

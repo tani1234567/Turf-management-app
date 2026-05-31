@@ -17,6 +17,7 @@ import {
   writeBatch,
   Timestamp,
   runTransaction as webRunTransaction,
+  increment as webIncrement,
 } from "firebase/firestore";
 import { db } from "./config";
 
@@ -645,7 +646,7 @@ const isSlotBlocked = (blockedSlots, groundId, date, startTime, endTime) => {
  * @param {object} bookingData - Booking details
  * @returns {Promise<{success: boolean, bookingId?: string, message?: string}>}
  */
-export const createBookingWithTransaction = async (bookingData) => {
+export const createBookingWithTransaction = async (bookingData, couponPayload = null) => {
   const { turfId, groundId, date, startTime, endTime } = bookingData;
   const normalizedNewGroundId = normalizeGroundId(groundId);
 
@@ -720,13 +721,60 @@ export const createBookingWithTransaction = async (bookingData) => {
           return { success: false, message: "This time slot is reserved for an academy session" };
         }
 
-        // Create the booking
+        // Pre-generate ref so the ID is available for the coupon usage doc
         const newBookingRef = bookingsRef.doc();
+
+        // Coupon re-validation inside transaction — prevents race on limited coupons
+        let couponDocRef = null;
+        if (couponPayload) {
+          couponDocRef = nativeFirestore()
+            .collection("coupons")
+            .doc(couponPayload.couponId);
+          const couponSnap = await transaction.get(couponDocRef);
+          if (!couponSnap.exists) {
+            return { success: false, message: "Coupon no longer exists." };
+          }
+          const cd = couponSnap.data();
+          if (cd.status !== "active") {
+            return { success: false, message: "Coupon is no longer active." };
+          }
+          const validTo = cd.validTo?.toDate ? cd.validTo.toDate() : new Date(cd.validTo);
+          if (new Date() > validTo) {
+            return { success: false, message: "This coupon has expired." };
+          }
+          if (cd.totalUsageLimit != null && cd.usageCount >= cd.totalUsageLimit) {
+            return { success: false, message: "Coupon usage limit has been reached." };
+          }
+        }
+
+        // Writes
         transaction.set(newBookingRef, {
           ...bookingData,
           createdAt: nativeFirestore.FieldValue.serverTimestamp(),
           updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
         });
+
+        if (couponPayload && couponDocRef) {
+          transaction.update(couponDocRef, {
+            usageCount: nativeFirestore.FieldValue.increment(1),
+            updatedAt: nativeFirestore.FieldValue.serverTimestamp(),
+          });
+          const usageRef = nativeFirestore().collection("couponUsages").doc();
+          transaction.set(usageRef, {
+            couponId: couponPayload.couponId,
+            couponCode: couponPayload.couponCode,
+            userId: couponPayload.userId,
+            bookingId: newBookingRef.id,
+            companyId: couponPayload.companyId,
+            turfId: couponPayload.turfId,
+            channel: couponPayload.channel,
+            originalAmount: couponPayload.originalAmount,
+            discountAmount: couponPayload.discountAmount,
+            finalAmount: couponPayload.finalAmount,
+            advanceAmount: couponPayload.advanceAmount || 0,
+            usedAt: nativeFirestore.FieldValue.serverTimestamp(),
+          });
+        }
 
         return { success: true, bookingId: newBookingRef.id };
       });
@@ -807,13 +855,58 @@ export const createBookingWithTransaction = async (bookingData) => {
         return { success: false, message: "This time slot is reserved for an academy session" };
       }
 
-      // Create the booking
+      // Pre-generate ref so the ID is available for the coupon usage doc
       const newBookingRef = doc(collection(db, "bookings"));
+
+      // Coupon re-validation inside transaction — prevents race on limited coupons
+      let couponDocRef = null;
+      if (couponPayload) {
+        couponDocRef = doc(db, "coupons", couponPayload.couponId);
+        const couponSnap = await transaction.get(couponDocRef);
+        if (!couponSnap.exists()) {
+          return { success: false, message: "Coupon no longer exists." };
+        }
+        const cd = couponSnap.data();
+        if (cd.status !== "active") {
+          return { success: false, message: "Coupon is no longer active." };
+        }
+        const validTo = cd.validTo?.toDate ? cd.validTo.toDate() : new Date(cd.validTo);
+        if (new Date() > validTo) {
+          return { success: false, message: "This coupon has expired." };
+        }
+        if (cd.totalUsageLimit != null && cd.usageCount >= cd.totalUsageLimit) {
+          return { success: false, message: "Coupon usage limit has been reached." };
+        }
+      }
+
+      // Writes
       transaction.set(newBookingRef, {
         ...bookingData,
         createdAt: webServerTimestamp(),
         updatedAt: webServerTimestamp(),
       });
+
+      if (couponPayload && couponDocRef) {
+        transaction.update(couponDocRef, {
+          usageCount: webIncrement(1),
+          updatedAt: webServerTimestamp(),
+        });
+        const usageRef = doc(collection(db, "couponUsages"));
+        transaction.set(usageRef, {
+          couponId: couponPayload.couponId,
+          couponCode: couponPayload.couponCode,
+          userId: couponPayload.userId,
+          bookingId: newBookingRef.id,
+          companyId: couponPayload.companyId,
+          turfId: couponPayload.turfId,
+          channel: couponPayload.channel,
+          originalAmount: couponPayload.originalAmount,
+          discountAmount: couponPayload.discountAmount,
+          finalAmount: couponPayload.finalAmount,
+          advanceAmount: couponPayload.advanceAmount || 0,
+          usedAt: webServerTimestamp(),
+        });
+      }
 
       return { success: true, bookingId: newBookingRef.id };
     });

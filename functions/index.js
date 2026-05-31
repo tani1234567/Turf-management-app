@@ -26,6 +26,7 @@ const fraudPreventionFunctions = require("./src/fraudPreventionFunctions");
 const bookingCleanupFunctions = require("./src/bookingCleanupFunctions");
 const cashfreeFunctions = require("./src/cashfreeFunctions");
 const supportFunctions = require("./src/supportFunctions");
+const couponFunctions = require("./src/couponFunctions");
 
 // Slot Lock Functions
 exports.releaseExpiredSlotLocks = slotLockFunctions.releaseExpiredSlotLocks;
@@ -70,6 +71,11 @@ exports.onTicketMessageCreated = supportFunctions.onTicketMessageCreated;
 exports.onTicketStatusChanged = supportFunctions.onTicketStatusChanged;
 exports.onDisputeResolved = supportFunctions.onDisputeResolved;
 exports.onRefundStatusChanged = supportFunctions.onRefundStatusChanged;
+
+// Coupon Functions
+exports.expireCoupons = couponFunctions.expireCoupons;
+exports.onCouponUsageCreate = couponFunctions.onCouponUsageCreate;
+exports.validateCouponHTTPS = couponFunctions.validateCouponHTTPS;
 
 // Subscription Functions
 exports.checkSubscriptionExpiry = subscriptionFunctions.checkSubscriptionExpiry;

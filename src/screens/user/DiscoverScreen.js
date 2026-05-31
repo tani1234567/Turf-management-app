@@ -23,6 +23,7 @@ import firestore from "@react-native-firebase/firestore";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#10B981";
 const FEATURED_CARD_WIDTH = SCREEN_WIDTH - 64;
+const BANNER_WIDTH = SCREEN_WIDTH - 48;
 
 const CATEGORIES = [
   { id: "all", label: "All", icon: "tag-multiple-outline", color: "#6B7280" },
@@ -70,11 +71,25 @@ function FeaturedCard({ offer, onPress }) {
       activeOpacity={0.88}
     >
       {offer.bannerImage ? (
-        <Image
-          source={{ uri: offer.bannerImage }}
-          style={styles.featuredImage}
-          resizeMode="cover"
-        />
+        <>
+          <Image
+            source={{ uri: offer.bannerImage }}
+            style={styles.featuredImage}
+            resizeMode="cover"
+          />
+          {/* Dark overlay for text readability on banner image */}
+          <View style={styles.featuredImageOverlay} />
+          {/* Text content overlay — brand, title, discount */}
+          <View style={styles.featuredBannerContent}>
+            <Text style={styles.featuredBrand} numberOfLines={1}>{offer.brandName}</Text>
+            <Text style={styles.featuredCardTitle} numberOfLines={2}>{offer.title}</Text>
+            {offer.discount && (
+              <View style={styles.featuredDiscountPill}>
+                <Text style={styles.featuredDiscountText}>{offer.discount}</Text>
+              </View>
+            )}
+          </View>
+        </>
       ) : (
         <LinearGradient colors={gradients} style={styles.featuredGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
           <View style={styles.featuredGradientContent}>
@@ -101,6 +116,17 @@ function FeaturedCard({ offer, onPress }) {
         </View>
       </View>
 
+      {/* Brand icon overlay — only on banner images, bottom-left corner */}
+      {offer.iconImage && offer.bannerImage && (
+        <View style={styles.featuredIconOverlay}>
+          <Image
+            source={{ uri: offer.iconImage }}
+            style={styles.featuredIconImage}
+            resizeMode="cover"
+          />
+        </View>
+      )}
+
       {/* Tap hint */}
       {!offer.bannerImage && (
         <View style={styles.featuredTapHint}>
@@ -119,10 +145,18 @@ function OfferCard({ offer, onPress }) {
   return (
     <TouchableOpacity style={styles.offerCard} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.offerCardInner}>
-        {/* Icon bg */}
-        <View style={[styles.offerCardIconBg, { backgroundColor: color + "18" }]}>
-          <MaterialCommunityIcons name={categoryMeta.icon} size={26} color={color} />
-        </View>
+        {/* Icon — brand image or category fallback */}
+        {offer.iconImage ? (
+          <Image
+            source={{ uri: offer.iconImage }}
+            style={styles.offerCardIconImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.offerCardIconBg, { backgroundColor: color + "18" }]}>
+            <MaterialCommunityIcons name={categoryMeta.icon} size={26} color={color} />
+          </View>
+        )}
 
         <Text style={styles.offerCardBrand} numberOfLines={1}>{offer.brandName}</Text>
         <Text style={styles.offerCardTitle} numberOfLines={2}>{offer.title}</Text>
@@ -165,9 +199,17 @@ function TurfPromoCard({ offer, onPress }) {
       >
         <View style={styles.turfPromoContent}>
           <View style={styles.turfPromoLeft}>
-            <View style={styles.turfPromoIconBg}>
-              <MaterialCommunityIcons name="soccer-field" size={28} color="#fff" />
-            </View>
+            {offer.iconImage ? (
+              <Image
+                source={{ uri: offer.iconImage }}
+                style={styles.turfPromoIconImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.turfPromoIconBg}>
+                <MaterialCommunityIcons name="soccer-field" size={28} color="#fff" />
+              </View>
+            )}
             <View style={styles.turfPromoText}>
               <Text style={styles.turfPromoBrand} numberOfLines={1}>{offer.brandName}</Text>
               <Text style={styles.turfPromoTitle} numberOfLines={2}>{offer.title}</Text>
@@ -314,19 +356,104 @@ function OfferDetailSheet({ offer, onClose }) {
   );
 }
 
+// ─── Platform Banner Card ──────────────────────────────────────────────────────
+function PlatformBannerCard({ banner }) {
+  const handlePress = async () => {
+    if (banner.couponCode) {
+      await Clipboard.setStringAsync(banner.couponCode);
+      Alert.alert(
+        "Code Copied!",
+        `"${banner.couponCode}" copied to clipboard. Apply it when booking a turf.`
+      );
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      style={[styles.bannerCard, { width: BANNER_WIDTH }]}
+      onPress={handlePress}
+      activeOpacity={0.9}
+    >
+      {banner.imageUrl ? (
+        <>
+          <Image
+            source={{ uri: banner.imageUrl }}
+            style={styles.bannerImage}
+            resizeMode="cover"
+          />
+          <View style={styles.bannerImageOverlay} />
+          <View style={styles.bannerTextOverlay}>
+            <Text style={styles.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+            {banner.subtitle ? (
+              <Text style={styles.bannerSubtitle} numberOfLines={1}>{banner.subtitle}</Text>
+            ) : null}
+            {banner.couponCode ? (
+              <View style={styles.bannerCodePill}>
+                <MaterialCommunityIcons name="tag" size={12} color="#fff" />
+                <Text style={styles.bannerCodeText}>{banner.couponCode}</Text>
+              </View>
+            ) : null}
+          </View>
+        </>
+      ) : (
+        <LinearGradient
+          colors={["#10B981", "#059669"]}
+          style={styles.bannerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <View style={styles.bannerGradientContent}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+              {banner.subtitle ? (
+                <Text style={[styles.bannerSubtitle, { color: "rgba(255,255,255,0.8)" }]} numberOfLines={1}>
+                  {banner.subtitle}
+                </Text>
+              ) : null}
+            </View>
+            {banner.couponCode ? (
+              <View style={[styles.bannerCodePill, { backgroundColor: "#fff" }]}>
+                <MaterialCommunityIcons name="tag" size={12} color="#10B981" />
+                <Text style={[styles.bannerCodeText, { color: "#10B981" }]}>
+                  {banner.couponCode}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </LinearGradient>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 // ─── Main Screen ───────────────────────────────────────────────────────────────
 export default function DiscoverScreen() {
   const [offers, setOffers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedOffer, setSelectedOffer] = useState(null);
+  const [platformBanners, setPlatformBanners] = useState([]);
+
+  // Live subscription to platform promotional banners
+  useEffect(() => {
+    const unsub = firestore()
+      .collection("platformBanners")
+      .where("isActive", "==", true)
+      .orderBy("displayOrder", "asc")
+      .onSnapshot(
+        (snap) =>
+          setPlatformBanners(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+        (err) => console.error("[DiscoverScreen] banners error:", err)
+      );
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = firestore()
       .collection("offers")
       .where("isActive", "==", true)
-      .orderBy("isFeatured", "desc")
-      .orderBy("createdAt", "desc")
+      .orderBy("sortOrder", "asc")
+      .orderBy("createdAt", "asc")
       .onSnapshot(
         (snapshot) => {
           const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -422,6 +549,22 @@ export default function DiscoverScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          {/* Platform Promotional Banners */}
+          {platformBanners.length > 0 && (
+            <View style={styles.bannerSection}>
+              <FlatList
+                horizontal
+                data={platformBanners}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => <PlatformBannerCard banner={item} />}
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={BANNER_WIDTH + 12}
+                decelerationRate="fast"
+                contentContainerStyle={styles.bannerList}
+              />
+            </View>
+          )}
+
           {/* Featured Carousel */}
           {featuredOffers.length > 0 && (
             <View style={styles.section}>
@@ -692,6 +835,38 @@ const styles = StyleSheet.create({
     fontFamily: "Ubuntu-Bold",
     color: "#fff",
   },
+  featuredIconOverlay: {
+    position: "absolute",
+    bottom: 12,
+    right: 14,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: "#fff",
+  },
+  featuredIconImage: {
+    width: 36,
+    height: 36,
+  },
+  featuredImageOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  featuredBannerContent: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 14,
+    paddingRight: 64,
+    paddingVertical: 16,
+    gap: 4,
+  },
   featuredTapHint: {
     position: "absolute",
     bottom: 12,
@@ -771,6 +946,12 @@ const styles = StyleSheet.create({
     gap: 6,
     minHeight: 160,
   },
+  offerCardIconImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
   offerCardIconBg: {
     width: 44,
     height: 44,
@@ -846,6 +1027,11 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
+  turfPromoIconImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
   turfPromoIconBg: {
     width: 48,
     height: 48,
@@ -913,6 +1099,79 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
     maxWidth: 260,
+  },
+
+  // ── Platform Banners ─────────────────────────────────────────────────────────
+  bannerSection: {
+    marginBottom: 4,
+  },
+  bannerList: {
+    paddingLeft: 20,
+    paddingRight: 8,
+  },
+  bannerCard: {
+    height: 96,
+    borderRadius: 14,
+    marginRight: 12,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bannerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  bannerImageOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.42)",
+  },
+  bannerTextOverlay: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0,
+    padding: 12,
+    gap: 3,
+  },
+  bannerGradient: {
+    flex: 1,
+    padding: 14,
+    justifyContent: "center",
+  },
+  bannerGradientContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  bannerTitle: {
+    fontSize: 15,
+    fontFamily: "Ubuntu-Bold",
+    color: "#fff",
+  },
+  bannerSubtitle: {
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "rgba(255,255,255,0.85)",
+  },
+  bannerCodePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.22)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
+  },
+  bannerCodeText: {
+    fontSize: 11,
+    fontFamily: "Ubuntu-Bold",
+    color: "#fff",
   },
 
   // ── Bottom Sheet ──────────────────────────────────────────────────────────────

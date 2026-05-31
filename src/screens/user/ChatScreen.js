@@ -329,6 +329,11 @@ export default function ChatScreen() {
         lockExpiry: card.paymentDeadline
           ? new Date(card.paymentDeadline).getTime()
           : new Date().getTime() + 10 * 60 * 1000,
+        // Coupon step data for negotiated bookings
+        totalAmount: card.totalAmount || null,
+        isNegotiatedBooking: true,
+        companyId: card.companyId || null,
+        turfId: card.turfId || null,
       });
     },
     [navigation, user]

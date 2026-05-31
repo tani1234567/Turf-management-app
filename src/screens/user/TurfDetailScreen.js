@@ -32,6 +32,8 @@ import {
 import { getDocument, queryDocuments } from "../../services/firebase/firestore";
 import { getOrCreateChat } from "../../services/firebase/chat";
 import { getReviewsForTurf } from "../../services/firebase/reviews";
+import { getTurfCoupons } from "../../services/firebase/coupons";
+import TurfOfferCard from "../../components/coupons/TurfOfferCard";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#10B981";
@@ -173,6 +175,7 @@ export default function TurfDetailScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [coupons, setCoupons] = useState([]);
 
   // Fetch turf details
   const fetchTurfDetails = useCallback(async () => {
@@ -198,6 +201,16 @@ export default function TurfDetailScreen({ navigation, route }) {
           ...g,
           id: g.id || `ground-${index}`,
         })));
+      }
+
+      // Fetch active coupons for this turf
+      if (turfData.companyId) {
+        try {
+          const couponDocs = await getTurfCoupons(turfId, turfData.companyId);
+          setCoupons(couponDocs);
+        } catch (err) {
+          console.error("Error fetching turf coupons:", err);
+        }
       }
 
       // Fetch real reviews
@@ -730,6 +743,29 @@ export default function TurfDetailScreen({ navigation, route }) {
     </View>
   );
 
+  const renderOffersSection = () => {
+    if (coupons.length === 0) return null;
+    return (
+      <View>
+        <View style={styles.section}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            Offers & Deals
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingLeft: 16, paddingRight: 4, gap: 10 }}
+          >
+            {coupons.map((coupon) => (
+              <TurfOfferCard key={coupon.id} coupon={coupon} />
+            ))}
+          </ScrollView>
+        </View>
+        <Divider />
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -769,6 +805,7 @@ export default function TurfDetailScreen({ navigation, route }) {
         <Divider />
         {renderPricingPreview()}
         <Divider />
+        {renderOffersSection()}
         {renderAmenitiesSection()}
         <Divider />
         {renderLocationSection()}

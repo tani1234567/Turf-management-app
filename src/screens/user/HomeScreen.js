@@ -39,6 +39,7 @@ import {
   toggleWishlistItem,
 } from "../../store/slices/wishlistSlice";
 import { queryDocuments } from "../../services/firebase/firestore";
+import { getTurfCoupons } from "../../services/firebase/coupons";
 import { useNotifications } from "../../hooks";
 import { FONTS } from "../../constants/theme";
 import {
@@ -101,7 +102,7 @@ const AMENITIES = [
 const ITEMS_PER_PAGE = 10;
 
 // Separate TurfCard component to properly use hooks
-const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation }) => {
+const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation, hasOffers }) => {
   const isGrid = viewMode === "grid";
   const isFavorite = favorites.includes(item.id);
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -179,6 +180,14 @@ const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation }) => 
                 color={isFavorite ? "#FF4444" : "#fff"}
               />
             </Pressable>
+
+            {/* Offers badge */}
+            {hasOffers && (
+              <View style={styles.offersBadge}>
+                <MaterialCommunityIcons name="tag" size={11} color="#fff" />
+                <Text style={styles.offersBadgeText}>Offers</Text>
+              </View>
+            )}
 
             {/* Sport chips — bottom-left over gradient */}
             {(item.sports || []).length > 0 && (
@@ -344,6 +353,7 @@ export default function HomeScreen({ navigation }) {
 
   // Data state
   const [turfs, setTurfs] = useState([]);
+  const [turfIdsWithOffers, setTurfIdsWithOffers] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
@@ -505,6 +515,41 @@ export default function HomeScreen({ navigation }) {
 
       setTurfs(paginatedTurfs);
       setHasMore(paginatedTurfs.length < filteredTurfs.length);
+
+      // Fetch active coupons to show offers badge — one query per unique company
+      try {
+        const companyIds = [...new Set(paginatedTurfs.map((t) => t.companyId).filter(Boolean))];
+        const couponFetches = companyIds.map((cId) =>
+          queryDocuments("coupons", [
+            { field: "channel", operator: "==", value: "turf" },
+            { field: "companyId", operator: "==", value: cId },
+            { field: "status", operator: "==", value: "active" },
+            { field: "companyStatus", operator: "==", value: "active" },
+          ])
+        );
+        const results = await Promise.all(couponFetches);
+        const now = Date.now();
+        const ids = new Set();
+        results.flat().forEach((coupon) => {
+          const validTo = coupon.validTo?.toDate
+            ? coupon.validTo.toDate().getTime()
+            : new Date(coupon.validTo).getTime();
+          if (now > validTo) return;
+          const turfIds = coupon.turfIds;
+          if (!turfIds || turfIds.length === 0) {
+            // applies to all turfs of the company — mark them all
+            paginatedTurfs
+              .filter((t) => t.companyId === coupon.companyId)
+              .forEach((t) => ids.add(t.id));
+          } else {
+            turfIds.forEach((id) => ids.add(id));
+          }
+        });
+        setTurfIdsWithOffers(ids);
+      } catch (err) {
+        // Non-critical — badge simply won't show if this fails
+        console.warn("[HomeScreen] offers badge fetch failed:", err.message);
+      }
     } catch (error) {
       console.error("Error fetching turfs:", error);
     } finally {
@@ -722,6 +767,7 @@ export default function HomeScreen({ navigation }) {
         favorites={favorites}
         toggleFavorite={toggleFavorite}
         navigation={navigation}
+        hasOffers={turfIdsWithOffers.has(item.id)}
       />
     );
   };
@@ -1575,6 +1621,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  // Offers badge — top-left corner of image
+  offersBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#10B981",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  offersBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontFamily: FONTS.bold,
+  },
+
   // Sport chips sit over the gradient at the bottom-left
   sportChipsContainer: {
     position: "absolute",

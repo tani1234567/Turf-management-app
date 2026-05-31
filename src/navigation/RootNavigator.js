@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { createStackNavigator } from "@react-navigation/stack";
 
@@ -8,6 +8,8 @@ import UserNavigator from "./UserNavigator";
 import OwnerNavigator from "./OwnerNavigator";
 import ManagerNavigator from "./ManagerNavigator";
 import CaretakerNavigator from "./CaretakerNavigator";
+import MaintenanceScreen from "../screens/MaintenanceScreen";
+import { subscribeToDocument } from "../services/firebase/firestore";
 
 const Stack = createStackNavigator();
 
@@ -51,10 +53,37 @@ function AuthNavigatorWithProps({ isNewUser }) {
  */
 export default function RootNavigator() {
   const { isAuthenticated, isLoading, user, userRole } = useAuth({ subscribe: true });
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceChecking, setMaintenanceChecking] = useState(true);
 
-  // Show loading screen while checking auth state
-  if (isLoading) {
+  useEffect(() => {
+    const unsubscribe = subscribeToDocument(
+      "feature_flags",
+      "maintenance_mode",
+      (flagDoc) => {
+        setMaintenanceMode(flagDoc?.value === true);
+        setMaintenanceChecking(false);
+      }
+    );
+    return unsubscribe;
+  }, []);
+
+  // Show loading screen while checking auth state or initial flag fetch
+  if (isLoading || maintenanceChecking) {
     return <LoadingScreen />;
+  }
+
+  if (maintenanceMode) {
+    return (
+      <MaintenanceScreen
+        onRetry={() => {
+          setMaintenanceChecking(true);
+          // Re-subscribe triggers the existing listener; just briefly show spinner
+          setTimeout(() => setMaintenanceChecking(false), 1500);
+        }}
+        isChecking={maintenanceChecking}
+      />
+    );
   }
 
   // Determine if user needs to complete profile setup

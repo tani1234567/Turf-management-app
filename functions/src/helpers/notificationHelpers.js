@@ -86,6 +86,10 @@ function getNotificationMeta(type, data) {
     case "refund_failed":
       return { screen: "Support", relatedType: "refund" };
 
+    // Coupons
+    case "coupon_used":
+      return { screen: "Settings", relatedType: "coupon" };
+
     default:
       return { screen: "Dashboard", relatedType: "booking" };
   }

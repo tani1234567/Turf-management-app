@@ -62,6 +62,7 @@ const SETTINGS_SECTIONS = [
       { id: "team",       icon: "account-group",            label: "Team Management",       color: WARN_ORANGE   },
       { id: "sub",        icon: "credit-card",              label: "Subscription",          color: "#F97316"     },
       { id: "analytics",  icon: "chart-bar",                label: "Analytics",             color: "#3B82F6"     },
+      { id: "coupons",    icon: "tag-multiple-outline",     label: "Offers & Coupons",      color: "#10B981"     },
       { id: "phonebook",  icon: "book-account",             label: "Customer Directory",     color: "#10B981"     },
     ],
   },
@@ -213,6 +214,7 @@ export default function OwnerSettingsScreen({ navigation }) {
       case "team":          navigation.navigate("Team"); break;
       case "sub":           navigation.navigate("SubscriptionPayment"); break;
       case "analytics":     navigation.navigate("OwnerAnalyticsDashboard"); break;
+      case "coupons":       navigation.navigate("CompanyCouponToggle"); break;
       case "phonebook":     navigation.navigate("CustomerPhonebook"); break;
       case "notifications": break;
       case "help":          break;

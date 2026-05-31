@@ -3,7 +3,9 @@
     "allow": [
       "Bash(ls:*)",
       "Read(//c/Users/Tanmay/Desktop/Turf-Admin/turf-admin-panel/src/app/\\(admin\\)/support/tickets/**)",
-      "Read(//c/Users/Tanmay/Desktop/Turf-Admin/turf-admin-panel/src/app/\\(admin\\)/support/tickets/new/**)"
+      "Read(//c/Users/Tanmay/Desktop/Turf-Admin/turf-admin-panel/src/app/\\(admin\\)/support/tickets/new/**)",
+      "Read(//c/Users/Tanmay/Desktop/**)",
+      "Bash(npx --yes create-next-app@latest sportsphere-website --typescript --tailwind --app --src-dir --import-alias \"@/*\" --no-eslint --use-npm --yes)"
     ]
   }
 }

@@ -39,6 +39,7 @@ import {
 import { formatPrice, formatDuration } from "../../utils/priceUtils";
 import { FONTS } from "../../constants/theme";
 import SkeletonBookingList from "../../components/user/SkeletonLoader";
+import CouponVoucherCard from "../../components/coupons/CouponVoucherCard";
 
 const USER_COLOR = "#10B981";
 const EMERALD_PALE = "#D1FAE5";
@@ -547,6 +548,19 @@ const BookingDetailsModal = ({ visible, booking, onDismiss, onCancel, onReview }
                 </Chip>
               </View>
             </View>
+
+            {/* Coupon Voucher / Discount Info */}
+            {booking.coupon?.applied && (
+              <View style={styles.modalSection}>
+                <Text variant="titleSmall" style={styles.sectionTitle}>
+                  Discount Applied
+                </Text>
+                <CouponVoucherCard
+                  coupon={booking.coupon}
+                  isVenue={!booking.payment?.advanceAmount || booking.payment.advanceAmount === 0}
+                />
+              </View>
+            )}
 
             {/* Special Requests */}
             {booking.specialRequests ? (

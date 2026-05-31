@@ -32,6 +32,12 @@ import {
   calculateDuration,
   formatPrice,
 } from "../../utils/priceUtils";
+import {
+  buildEmptyCoupon,
+  buildCouponBookingPayload,
+  calculateDiscount,
+} from "../../utils/couponUtils";
+import { validateCouponForBooking } from "../../services/firebase/coupons";
 
 const USER_COLOR = "#10B981";
 const EMERALD_PALE = "#D1FAE5";
@@ -56,6 +62,10 @@ export default function BookingConfirmationScreen({ navigation, route }) {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("upi"); // "upi" or "cash_at_venue"
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
 
   // Get advance payment settings from turf
   const advancePayment = turf?.advancePayment || {
@@ -75,7 +85,12 @@ export default function BookingConfirmationScreen({ navigation, route }) {
   // Calculate price breakdown using priceUtils
   const priceBreakdown = useMemo(() => {
     if (!ground?.pricing || !startTime || !endTime || !date) {
-      return { slots: [], subtotal: totalPrice || 0, convenienceFee: 0, total: totalPrice || 0 };
+      const fallback = totalPrice || 0;
+      return {
+        slots: [], subtotal: fallback, convenienceFee: 0,
+        rawTotal: fallback, discountAmount: 0, total: fallback,
+        advanceAmount: 0, remainingAmount: fallback,
+      };
     }
 
     const result = calculateBookingPrice(
@@ -86,7 +101,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
       endTime.time
     );
 
-    // Map slots to display format
     const slots = result.slots.map((s) => ({
       name: s.name,
       rate: s.rate,
@@ -94,10 +108,13 @@ export default function BookingConfirmationScreen({ navigation, route }) {
       price: s.amount,
     }));
 
-    const convenienceFee = 0; // Can add platform fee here
+    const convenienceFee = 0;
+    const rawTotal = result.subtotal + convenienceFee;
 
-    // Calculate advance amount if required
-    const total = result.subtotal + convenienceFee;
+    // Discount applied to raw total; advance is then a % of the discounted total
+    const { discountAmount } = calculateDiscount(appliedCoupon, rawTotal);
+    const total = rawTotal - discountAmount;
+
     const advanceAmount = advancePayment.isRequired
       ? Math.round((total * advancePayment.percentage) / 100)
       : 0;
@@ -107,14 +124,46 @@ export default function BookingConfirmationScreen({ navigation, route }) {
       slots,
       subtotal: result.subtotal,
       convenienceFee,
+      rawTotal,
+      discountAmount,
       total,
       advanceAmount,
       remainingAmount,
     };
-  }, [ground, startTime, endTime, date, sport, totalPrice, advancePayment]);
+  }, [ground, startTime, endTime, date, sport, totalPrice, advancePayment, appliedCoupon]);
 
   // Get user ID (handles different property names: id, userId, uid)
   const getUserId = () => user?.id || user?.userId || user?.uid;
+
+  const handleApplyCoupon = useCallback(async () => {
+    if (!couponInput.trim()) return;
+    setCouponLoading(true);
+    setCouponError(null);
+
+    const result = await validateCouponForBooking(couponInput, {
+      userId: getUserId(),
+      turfId,
+      companyId: turf?.companyId || "",
+      totalAmount: priceBreakdown.rawTotal,
+      isNegotiatedBooking: false,
+    });
+
+    setCouponLoading(false);
+
+    if (result.valid) {
+      setAppliedCoupon(result.coupon);
+      setCouponError(null);
+    } else {
+      setCouponError(result.error);
+      setAppliedCoupon(null);
+    }
+  }, [couponInput, turfId, turf, priceBreakdown, user]);
+
+  const handleRemoveCoupon = useCallback(() => {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError(null);
+  }, []);
 
   // Handle booking confirmation
   const handleConfirmBooking = useCallback(async () => {
@@ -215,9 +264,18 @@ export default function BookingConfirmationScreen({ navigation, route }) {
           lockExpiry: isSoftLock ? softLockExpiry.toISOString() : null,
           lockReason: isSoftLock ? "payment_pending" : null,
         },
+        coupon: appliedCoupon
+          ? buildCouponBookingPayload(
+              appliedCoupon,
+              priceBreakdown.discountAmount,
+              priceBreakdown.rawTotal
+            )
+          : buildEmptyCoupon(),
         // Payment structure following V2.1 schema
         payment: {
-          slotAmount: priceBreakdown.total,
+          slotAmount: priceBreakdown.rawTotal,
+          discountAmount: priceBreakdown.discountAmount,
+          finalAmount: priceBreakdown.total,
           advanceConfig: {
             isRequired: advancePayment.isRequired,
             percentage: advancePayment.percentage,
@@ -272,8 +330,24 @@ export default function BookingConfirmationScreen({ navigation, route }) {
         ],
       };
 
+      // Build coupon payload for atomic transaction recording (null = no coupon)
+      const couponPayload = appliedCoupon
+        ? {
+            couponId: appliedCoupon.id,
+            couponCode: appliedCoupon.code,
+            userId: currentUserId,
+            companyId: turf?.companyId || "",
+            turfId,
+            channel: appliedCoupon.channel,
+            originalAmount: priceBreakdown.rawTotal,
+            discountAmount: priceBreakdown.discountAmount,
+            finalAmount: priceBreakdown.total,
+            advanceAmount: priceBreakdown.advanceAmount,
+          }
+        : null;
+
       // Create booking with transaction to handle race conditions
-      const result = await createBookingWithTransaction(bookingData);
+      const result = await createBookingWithTransaction(bookingData, couponPayload);
 
       if (result.success) {
         setShowConfirmDialog(false);
@@ -353,6 +427,7 @@ export default function BookingConfirmationScreen({ navigation, route }) {
     navigation,
     advancePayment,
     paymentMethod,
+    appliedCoupon,
   ]);
 
   return (
@@ -488,6 +563,17 @@ export default function BookingConfirmationScreen({ navigation, route }) {
               </View>
             )}
 
+            {appliedCoupon && (
+              <View style={styles.priceRow}>
+                <Text variant="bodyMedium" style={[styles.priceLabel, { color: USER_COLOR }]}>
+                  Discount ({appliedCoupon.code})
+                </Text>
+                <Text variant="bodyMedium" style={[styles.priceAmount, { color: USER_COLOR }]}>
+                  − ₹{priceBreakdown.discountAmount}
+                </Text>
+              </View>
+            )}
+
             <Divider style={styles.priceDivider} />
 
             <View style={styles.totalRow}>
@@ -496,6 +582,76 @@ export default function BookingConfirmationScreen({ navigation, route }) {
                 ₹{priceBreakdown.total}
               </Text>
             </View>
+          </Surface>
+
+          {/* Coupon Card */}
+          <Surface style={styles.card} elevation={1}>
+            <View style={styles.cardHeader}>
+              <MaterialCommunityIcons name="tag-outline" size={24} color={USER_COLOR} />
+              <Text variant="titleMedium" style={styles.cardTitle}>
+                Have a Coupon?
+              </Text>
+            </View>
+            <Divider style={styles.divider} />
+
+            {appliedCoupon ? (
+              <View style={styles.couponApplied}>
+                <View style={styles.couponAppliedInfo}>
+                  <MaterialCommunityIcons name="check-circle" size={20} color={USER_COLOR} />
+                  <View style={styles.couponAppliedText}>
+                    <Text variant="bodyMedium" style={{ color: USER_COLOR, fontWeight: "600" }}>
+                      {appliedCoupon.code} applied
+                    </Text>
+                    <Text variant="bodySmall" style={{ color: "#666" }}>
+                      You save ₹{priceBreakdown.discountAmount}
+                    </Text>
+                  </View>
+                </View>
+                <Button
+                  mode="text"
+                  compact
+                  textColor="#F44336"
+                  onPress={handleRemoveCoupon}
+                >
+                  Remove
+                </Button>
+              </View>
+            ) : (
+              <View style={styles.couponInputRow}>
+                <TextInput
+                  mode="outlined"
+                  placeholder="Enter coupon code"
+                  value={couponInput}
+                  onChangeText={(text) => {
+                    setCouponInput(text.toUpperCase());
+                    if (couponError) setCouponError(null);
+                  }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={styles.couponInput}
+                  outlineColor="#ddd"
+                  activeOutlineColor={USER_COLOR}
+                  dense
+                />
+                <Button
+                  mode="contained"
+                  onPress={handleApplyCoupon}
+                  loading={couponLoading}
+                  disabled={!couponInput.trim() || couponLoading}
+                  buttonColor={USER_COLOR}
+                  style={styles.couponApplyBtn}
+                  contentStyle={{ paddingVertical: 2 }}
+                >
+                  Apply
+                </Button>
+              </View>
+            )}
+
+            {couponError ? (
+              <Text variant="bodySmall" style={styles.couponError}>
+                {couponError}
+              </Text>
+            ) : null}
           </Surface>
 
           {/* Advance Payment Card - Only show if required */}
@@ -918,6 +1074,43 @@ const styles = StyleSheet.create({
   },
   confirmButtonContent: {
     paddingVertical: 4,
+  },
+
+  // Coupon Section
+  couponInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  couponInput: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  couponApplyBtn: {
+    borderRadius: 8,
+  },
+  couponApplied: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  couponAppliedInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  couponAppliedText: {
+    gap: 2,
+  },
+  couponError: {
+    color: "#F44336",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
 
   // Advance Payment Section

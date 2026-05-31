@@ -2,10 +2,65 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Role helpers ──────────────────────────────────────────────────────────
+    function isAdminRole() {
+      return request.auth.token.role in ['admin', 'super_admin'];
+    }
+
+    function isManagerOrOwner() {
+      return request.auth.token.role in ['manager', 'owner', 'admin', 'super_admin'];
+    }
+
+    function userCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+
     // ── Default: authenticated users can read/write everything not explicitly covered
     // TODO: tighten per-collection as the app matures
     match /{document=**} {
       allow read, write: if request.auth != null;
+    }
+
+    // ── Coupons ───────────────────────────────────────────────────────────────
+    match /coupons/{couponId} {
+      // Any authenticated user can read coupons (needed to validate codes)
+      allow read: if request.auth != null;
+
+      // Only admins can create new coupons or delete them
+      allow create, delete: if request.auth != null && isAdminRole();
+
+      // Admins can update any field.
+      // Managers/owners can ONLY update companyStatus (their toggle) on their own company's coupon.
+      allow update: if request.auth != null && (
+        isAdminRole()
+        ||
+        (
+          isManagerOrOwner()
+          && resource.data.companyId == userCompanyId()
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['companyStatus', 'updatedAt'])
+        )
+      );
+    }
+
+    // ── Coupon Usages ─────────────────────────────────────────────────────────
+    match /couponUsages/{usageId} {
+      // User can read their own usage records; admins and company managers can read all
+      allow read: if request.auth != null && (
+        isAdminRole()
+        || resource.data.userId == request.auth.uid
+        || (isManagerOrOwner() && resource.data.companyId == userCompanyId())
+      );
+
+      // Users may only create a usage record that belongs to themselves.
+      // The booking transaction creates these under the user's auth token.
+      // Update and delete are blocked — usage records are immutable.
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.couponId is string
+        && request.resource.data.bookingId is string;
+
+      allow update, delete: if false;
     }
 
     // ── Support Tickets ──────────────────────────────────────────────────────
