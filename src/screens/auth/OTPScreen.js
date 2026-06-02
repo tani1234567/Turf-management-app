@@ -134,6 +134,8 @@ export default function OTPScreen({ route, navigation }) {
         friendlyMessage = "Invalid OTP code. Please check and try again.";
       } else if (error.code === "auth/code-expired") {
         friendlyMessage = "OTP has expired. Please request a new one.";
+      } else if (error.code === "auth/keychain-error") {
+        friendlyMessage = "A device security error occurred. Please restart the app and try again.";
       } else if (error.message) {
         friendlyMessage = error.message;
       }
