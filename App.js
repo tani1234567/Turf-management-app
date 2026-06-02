@@ -1,6 +1,11 @@
 // Import Firebase compat SDK first (required for expo-firebase-recaptcha on web)
 import "./src/services/firebase/firebase-compat";
 
+import auth from "@react-native-firebase/auth";
+if (__DEV__) {
+  auth().settings.appVerificationDisabledForTesting = true;
+}
+
 import React, { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
