@@ -49,7 +49,8 @@
       [
         "expo-splash-screen",
         {}
-      ]
+      ],
+      "./plugins/withFirebaseConfigure"
 ],
     "extra": {
       "eas": {
