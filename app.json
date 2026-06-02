@@ -21,7 +21,7 @@
       },
       "entitlements": {
         "keychain-access-groups": [
-          "$(AppIdentifierPrefix)$(CFBundleIdentifier)"
+          "$(AppIdentifierPrefix)com.tanmaydevil.Turf1701"
         ]
       }
     },
