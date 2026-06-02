@@ -15,6 +15,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth } from "../../services/firebase/config";
 import { useAppDispatch } from "../../hooks";
+
+let nativeFirebaseAuth = null;
+if (Platform.OS !== "web") {
+  try {
+    nativeFirebaseAuth = require("@react-native-firebase/auth").default;
+  } catch (_) {}
+}
 import { setUser, setLoading, setError } from "../../store/slices/authSlice";
 import { getDocument } from "../../services/firebase/firestore";
 
@@ -103,7 +110,23 @@ export default function OTPScreen({ route, navigation }) {
         }
       } else {
         if (global.phoneAuthConfirmation) {
-          userCredential = await global.phoneAuthConfirmation.confirm(otpString);
+          try {
+            userCredential = await global.phoneAuthConfirmation.confirm(otpString);
+          } catch (confirmError) {
+            // On iOS simulator the OTP verification succeeds server-side but
+            // token persistence to the keychain can fail. If the user is
+            // already signed in (currentUser is set), treat it as success.
+            if (
+              confirmError.code === "auth/keychain-error" &&
+              nativeFirebaseAuth &&
+              nativeFirebaseAuth().currentUser
+            ) {
+              console.warn("[OTP] Keychain error but user authenticated — continuing");
+              userCredential = { user: nativeFirebaseAuth().currentUser };
+            } else {
+              throw confirmError;
+            }
+          }
         } else {
           throw new Error("Phone authentication session expired. Please try again.");
         }
