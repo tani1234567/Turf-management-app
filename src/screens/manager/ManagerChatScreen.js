@@ -41,6 +41,7 @@ import {
   createBookingFromNegotiationWithPaymentRequest,
   updateBookingWithAdvancePayment,
   confirmPendingBooking,
+  rejectPendingBooking,
   expireConflictingNegotiations,
   approveBookingWithoutAdvancePayment,
 } from "../../services/firebase/booking";
@@ -495,6 +496,19 @@ export default function ManagerChatScreen() {
             style: "destructive",
             onPress: async () => {
               try {
+                // Update the actual booking document first
+                const result = await rejectPendingBooking(
+                  card.bookingId,
+                  user?.userId,
+                  user?.name || "Manager"
+                );
+
+                if (!result.success) {
+                  setSnackbar({ visible: true, message: result.message || "Failed to reject booking" });
+                  return;
+                }
+
+                // Then update the chat card to reflect the rejection
                 await updateBookingCardStatus(chatId, messageId, "rejected", {
                   respondedBy: user?.userId,
                   respondedByName: user?.name || "Manager",

@@ -727,6 +727,53 @@ export const confirmPendingBooking = async (bookingId, respondedBy, respondedByN
 };
 
 /**
+ * Reject a pending booking from chat (Quick Reject)
+ * @param {string} bookingId - Booking ID
+ * @param {string} respondedBy - User ID of who rejected
+ * @param {string} respondedByName - Name of who rejected
+ * @returns {Promise<{success: boolean, message?: string}>}
+ */
+export const rejectPendingBooking = async (bookingId, respondedBy, respondedByName) => {
+  try {
+    const bookingRef = doc(db, "bookings", bookingId);
+    const bookingDoc = await getDoc(bookingRef);
+
+    if (!bookingDoc.exists()) {
+      return { success: false, message: "Booking not found" };
+    }
+
+    const booking = bookingDoc.data();
+
+    if (!["pending", "confirmed"].includes(booking.status)) {
+      return { success: false, message: "Booking cannot be rejected in its current state" };
+    }
+
+    await updateDoc(bookingRef, {
+      status: "rejected",
+      rejectedAt: webServerTimestamp(),
+      rejectedBy: respondedBy,
+      rejectedByName: respondedByName,
+      statusHistory: [
+        ...(booking.statusHistory || []),
+        {
+          status: "rejected",
+          timestamp: new Date(),
+          changedBy: respondedBy,
+          changedByRole: "manager",
+          reason: "Rejected from chat",
+        },
+      ],
+      updatedAt: webServerTimestamp(),
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error rejecting booking:", error);
+    return { success: false, message: "An error occurred. Please try again." };
+  }
+};
+
+/**
  * Expire negotiations for a specific slot (called when slot is booked)
  * @param {string} turfId - Turf ID
  * @param {string} groundId - Ground ID
