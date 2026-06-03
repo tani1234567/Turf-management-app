@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
+import { PhoneAuthProvider, signInWithCredential, onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../services/firebase/config";
 import { useAppDispatch } from "../../hooks";
 
@@ -114,6 +114,17 @@ export default function OTPScreen({ route, navigation }) {
 
       const userId = userCredential.user.uid;
       console.log("[OTP] Verification successful, userId:", userId);
+
+      // Wait for the auth token to propagate to the Firestore SDK.
+      // signInWithCredential resolves before the internal auth<->Firestore
+      // token binding is guaranteed, so an immediate Firestore read can
+      // arrive unauthenticated. onAuthStateChanged fires only after the
+      // SDK has fully applied the token.
+      await new Promise((resolve) => {
+        const unsub = onAuthStateChanged(auth, (user) => {
+          if (user) { unsub(); resolve(); }
+        });
+      });
 
       const userData = await getDocument("users", userId);
 
