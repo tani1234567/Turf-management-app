@@ -16,12 +16,6 @@ import { PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import { auth } from "../../services/firebase/config";
 import { useAppDispatch } from "../../hooks";
 
-let nativeFirebaseAuth = null;
-if (Platform.OS !== "web") {
-  try {
-    nativeFirebaseAuth = require("@react-native-firebase/auth").default;
-  } catch (_) {}
-}
 import { setUser, setLoading, setError } from "../../store/slices/authSlice";
 import { getDocument } from "../../services/firebase/firestore";
 
@@ -113,16 +107,16 @@ export default function OTPScreen({ route, navigation }) {
           try {
             userCredential = await global.phoneAuthConfirmation.confirm(otpString);
           } catch (confirmError) {
-            // On iOS simulator the OTP verification succeeds server-side but
-            // token persistence to the keychain can fail. If the user is
-            // already signed in (currentUser is set), treat it as success.
-            if (
-              confirmError.code === "auth/keychain-error" &&
-              nativeFirebaseAuth &&
-              nativeFirebaseAuth().currentUser
-            ) {
-              console.warn("[OTP] Keychain error but user authenticated — continuing");
-              userCredential = { user: nativeFirebaseAuth().currentUser };
+            if (confirmError.code === "auth/keychain-error") {
+              // iOS simulator (and some EAS builds) can't write to the system
+              // keychain. Fall back to the web Firebase SDK which persists
+              // auth state via AsyncStorage — no keychain needed.
+              console.warn("[OTP] Keychain unavailable — falling back to web SDK auth");
+              const { PhoneAuthProvider, signInWithCredential: webSignIn } =
+                require("firebase/auth");
+              const { auth: webAuth } = require("../../services/firebase/config");
+              const credential = PhoneAuthProvider.credential(verificationId, otpString);
+              userCredential = await webSignIn(webAuth, credential);
             } else {
               throw confirmError;
             }

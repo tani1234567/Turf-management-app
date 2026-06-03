@@ -19,29 +19,22 @@ import { clearOwnerState } from "../store/slices/ownerSlice";
 import { getDocument } from "../services/firebase/firestore";
 import { getPushToken, removeFCMToken } from "../services/notifications/setup";
 
-// Import appropriate auth based on platform
-let subscribeToAuthState, signOutFunc;
+// Use web Firebase SDK (AsyncStorage-backed) for auth state on ALL platforms.
+// @react-native-firebase/auth is used only for phone OTP sending (LoginScreen)
+// but auth state persistence goes through web SDK to avoid iOS Keychain dependency.
+const { subscribeToAuthState, signOut: _webSignOut } = require("../services/firebase/auth");
 
-if (Platform.OS === "web") {
-  // Web: Use Firebase JS SDK
-  const firebaseAuth = require("../services/firebase/auth");
-  subscribeToAuthState = firebaseAuth.subscribeToAuthState;
-  signOutFunc = firebaseAuth.signOut;
-} else {
-  // Native: Use @react-native-firebase/auth
-  try {
-    const nativeAuth = require("@react-native-firebase/auth").default;
-    subscribeToAuthState = (callback) => {
-      return nativeAuth().onAuthStateChanged(callback);
-    };
-    signOutFunc = () => nativeAuth().signOut();
-  } catch (e) {
-    // Fallback to web SDK if native not available
-    const firebaseAuth = require("../services/firebase/auth");
-    subscribeToAuthState = firebaseAuth.subscribeToAuthState;
-    signOutFunc = firebaseAuth.signOut;
+const signOutFunc = async () => {
+  // Sign out from web SDK (AsyncStorage session)
+  await _webSignOut();
+  // Best-effort: also sign out from native Firebase Auth if it has a session
+  if (Platform.OS !== "web") {
+    try {
+      const nativeAuth = require("@react-native-firebase/auth").default;
+      if (nativeAuth().currentUser) await nativeAuth().signOut();
+    } catch (_) {}
   }
-}
+};
 
 /**
  * Custom hook for authentication state and actions
