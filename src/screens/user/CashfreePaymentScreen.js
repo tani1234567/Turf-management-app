@@ -12,12 +12,13 @@ import { ActivityIndicator, Button, Text, TextInput } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
-import firestore from "@react-native-firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../../services/firebase/config";
 import { useCashfreePayment } from "../../hooks/useCashfreePayment";
 import { releaseSlotLock } from "../../services/firebase/payments";
 import { validateCouponForBooking, applyCouponToExistingBooking } from "../../services/firebase/coupons";
 import { calculateDiscount } from "../../utils/couponUtils";
-import auth from "@react-native-firebase/auth";
+import { auth } from "../../services/firebase/config";
 
 const USER_COLOR = "#10B981";
 const RETURN_URL = "https://payment-done.playgrid.local";
@@ -164,11 +165,8 @@ export default function CashfreePaymentScreen({ navigation, route }) {
 
   // ── Firestore listener — activated after checkout ────────────────────────────
   const startBookingListener = useCallback(() => {
-    unsubscribeRef.current = firestore()
-      .collection("bookings")
-      .doc(bookingId)
-      .onSnapshot((snap) => {
-        if (!snap.exists) return;
+    unsubscribeRef.current = onSnapshot(doc(db, "bookings", bookingId), (snap) => {
+        if (!snap.exists()) return;
         const data = snap.data();
 
         if (data.status === "confirmed" && data.paymentStatus === "paid") {
@@ -247,7 +245,7 @@ export default function CashfreePaymentScreen({ navigation, route }) {
     setCouponLoading(true);
     setCouponError(null);
 
-    const userId = auth().currentUser?.uid || "";
+    const userId = auth.currentUser?.uid || "";
     const result = await validateCouponForBooking(couponInput, {
       userId,
       turfId: turfId || "",
@@ -290,7 +288,7 @@ export default function CashfreePaymentScreen({ navigation, route }) {
     setIsApplyingCoupon(true);
     try {
       if (appliedCoupon) {
-        const userId = auth().currentUser?.uid || "";
+        const userId = auth.currentUser?.uid || "";
         const { discountAmount } = calculateDiscount(appliedCoupon, totalAmount);
         const finalAmount = totalAmount - discountAmount;
 

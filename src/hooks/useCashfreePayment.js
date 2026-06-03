@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
-import auth from "@react-native-firebase/auth";
+import { auth } from "../services/firebase/config";
 
 const BASE_URL = "https://us-central1-sowin-power.cloudfunctions.net";
 
 async function callFunction(name, data) {
-  const currentUser = auth().currentUser;
+  const currentUser = auth.currentUser;
   if (!currentUser) throw new Error("User is not logged in");
 
   const idToken = await currentUser.getIdToken();

@@ -15,17 +15,12 @@ import {
 } from "firebase/firestore";
 import { db } from "./config";
 
-let nativeFirestore = null;
-let hasNativeFirestore = false;
-
-if (Platform.OS !== "web") {
-  try {
-    nativeFirestore = require("@react-native-firebase/firestore").default;
-    hasNativeFirestore = true;
-  } catch (error) {
-    // Fall back to web SDK when native module is unavailable.
-  }
-}
+// Always use the web Firebase SDK for Firestore so it shares the same auth
+// context as the web SDK auth instance (AsyncStorage-backed). The native
+// @react-native-firebase/firestore SDK has its own separate auth context
+// which causes permission-denied errors when auth lives in the web SDK.
+const nativeFirestore = null;
+const hasNativeFirestore = false;
 
 const serverTimestamp = () => {
   if (hasNativeFirestore) {

@@ -1,22 +1,25 @@
-import auth from "@react-native-firebase/auth";
-import firestore from "@react-native-firebase/firestore";
-import storage from "@react-native-firebase/storage";
+import {
+  doc,
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  arrayUnion,
+  Timestamp,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage, auth } from "./config";
 import { generateUpiUrl, generateTransactionRef } from "../../utils/upiUtils";
 
-// Platform UPI details (replace with your actual UPI)
 const PLATFORM_UPI_ID = "tanmaygharat957-1@oksbi";
 const PLATFORM_NAME = "SportSwift Platform";
 
-/**
- * Initiate subscription payment via UPI with tiered pricing
- * Creates a pending payment record and returns UPI link
- * @param {string} companyId - Company ID
- * @param {Array<string>} selectedTurfIds - Array of turf IDs to subscribe
- * @param {number} totalGrounds - Total grounds across selected turfs
- * @param {number} months - Subscription duration in months
- * @param {Object} pricingDetails - Calculated pricing breakdown from subscriptionPricing.js
- * @returns {Promise<Object>} Payment initiation result with transactionRef and upiLink
- */
 export async function initiateSubscriptionPayment(
   companyId,
   selectedTurfIds,
@@ -24,15 +27,12 @@ export async function initiateSubscriptionPayment(
   months,
   pricingDetails
 ) {
-  const currentUser = auth().currentUser;
-  if (!currentUser) {
-    throw new Error("User not authenticated. Please log in again.");
-  }
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("User not authenticated. Please log in again.");
 
   const transactionRef = generateTransactionRef("SUB");
   const transactionNote = `Subscription ${months}M ${totalGrounds}G - ${companyId.substring(0, 8)}`;
 
-  // Generate UPI link
   const upiLink = generateUpiUrl({
     upiId: PLATFORM_UPI_ID,
     name: PLATFORM_NAME,
@@ -41,7 +41,6 @@ export async function initiateSubscriptionPayment(
     bookingId: transactionRef,
   });
 
-  // Create pending payment record
   const paymentData = {
     transactionRef,
     companyId,
@@ -59,66 +58,41 @@ export async function initiateSubscriptionPayment(
       finalAmount: pricingDetails.finalAmount,
     },
     amount: pricingDetails.finalAmount,
-    status: "initiated", // initiated → proof_submitted → verified → completed
+    status: "initiated",
     upiLink,
     transactionNote,
-    createdAt: firestore.FieldValue.serverTimestamp(),
-    expiresAt: firestore.Timestamp.fromDate(
-      new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-    ),
+    createdAt: serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
   };
 
-  await firestore()
-    .collection("pending_subscription_payments")
-    .doc(transactionRef)
-    .set(paymentData);
+  await setDoc(doc(db, "pending_subscription_payments", transactionRef), paymentData);
 
-  return {
-    transactionRef,
-    upiLink,
-    amount: pricingDetails.finalAmount,
-    months,
-    totalGrounds,
-  };
+  return { transactionRef, upiLink, amount: pricingDetails.finalAmount, months, totalGrounds };
 }
 
-/**
- * Upload subscription payment proof screenshot
- * @param {string} transactionRef - Transaction reference
- * @param {string} imageUri - Local URI of the proof image
- * @param {Object} additionalInfo - Additional payment details
- * @param {string} [additionalInfo.transactionId] - UPI transaction ID
- * @param {string} [additionalInfo.paidFrom] - UPI ID used for payment
- * @param {string} [additionalInfo.notes] - Additional notes
- * @returns {Promise<Object>} Upload result
- */
 export async function uploadSubscriptionPaymentProof(transactionRef, imageUri, additionalInfo = {}) {
-  const currentUser = auth().currentUser;
-  if (!currentUser) {
-    throw new Error("User not authenticated. Please log in again.");
-  }
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("User not authenticated. Please log in again.");
 
   try {
-    // Upload screenshot to Firebase Storage
     const storagePath = `subscription_payments/${transactionRef}/proof_${Date.now()}.jpg`;
-    const reference = storage().ref(storagePath);
-    await reference.putFile(imageUri);
-    const downloadURL = await reference.getDownloadURL();
 
-    // Update payment record
-    await firestore()
-      .collection("pending_subscription_payments")
-      .doc(transactionRef)
-      .update({
-        status: "proof_submitted",
-        paymentProof: downloadURL,
-        proofSubmittedAt: firestore.FieldValue.serverTimestamp(),
-        additionalInfo: {
-          transactionId: additionalInfo.transactionId || "",
-          paidFrom: additionalInfo.paidFrom || "",
-          notes: additionalInfo.notes || "",
-        },
-      });
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const storageRef = ref(storage, storagePath);
+    await uploadBytes(storageRef, blob);
+    const downloadURL = await getDownloadURL(storageRef);
+
+    await updateDoc(doc(db, "pending_subscription_payments", transactionRef), {
+      status: "proof_submitted",
+      paymentProof: downloadURL,
+      proofSubmittedAt: serverTimestamp(),
+      additionalInfo: {
+        transactionId: additionalInfo.transactionId || "",
+        paidFrom: additionalInfo.paidFrom || "",
+        notes: additionalInfo.notes || "",
+      },
+    });
 
     return { success: true, proofUrl: downloadURL };
   } catch (error) {
@@ -127,127 +101,80 @@ export async function uploadSubscriptionPaymentProof(transactionRef, imageUri, a
   }
 }
 
-/**
- * Check subscription payment status
- * @param {string} transactionRef - Transaction reference
- * @returns {Promise<Object>} Payment status data
- */
 export async function checkSubscriptionPaymentStatus(transactionRef) {
-  const snapshot = await firestore()
-    .collection("pending_subscription_payments")
-    .doc(transactionRef)
-    .get();
-
-  if (!snapshot.exists) {
-    return { status: "not_found" };
-  }
-
+  const snapshot = await getDoc(doc(db, "pending_subscription_payments", transactionRef));
+  if (!snapshot.exists()) return { status: "not_found" };
   return { id: snapshot.id, ...snapshot.data() };
 }
 
-/**
- * Get pending subscription payment for a company
- * @param {string} companyId - Company ID
- * @returns {Promise<Object|null>} Most recent pending payment or null
- */
 export async function getPendingSubscriptionPayment(companyId) {
-  const snapshot = await firestore()
-    .collection("pending_subscription_payments")
-    .where("companyId", "==", companyId)
-    .where("status", "in", ["initiated", "proof_submitted"])
-    .orderBy("createdAt", "desc")
-    .limit(1)
-    .get();
-
-  if (snapshot.empty) {
-    return null;
-  }
-
-  const doc = snapshot.docs[0];
-  return { id: doc.id, ...doc.data() };
+  const q = query(
+    collection(db, "pending_subscription_payments"),
+    where("companyId", "==", companyId),
+    where("status", "in", ["initiated", "proof_submitted"]),
+    orderBy("createdAt", "desc"),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const d = snapshot.docs[0];
+  return { id: d.id, ...d.data() };
 }
 
-/**
- * Verify subscription payment (Admin action)
- * Activates subscription for selected turfs and updates company record
- * @param {string} transactionRef - Transaction reference
- * @param {string} adminId - Admin user ID
- * @param {boolean} approved - Whether payment is approved
- * @param {string} [notes] - Verification notes
- */
 export async function verifySubscriptionPayment(transactionRef, adminId, approved, notes = "") {
-  const paymentDoc = await firestore()
-    .collection("pending_subscription_payments")
-    .doc(transactionRef)
-    .get();
-
-  if (!paymentDoc.exists) {
-    throw new Error("Payment record not found");
-  }
+  const paymentDocRef = doc(db, "pending_subscription_payments", transactionRef);
+  const paymentDoc = await getDoc(paymentDocRef);
+  if (!paymentDoc.exists()) throw new Error("Payment record not found");
 
   const payment = paymentDoc.data();
 
   if (approved) {
-    // Get current company subscription data
-    const companyDoc = await firestore()
-      .collection("companies")
-      .doc(payment.companyId)
-      .get();
+    const companyDocRef = doc(db, "companies", payment.companyId);
+    const companyDoc = await getDoc(companyDocRef);
     const companyData = companyDoc.data();
 
-    // Calculate new subscription end date
     const currentEnd = companyData?.subscription?.subscriptionEndDate?.toDate() || new Date();
     const newEnd = new Date(Math.max(currentEnd.getTime(), Date.now()));
     newEnd.setMonth(newEnd.getMonth() + payment.months);
 
-    // Update company subscription
-    await firestore()
-      .collection("companies")
-      .doc(payment.companyId)
-      .update({
-        "subscription.status": "active",
-        "subscription.subscriptionEndDate": firestore.Timestamp.fromDate(newEnd),
-        "subscription.totalGrounds": payment.totalGrounds,
-        "subscription.subscribedTurfIds": payment.selectedTurfIds,
-        "subscription.lastPaymentDate": firestore.FieldValue.serverTimestamp(),
-        "subscription.lastPaymentAmount": payment.pricingDetails.finalAmount,
-        "subscription.paymentHistory": firestore.FieldValue.arrayUnion({
-          date: new Date().toISOString(),
-          amount: payment.pricingDetails.finalAmount,
-          method: "upi",
-          transactionRef: payment.transactionRef,
-          months: payment.months,
-          totalGrounds: payment.totalGrounds,
-          pricePerGround: payment.pricingDetails.pricePerGround,
-          verifiedBy: adminId,
-        }),
-      });
+    await updateDoc(companyDocRef, {
+      "subscription.status": "active",
+      "subscription.subscriptionEndDate": Timestamp.fromDate(newEnd),
+      "subscription.totalGrounds": payment.totalGrounds,
+      "subscription.subscribedTurfIds": payment.selectedTurfIds,
+      "subscription.lastPaymentDate": serverTimestamp(),
+      "subscription.lastPaymentAmount": payment.pricingDetails.finalAmount,
+      "subscription.paymentHistory": arrayUnion({
+        date: new Date().toISOString(),
+        amount: payment.pricingDetails.finalAmount,
+        method: "upi",
+        transactionRef: payment.transactionRef,
+        months: payment.months,
+        totalGrounds: payment.totalGrounds,
+        pricePerGround: payment.pricingDetails.pricePerGround,
+        verifiedBy: adminId,
+      }),
+    });
 
-    // Activate only the selected turfs
     for (const turfId of payment.selectedTurfIds) {
-      await firestore()
-        .collection("turfs")
-        .doc(turfId)
-        .update({
-          isActive: true,
-          subscriptionEndDate: firestore.Timestamp.fromDate(newEnd),
-        });
+      await updateDoc(doc(db, "turfs", turfId), {
+        isActive: true,
+        subscriptionEndDate: Timestamp.fromDate(newEnd),
+      });
     }
 
-    // Update payment status to completed
-    await paymentDoc.ref.update({
+    await updateDoc(paymentDocRef, {
       status: "completed",
       verifiedBy: adminId,
-      verifiedAt: firestore.FieldValue.serverTimestamp(),
+      verifiedAt: serverTimestamp(),
       verificationNotes: notes,
-      completedAt: firestore.FieldValue.serverTimestamp(),
+      completedAt: serverTimestamp(),
     });
   } else {
-    // Reject payment
-    await paymentDoc.ref.update({
+    await updateDoc(paymentDocRef, {
       status: "rejected",
       verifiedBy: adminId,
-      verifiedAt: firestore.FieldValue.serverTimestamp(),
+      verifiedAt: serverTimestamp(),
       verificationNotes: notes || "Payment verification failed",
     });
   }

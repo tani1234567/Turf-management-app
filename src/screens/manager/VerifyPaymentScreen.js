@@ -25,7 +25,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
 import { verifyPayment, rejectPayment } from "../../services/firebase/payments";
-import firestore from "@react-native-firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../../services/firebase/config";
 
 const MANAGER_COLOR = "#2196F3";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -61,9 +62,9 @@ export default function VerifyPaymentScreen({ navigation, route }) {
   const fetchBooking = async () => {
     try {
       setIsLoading(true);
-      const doc = await firestore().collection("bookings").doc(bookingId).get();
-      if (doc.exists) {
-        setBooking({ id: doc.id, ...doc.data() });
+      const docSnap = await getDoc(doc(db, "bookings", bookingId));
+      if (docSnap.exists()) {
+        setBooking({ id: docSnap.id, ...docSnap.data() });
       }
     } catch (error) {
       console.error("Error fetching booking:", error);
@@ -132,12 +133,12 @@ export default function VerifyPaymentScreen({ navigation, route }) {
   const checkSlotAvailability = async () => {
     try {
       // Check for other confirmed bookings on same date/ground/time
-      const confirmedBookings = await firestore()
-        .collection("bookings")
-        .where("turfId", "==", booking.turfId)
-        .where("date", "==", booking.date)
-        .where("status", "==", "confirmed")
-        .get();
+      const confirmedBookings = await getDocs(query(
+        collection(db, "bookings"),
+        where("turfId", "==", booking.turfId),
+        where("date", "==", booking.date),
+        where("status", "==", "confirmed")
+      ));
 
       const conflictingBooking = confirmedBookings.docs.find((doc) => {
         const b = doc.data();
@@ -155,11 +156,11 @@ export default function VerifyPaymentScreen({ navigation, route }) {
 
       // Check for blocked slots
       try {
-        const blockedSlots = await firestore()
-          .collection("blocked_slots")
-          .where("turfId", "==", booking.turfId)
-          .where("date", "==", booking.date)
-          .get();
+        const blockedSlots = await getDocs(query(
+          collection(db, "blocked_slots"),
+          where("turfId", "==", booking.turfId),
+          where("date", "==", booking.date)
+        ));
 
         const conflictingBlock = blockedSlots.docs.find((doc) => {
           const block = doc.data();

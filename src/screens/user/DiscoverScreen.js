@@ -18,7 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Clipboard from "expo-clipboard";
-import firestore from "@react-native-firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { db } from "../../services/firebase/config";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#10B981";
@@ -436,35 +437,37 @@ export default function DiscoverScreen() {
 
   // Live subscription to platform promotional banners
   useEffect(() => {
-    const unsub = firestore()
-      .collection("platformBanners")
-      .where("isActive", "==", true)
-      .orderBy("displayOrder", "asc")
-      .onSnapshot(
-        (snap) =>
-          setPlatformBanners(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-        (err) => console.error("[DiscoverScreen] banners error:", err)
-      );
+    const bannersQ = query(
+      collection(db, "platformBanners"),
+      where("isActive", "==", true),
+      orderBy("displayOrder", "asc")
+    );
+    const unsub = onSnapshot(
+      bannersQ,
+      (snap) => setPlatformBanners(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("[DiscoverScreen] banners error:", err)
+    );
     return () => unsub();
   }, []);
 
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection("offers")
-      .where("isActive", "==", true)
-      .orderBy("sortOrder", "asc")
-      .orderBy("createdAt", "asc")
-      .onSnapshot(
-        (snapshot) => {
-          const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-          setOffers(data);
-          setIsLoading(false);
-        },
-        (error) => {
-          console.error("[DiscoverScreen] Firestore error:", error);
-          setIsLoading(false);
-        }
-      );
+    const offersQ = query(
+      collection(db, "offers"),
+      where("isActive", "==", true),
+      orderBy("sortOrder", "asc"),
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(
+      offersQ,
+      (snapshot) => {
+        setOffers(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error("[DiscoverScreen] Firestore error:", error);
+        setIsLoading(false);
+      }
+    );
     return () => unsubscribe();
   }, []);
 
