@@ -1,4 +1,5 @@
-import { Platform } from "react-native";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "./config";
 import {
   queryDocuments,
   addDocument,
@@ -6,17 +7,10 @@ import {
   deleteDocument,
 } from "./firestore";
 
-let nativeStorage = null;
-let hasNativeStorage = false;
-
-if (Platform.OS !== "web") {
-  try {
-    nativeStorage = require("@react-native-firebase/storage").default;
-    hasNativeStorage = true;
-  } catch (error) {
-    // Fall back when native module unavailable
-  }
-}
+// Always use the web Firebase SDK for Storage so it shares the same auth
+// context as the web SDK auth instance (AsyncStorage-backed).
+const nativeStorage = null;
+const hasNativeStorage = false;
 
 /**
  * Add a new expense
@@ -51,22 +45,12 @@ export async function uploadReceiptImages(expenseId, imageUris) {
     const uri = imageUris[i];
     const storagePath = `expenses/${expenseId}/receipt_${Date.now()}_${i}.jpg`;
 
-    if (hasNativeStorage) {
-      const reference = nativeStorage().ref(storagePath);
-      await reference.putFile(uri);
-      const downloadURL = await reference.getDownloadURL();
-      urls.push(downloadURL);
-    } else {
-      // Web fallback - fetch blob and upload
-      const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
-      const { storage } = await import("./config");
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, blob);
-      const downloadURL = await getDownloadURL(storageRef);
-      urls.push(downloadURL);
-    }
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const storageRef = ref(storage, storagePath);
+    await uploadBytes(storageRef, blob);
+    const downloadURL = await getDownloadURL(storageRef);
+    urls.push(downloadURL);
   }
 
   return urls;
