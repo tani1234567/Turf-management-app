@@ -159,8 +159,13 @@ export default function ManagerDashboardScreen({ navigation }) {
   // Refs for cleanup
   const unsubscribeRef = useRef(null);
 
+  // Stable key: only re-run when the actual IDs change, not on every new array reference
+  const assignedTurfIdsKey = assignedTurfIds.join(",");
+
   // Load assigned turfs
   useEffect(() => {
+    let cancelled = false;
+
     const loadTurfs = async () => {
       if (!assignedTurfIds || assignedTurfIds.length === 0) {
         setLoading(false);
@@ -172,6 +177,7 @@ export default function ManagerDashboardScreen({ navigation }) {
           getDocument("turfs", id)
         );
         const turfDocs = await Promise.all(turfPromises);
+        if (cancelled) return;
         const validTurfs = turfDocs.filter(Boolean);
         setTurfs(validTurfs);
 
@@ -183,12 +189,14 @@ export default function ManagerDashboardScreen({ navigation }) {
           setSelectedTurfId(validTurfs[0].id);
         }
       } catch (error) {
-        console.error("Error loading turfs:", error);
+        if (!cancelled) console.error("Error loading turfs:", error);
       }
     };
 
     loadTurfs();
-  }, [assignedTurfIds, reduxUser?.selectedTurfId]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignedTurfIdsKey, reduxUser?.selectedTurfId]);
 
   // Fetch pending turf requests count
   useEffect(() => {
@@ -213,10 +221,13 @@ export default function ManagerDashboardScreen({ navigation }) {
       setLoading(false);
       return;
     }
-    fetchDashboardData();
+
+    const token = { cancelled: false };
+    fetchDashboardData(token);
     setupRealtimeListeners();
 
     return () => {
+      token.cancelled = true;
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
@@ -245,7 +256,7 @@ export default function ManagerDashboardScreen({ navigation }) {
     unsubscribeRef.current = unsubscribe;
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (token = {}) => {
     try {
       setLoading(true);
       const today = getTodayString();
@@ -262,6 +273,9 @@ export default function ManagerDashboardScreen({ navigation }) {
           { field: "turfId", operator: "==", value: selectedTurfId },
         ]),
       ]);
+
+      // Abort if the effect was cleaned up while awaiting
+      if (token.cancelled) return;
 
       // Filter today's bookings client-side
       const todayBookings = turfBookings.filter((b) => b.date === today);
@@ -334,7 +348,7 @@ export default function ManagerDashboardScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchDashboardData();
+    await fetchDashboardData({});
     setRefreshing(false);
   }, [selectedTurfId]);
 

@@ -60,15 +60,18 @@ export const selectUserCompanyId = (state) => state.auth.user?.companyId;
 // Owner-specific selectors
 export const selectHasOperationalPermissions = (state) =>
   state.auth.user?.role === 'owner' && state.auth.user?.hasOperationalPermissions === true;
+// Input selector is the full user object so the result function extracts a
+// different value — avoids the reselect v5 "identity function" warning that
+// fires (and causes infinite re-render loops) when result === input[0].
 export const selectManagedTurfIds = createSelector(
-  (state) => state.auth.user?.managedTurfIds,
-  (managedTurfIds) => managedTurfIds || []
+  (state) => state.auth.user,
+  (user) => user?.managedTurfIds ?? []
 );
 
 // Manager-specific selectors
 export const selectAssignedTurfIds = createSelector(
-  (state) => state.auth.user?.assignedTurfIds,
-  (assignedTurfIds) => assignedTurfIds || []
+  (state) => state.auth.user,
+  (user) => user?.assignedTurfIds ?? []
 );
 export const selectSelectedTurfId = (state) => state.auth.user?.selectedTurfId;
 
