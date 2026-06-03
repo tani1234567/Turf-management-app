@@ -103,27 +103,13 @@ export default function OTPScreen({ route, navigation }) {
           userCredential = await signInWithCredential(auth, credential);
         }
       } else {
-        if (global.phoneAuthConfirmation) {
-          try {
-            userCredential = await global.phoneAuthConfirmation.confirm(otpString);
-          } catch (confirmError) {
-            if (confirmError.code === "auth/keychain-error") {
-              // iOS simulator (and some EAS builds) can't write to the system
-              // keychain. Fall back to the web Firebase SDK which persists
-              // auth state via AsyncStorage — no keychain needed.
-              console.warn("[OTP] Keychain unavailable — falling back to web SDK auth");
-              const { PhoneAuthProvider, signInWithCredential: webSignIn } =
-                require("firebase/auth");
-              const { auth: webAuth } = require("../../services/firebase/config");
-              const credential = PhoneAuthProvider.credential(verificationId, otpString);
-              userCredential = await webSignIn(webAuth, credential);
-            } else {
-              throw confirmError;
-            }
-          }
-        } else {
-          throw new Error("Phone authentication session expired. Please try again.");
-        }
+        // Always verify via the web Firebase SDK so the auth session lives in
+        // AsyncStorage (web SDK persistence). This ensures Firestore reads using
+        // the web SDK immediately have a valid auth context after sign-in.
+        // The verificationId from native signInWithPhoneNumber is a backend
+        // session token compatible with the web SDK's PhoneAuthProvider.
+        const credential = PhoneAuthProvider.credential(verificationId, otpString);
+        userCredential = await signInWithCredential(auth, credential);
       }
 
       const userId = userCredential.user.uid;
