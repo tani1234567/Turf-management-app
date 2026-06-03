@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import {
   collection,
   doc,
@@ -21,17 +20,13 @@ import {
 } from "firebase/firestore";
 import { db } from "./config";
 
-let nativeFirestore = null;
-let hasNativeFirestore = false;
-
-if (Platform.OS !== "web") {
-  try {
-    nativeFirestore = require("@react-native-firebase/firestore").default;
-    hasNativeFirestore = true;
-  } catch (error) {
-    // Fall back to web SDK when native module is unavailable.
-  }
-}
+// Always use the web Firebase SDK for Firestore so it shares the same auth
+// context as the web SDK auth instance (AsyncStorage-backed, no keychain).
+// @react-native-firebase/firestore is intentionally not used — it has its own
+// separate native auth context which causes permission-denied errors when auth
+// state lives in the web SDK.
+const nativeFirestore = null;
+const hasNativeFirestore = false;
 
 const snapshotExists = (docSnap) => {
   if (typeof docSnap?.exists === "function") {
@@ -302,26 +297,33 @@ export const deleteDocument = async (collectionName, docId) => {
  * @param {function} callback - Callback function receiving document data
  * @returns {function} - Unsubscribe function
  */
-export const subscribeToDocument = (collectionName, docId, callback) => {
+export const subscribeToDocument = (collectionName, docId, callback, onError) => {
   if (hasNativeFirestore) {
     const docRef = nativeFirestore().collection(collectionName).doc(docId);
-    return docRef.onSnapshot((docSnap) => {
+    return docRef.onSnapshot(
+      (docSnap) => {
+        if (snapshotExists(docSnap)) {
+          callback({ id: docSnap.id, ...docSnap.data() });
+        } else {
+          callback(null);
+        }
+      },
+      onError || (() => {})
+    );
+  }
+
+  const docRef = doc(db, collectionName, docId);
+  return onSnapshot(
+    docRef,
+    (docSnap) => {
       if (snapshotExists(docSnap)) {
         callback({ id: docSnap.id, ...docSnap.data() });
       } else {
         callback(null);
       }
-    });
-  }
-
-  const docRef = doc(db, collectionName, docId);
-  return onSnapshot(docRef, (docSnap) => {
-    if (snapshotExists(docSnap)) {
-      callback({ id: docSnap.id, ...docSnap.data() });
-    } else {
-      callback(null);
-    }
-  });
+    },
+    onError || (() => {})
+  );
 };
 
 /**

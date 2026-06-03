@@ -63,6 +63,11 @@ export default function RootNavigator() {
       (flagDoc) => {
         setMaintenanceMode(flagDoc?.value === true);
         setMaintenanceChecking(false);
+      },
+      (_err) => {
+        // Permission-denied on unauthenticated first boot — treat as no maintenance
+        setMaintenanceMode(false);
+        setMaintenanceChecking(false);
       }
     );
     return unsubscribe;
