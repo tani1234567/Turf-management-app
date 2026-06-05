@@ -12,6 +12,8 @@ import {
   Alert,
   Animated,
   Pressable,
+  Modal,
+  Platform,
 } from "react-native";
 import {
   Text,
@@ -19,8 +21,6 @@ import {
   Searchbar,
   Chip,
   IconButton,
-  Dialog,
-  Portal,
   Button,
   Divider,
   Badge,
@@ -67,7 +67,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const USER_COLOR = "#10B981";
 const EMERALD_PALE = "#D1FAE5";
 const EMERALD_DARK = "#059669";
@@ -1000,22 +1000,23 @@ export default function HomeScreen({ navigation }) {
       )}
 
       {/* Filter Modal */}
-      <Portal>
-        <Dialog
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          style={styles.filterDialog}
-        >
-          <View style={styles.filterDialogHeader}>
-            <Text variant="titleLarge" style={styles.filterDialogTitle}>Filter Turfs</Text>
-            <IconButton
-              icon="close"
-              size={24}
-              onPress={() => setFilterModalVisible(false)}
-            />
-          </View>
-          <Dialog.ScrollArea style={styles.dialogScrollArea}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.filterOverlay}>
+          <View style={styles.filterSheet}>
+            <View style={styles.filterDialogHeader}>
+              <Text variant="titleLarge" style={styles.filterDialogTitle}>Filter Turfs</Text>
+              <IconButton
+                icon="close"
+                size={24}
+                onPress={() => setFilterModalVisible(false)}
+              />
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.filterScrollArea}>
               {/* Price Range */}
               <View style={styles.filterSection}>
                 <Text variant="titleSmall" style={styles.filterSectionTitle}>
@@ -1176,106 +1177,107 @@ export default function HomeScreen({ navigation }) {
                 </View>
               </View>
             </ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={clearFilters}>Clear All</Button>
-            <Button mode="contained" onPress={applyFilters} buttonColor={USER_COLOR}>
-              Apply Filters
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+            <View style={styles.filterActions}>
+              <Button onPress={clearFilters} textColor={USER_COLOR}>Clear All</Button>
+              <Button mode="contained" onPress={applyFilters} buttonColor={USER_COLOR}>
+                Apply Filters
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Enhanced Location Picker Modal */}
-      <Portal>
-        <Dialog
-          visible={locationModalVisible}
-          onDismiss={closeLocationModal}
-          style={styles.locationDialog}
-        >
-          <View style={styles.locationDialogHeader}>
-            <View>
-              <Text variant="titleLarge" style={styles.locationDialogTitle}>
-                Select Areas
-              </Text>
-              {selectedAreas.length > 0 && (
-                <Text variant="bodySmall" style={styles.locationDialogSubtitle}>
-                  {selectedAreas.length} area{selectedAreas.length > 1 ? 's' : ''} selected
+      <Modal
+        visible={locationModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={closeLocationModal}
+      >
+        <View style={styles.locationOverlay}>
+          <View style={styles.locationSheet}>
+            <View style={styles.locationDialogHeader}>
+              <View>
+                <Text variant="titleLarge" style={styles.locationDialogTitle}>
+                  Select Areas
                 </Text>
-              )}
-            </View>
-            <IconButton
-              icon="close"
-              size={24}
-              onPress={closeLocationModal}
-            />
-          </View>
-
-          {/* Nearest Area Info */}
-          {nearestArea && selectedAreas.length === 0 && (
-            <Surface style={styles.nearestAreaBanner} elevation={0}>
-              <MaterialCommunityIcons name="crosshairs-gps" size={20} color={USER_COLOR} />
-              <View style={styles.nearestAreaInfo}>
-                <Text variant="bodySmall" style={styles.nearestAreaLabel}>
-                  Nearest to you
-                </Text>
-                <Text variant="bodyMedium" style={styles.nearestAreaName}>
-                  {nearestArea.name} ({nearestArea.distance} km)
-                </Text>
+                {selectedAreas.length > 0 && (
+                  <Text variant="bodySmall" style={styles.locationDialogSubtitle}>
+                    {selectedAreas.length} area{selectedAreas.length > 1 ? 's' : ''} selected
+                  </Text>
+                )}
               </View>
-              <Button
-                mode="contained"
-                compact
-                onPress={() => toggleAreaSelection(nearestArea.id)}
-                buttonColor={USER_COLOR}
-                labelStyle={styles.nearestAreaButtonLabel}
-              >
-                Select
-              </Button>
-            </Surface>
-          )}
+              <IconButton
+                icon="close"
+                size={24}
+                onPress={closeLocationModal}
+              />
+            </View>
 
-          {/* Search Bar */}
-          <View style={styles.locationSearchWrapper}>
-            <Searchbar
-              placeholder="Search Mumbai areas..."
-              value={locationSearch}
-              onChangeText={setLocationSearch}
-              style={styles.locationSearchbar}
-              inputStyle={styles.locationSearchInput}
-              icon="magnify"
-            />
-          </View>
+            {/* Nearest Area Info */}
+            {nearestArea && selectedAreas.length === 0 && (
+              <Surface style={styles.nearestAreaBanner} elevation={0}>
+                <MaterialCommunityIcons name="crosshairs-gps" size={20} color={USER_COLOR} />
+                <View style={styles.nearestAreaInfo}>
+                  <Text variant="bodySmall" style={styles.nearestAreaLabel}>
+                    Nearest to you
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.nearestAreaName}>
+                    {nearestArea.name} ({nearestArea.distance} km)
+                  </Text>
+                </View>
+                <Button
+                  mode="contained"
+                  compact
+                  onPress={() => toggleAreaSelection(nearestArea.id)}
+                  buttonColor={USER_COLOR}
+                  labelStyle={styles.nearestAreaButtonLabel}
+                >
+                  Select
+                </Button>
+              </Surface>
+            )}
 
-          {/* Zone Filter Tabs */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.zoneFilterContainer}
-            contentContainerStyle={styles.zoneFilterContent}
-          >
-            {["All", "Western", "Central", "South", "Eastern"].map((zone) => (
-              <Chip
-                key={zone}
-                selected={selectedZone === zone}
-                onPress={() => setSelectedZone(zone)}
-                style={[
-                  styles.zoneChip,
-                  selectedZone === zone && styles.selectedZoneChip,
-                ]}
-                textStyle={[
-                  styles.zoneChipText,
-                  selectedZone === zone && styles.selectedZoneChipText,
-                ]}
-              >
-                {zone}
-              </Chip>
-            ))}
-          </ScrollView>
+            {/* Search Bar */}
+            <View style={styles.locationSearchWrapper}>
+              <Searchbar
+                placeholder="Search Mumbai areas..."
+                value={locationSearch}
+                onChangeText={setLocationSearch}
+                style={styles.locationSearchbar}
+                inputStyle={styles.locationSearchInput}
+                icon="magnify"
+              />
+            </View>
 
-          {/* Areas List */}
-          <Dialog.ScrollArea style={styles.locationScrollArea}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Zone Filter Tabs */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.zoneFilterContainer}
+              contentContainerStyle={styles.zoneFilterContent}
+            >
+              {["All", "Western", "Central", "South", "Eastern"].map((zone) => (
+                <Chip
+                  key={zone}
+                  selected={selectedZone === zone}
+                  onPress={() => setSelectedZone(zone)}
+                  style={[
+                    styles.zoneChip,
+                    selectedZone === zone && styles.selectedZoneChip,
+                  ]}
+                  textStyle={[
+                    styles.zoneChipText,
+                    selectedZone === zone && styles.selectedZoneChipText,
+                  ]}
+                >
+                  {zone}
+                </Chip>
+              ))}
+            </ScrollView>
+
+            {/* Areas List */}
+            <ScrollView style={styles.locationScrollArea} showsVerticalScrollIndicator={false}>
               {/* Clear All Option */}
               {selectedAreas.length > 0 && (
                 <>
@@ -1357,23 +1359,23 @@ export default function HomeScreen({ navigation }) {
                 </View>
               )}
             </ScrollView>
-          </Dialog.ScrollArea>
 
-          {/* Action Buttons */}
-          <Dialog.Actions style={styles.locationDialogActions}>
-            <Button onPress={clearAreaSelection} disabled={selectedAreas.length === 0}>
-              Clear All
-            </Button>
-            <Button
-              mode="contained"
-              onPress={closeLocationModal}
-              buttonColor={USER_COLOR}
-            >
-              Done
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+            {/* Action Buttons */}
+            <View style={styles.locationDialogActions}>
+              <Button onPress={clearAreaSelection} disabled={selectedAreas.length === 0} textColor={USER_COLOR}>
+                Clear All
+              </Button>
+              <Button
+                mode="contained"
+                onPress={closeLocationModal}
+                buttonColor={USER_COLOR}
+              >
+                Done
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1750,8 +1752,30 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: "#666",
   },
-  filterDialog: {
-    maxHeight: "80%",
+  filterOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  filterSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "85%",
+  },
+  filterScrollArea: {
+    paddingHorizontal: 0,
+  },
+  filterActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 34 : 18,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    gap: 8,
   },
   filterDialogHeader: {
     flexDirection: "row",
@@ -1760,13 +1784,12 @@ const styles = StyleSheet.create({
     paddingLeft: 24,
     paddingRight: 8,
     paddingTop: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
   },
   filterDialogTitle: {
     fontWeight: "bold",
     color: "#333",
-  },
-  dialogScrollArea: {
-    paddingHorizontal: 0,
   },
   filterSection: {
     padding: 16,
@@ -1871,9 +1894,17 @@ const styles = StyleSheet.create({
     gap: GRID_GAP,
     paddingHorizontal: SCREEN_WIDTH * 0.05,
   },
-  locationDialog: {
+  locationOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  locationSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     maxHeight: "85%",
-    borderRadius: 16,
+    height: "auto"  
   },
   locationDialogHeader: {
     flexDirection: "row",
@@ -1883,6 +1914,9 @@ const styles = StyleSheet.create({
     paddingRight: 8,
     paddingTop: 16,
     paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+    marginBottom: 5,
   },
   locationDialogTitle: {
     fontFamily: "Ubuntu-Bold",
@@ -1951,7 +1985,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   locationScrollArea: {
-    maxHeight: 400,
+    maxHeight: SCREEN_HEIGHT * 0.42,
     paddingHorizontal: 0,
   },
   locationItem: {
@@ -2002,8 +2036,15 @@ const styles = StyleSheet.create({
     color: "#999",
   },
   locationDialogActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 34 : 18,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    gap: 8,
   },
   distanceHint: {
     flexDirection: "row",

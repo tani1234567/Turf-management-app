@@ -35,6 +35,7 @@ import {
 } from "../../utils/subscriptionPricing";
 import {
   initiateSubscriptionPayment,
+  initiateOfflineSubscriptionPayment,
   uploadSubscriptionPaymentProof,
   getPendingSubscriptionPayment,
 } from "../../services/firebase/subscriptionPayments";
@@ -67,6 +68,11 @@ export default function SubscriptionPaymentScreen({ navigation }) {
   const [paidFrom, setPaidFrom] = useState("");
   const [notes, setNotes] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  // Offline payment
+  const [paymentMode, setPaymentMode] = useState("online"); // "online" | "offline"
+  const [offlineNotes, setOfflineNotes] = useState("");
+  const [offlineLoading, setOfflineLoading] = useState(false);
 
   // Pending payment check
   const [pendingPayment, setPendingPayment] = useState(null);
@@ -132,6 +138,29 @@ export default function SubscriptionPaymentScreen({ navigation }) {
       setSelectedTurfIds([]);
     } else {
       setSelectedTurfIds(turfs.map((t) => t.id || t.turfId));
+    }
+  };
+
+  const handleOfflinePayment = async () => {
+    const companyId = company?.id || company?.companyId;
+    if (!companyId) { Alert.alert("Error", "Company information not available."); return; }
+    if (selectedDuration < 3) { Alert.alert("Minimum 3 Months", "Offline payments require a minimum subscription of 3 months."); return; }
+
+    setOfflineLoading(true);
+    try {
+      await initiateOfflineSubscriptionPayment(
+        companyId, selectedTurfIds, totalGrounds, selectedDuration, pricing,
+        { collectedBy: "owner", notes: offlineNotes, collectedAt: new Date().toISOString() }
+      );
+      Alert.alert(
+        "Payment Recorded",
+        `Offline payment of ${formatPrice(pricing.finalAmount)} for ${selectedDuration} months has been recorded. Admin will verify and activate your subscription.`,
+        [{ text: "OK", onPress: () => navigation.goBack() }]
+      );
+    } catch (error) {
+      Alert.alert("Error", "Failed to record offline payment. Please try again.");
+    } finally {
+      setOfflineLoading(false);
     }
   };
 
@@ -501,6 +530,50 @@ export default function SubscriptionPaymentScreen({ navigation }) {
           </Text>
         </Surface>
 
+        {/* Payment mode toggle */}
+        <View style={styles.modeToggleRow}>
+          <TouchableOpacity
+            style={[styles.modeBtn, paymentMode === "online" && styles.modeBtnActive]}
+            onPress={() => setPaymentMode("online")}
+          >
+            <MaterialCommunityIcons name="qrcode" size={16} color={paymentMode === "online" ? "#fff" : "#666"} />
+            <Text style={[styles.modeBtnText, paymentMode === "online" && styles.modeBtnTextActive]}>Online (UPI)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeBtn, paymentMode === "offline" && styles.modeBtnActive]}
+            onPress={() => setPaymentMode("offline")}
+          >
+            <MaterialCommunityIcons name="cash" size={16} color={paymentMode === "offline" ? "#fff" : "#666"} />
+            <Text style={[styles.modeBtnText, paymentMode === "offline" && styles.modeBtnTextActive]}>Offline (Cash)</Text>
+          </TouchableOpacity>
+        </View>
+
+        {paymentMode === "offline" && (
+          <Surface style={styles.offlineBox} elevation={1}>
+            <View style={styles.offlineHeader}>
+              <MaterialCommunityIcons name="information" size={18} color={OWNER_COLOR} />
+              <Text style={styles.offlineInfoText}>
+                Minimum 3 months required for offline payment. Admin will verify and activate.
+              </Text>
+            </View>
+            {selectedDuration < 3 && (
+              <Text style={styles.offlineWarning}>
+                Please select 3 months or more to use offline payment.
+              </Text>
+            )}
+            <TextInput
+              mode="outlined"
+              label="Notes (optional)"
+              value={offlineNotes}
+              onChangeText={setOfflineNotes}
+              placeholder="e.g. Cash collected at office"
+              style={{ backgroundColor: "#fff", marginTop: 10 }}
+              outlineColor="#ddd"
+              activeOutlineColor={OWNER_COLOR}
+            />
+          </Surface>
+        )}
+
         <View style={styles.durationButtonRow}>
           <Button
             mode="outlined"
@@ -510,16 +583,29 @@ export default function SubscriptionPaymentScreen({ navigation }) {
           >
             Back
           </Button>
-          <Button
-            mode="contained"
-            onPress={handleInitiatePayment}
-            style={[styles.durationBtn, { flex: 2 }]}
-            buttonColor={OWNER_COLOR}
-            loading={loading}
-            disabled={loading}
-          >
-            Pay {formatPrice(pricing.finalAmount)}
-          </Button>
+          {paymentMode === "online" ? (
+            <Button
+              mode="contained"
+              onPress={handleInitiatePayment}
+              style={[styles.durationBtn, { flex: 2 }]}
+              buttonColor={OWNER_COLOR}
+              loading={loading}
+              disabled={loading}
+            >
+              Pay {formatPrice(pricing.finalAmount)}
+            </Button>
+          ) : (
+            <Button
+              mode="contained"
+              onPress={handleOfflinePayment}
+              style={[styles.durationBtn, { flex: 2 }]}
+              buttonColor="#4CAF50"
+              loading={offlineLoading}
+              disabled={offlineLoading || selectedDuration < 3}
+            >
+              Record Offline Payment
+            </Button>
+          )}
         </View>
       </Card.Content>
     </Card>
@@ -677,20 +763,6 @@ export default function SubscriptionPaymentScreen({ navigation }) {
             {company?.name || "My Company"}
           </Text>
         </View>
-        {/* Step indicator */}
-        <View style={styles.stepIndicator}>
-          {["turfs", "duration", "initiated", "proof"].map((step, i) => (
-            <View
-              key={step}
-              style={[
-                styles.stepDot,
-                (paymentStep === step ||
-                  ["turfs", "duration", "initiated", "proof"].indexOf(paymentStep) >= i) &&
-                  styles.stepDotActive,
-              ]}
-            />
-          ))}
-        </View>
       </View>
 
       <ScrollView
@@ -699,10 +771,35 @@ export default function SubscriptionPaymentScreen({ navigation }) {
       >
         {renderPendingPaymentBanner()}
 
-        {paymentStep === "turfs" && renderTurfSelection()}
-        {paymentStep === "duration" && renderDurationSelector()}
-        {paymentStep === "initiated" && renderPaymentInstructions()}
-        {paymentStep === "proof" && renderProofUpload()}
+        <Card style={styles.card}>
+          <Card.Content>
+            <View style={styles.contactIconWrap}>
+              <MaterialCommunityIcons name="headset" size={56} color={OWNER_COLOR} />
+            </View>
+            <Text style={styles.contactTitle}>Contact Platform Team</Text>
+            <Text style={styles.contactBody}>
+              To activate or renew your subscription, please reach out to the SportSphere platform team directly. Our team will set up your plan, process the payment, and activate your subscription promptly.
+            </Text>
+
+            <View style={styles.contactInfoBlock}>
+              <View style={styles.contactInfoRow}>
+                <MaterialCommunityIcons name="email-outline" size={20} color={OWNER_COLOR} />
+                <Text style={styles.contactInfoText}>tanmaygharat957@gmail.com</Text>
+              </View>
+              <View style={styles.contactInfoRow}>
+                <MaterialCommunityIcons name="whatsapp" size={20} color="#25D366" />
+                <Text style={styles.contactInfoText}>+91 XXXXX XXXXX (WhatsApp)</Text>
+              </View>
+            </View>
+
+            <Surface style={styles.contactNoteBox} elevation={0}>
+              <MaterialCommunityIcons name="information-outline" size={16} color="#6B7280" />
+              <Text style={styles.contactNoteText}>
+                Please mention your company name and the number of turfs/grounds when contacting us.
+              </Text>
+            </Surface>
+          </Card.Content>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1134,5 +1231,113 @@ const styles = StyleSheet.create({
   submitButton: {
     marginVertical: 8,
     borderRadius: 8,
+  },
+  contactIconWrap: {
+    alignItems: "center",
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  contactTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  contactBody: {
+    fontSize: 14,
+    color: "#4B5563",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  contactInfoBlock: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  contactInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  contactInfoText: {
+    fontSize: 14,
+    color: "#111827",
+    fontWeight: "500",
+    flex: 1,
+  },
+  contactNoteBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 10,
+    padding: 12,
+  },
+  contactNoteText: {
+    fontSize: 12,
+    color: "#6B7280",
+    flex: 1,
+    lineHeight: 18,
+  },
+  modeToggleRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 16,
+  },
+  modeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#F9FAFB",
+  },
+  modeBtnActive: {
+    backgroundColor: OWNER_COLOR,
+    borderColor: OWNER_COLOR,
+  },
+  modeBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#666",
+  },
+  modeBtnTextActive: {
+    color: "#fff",
+  },
+  offlineBox: {
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "#F9F5FF",
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: OWNER_COLOR,
+  },
+  offlineHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  offlineInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#374151",
+    lineHeight: 18,
+  },
+  offlineWarning: {
+    fontSize: 12,
+    color: "#EF4444",
+    fontWeight: "600",
+    marginTop: 8,
   },
 });

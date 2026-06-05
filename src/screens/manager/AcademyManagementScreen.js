@@ -119,6 +119,26 @@ const getDayOfWeek = (dateStr) => {
   return days[date.getDay()];
 };
 
+const MONTH_NAMES_FULL = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const getUpcomingMonths = () => {
+  const d = new Date();
+  return Array.from({ length: 3 }, (_, i) => {
+    const t = new Date(d.getFullYear(), d.getMonth() + i, 1);
+    const key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`;
+    return { key, label: `${MONTH_NAMES_FULL[t.getMonth()]} ${t.getFullYear()}` };
+  });
+};
+
+const getLastDayOfMonth = (monthKey) => {
+  const [y, m] = monthKey.split("-").map(Number);
+  const last = new Date(y, m, 0);
+  return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
+};
+
 /**
  * Generate all session dates for a given schedule within a contract period
  */
@@ -254,8 +274,24 @@ const getDaysUntilExpiry = (endDateStr) => {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 };
 
+/**
+ * Returns the display status of an academy, computing "expired" client-side
+ * if the contract end date has passed — regardless of what's stored in Firestore.
+ * The Cloud Function updates this daily, but this ensures the UI is always accurate.
+ */
+const getEffectiveStatus = (academy) => {
+  if (!academy) return "active";
+  const stored = academy.status || "active";
+  if (stored === "active" || stored === "paused") {
+    const endDate = academy.contract?.endDate;
+    if (endDate && endDate < getTodayString()) return "expired";
+  }
+  return stored;
+};
+
 function AcademyCard({ academy, onPress, onStatusChange }) {
-  const status = STATUS_CONFIG[academy.status] || STATUS_CONFIG.active;
+  const effectiveStatus = getEffectiveStatus(academy);
+  const status = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.active;
   const scheduleDays = academy.schedule?.days;
   const isOldFormat = Array.isArray(scheduleDays);
   const daysArr = isOldFormat ? scheduleDays : (scheduleDays ? Object.keys(scheduleDays) : []);
@@ -263,7 +299,7 @@ function AcademyCard({ academy, onPress, onStatusChange }) {
     .map((d) => d.charAt(0).toUpperCase() + d.slice(1, 3))
     .join(", ");
 
-  const daysUntilExpiry = academy.status === "active"
+  const daysUntilExpiry = effectiveStatus === "active"
     ? getDaysUntilExpiry(academy.contract?.endDate)
     : null;
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= 5;
@@ -283,10 +319,20 @@ function AcademyCard({ academy, onPress, onStatusChange }) {
             </View>
           </View>
           <IconButton
-            icon={academy.status === "active" ? "pause-circle-outline" : "play-circle-outline"}
-            iconColor={academy.status === "active" ? "#FF9800" : "#4CAF50"}
+            icon={
+              effectiveStatus === "expired"
+                ? "refresh-circle"
+                : effectiveStatus === "active"
+                ? "pause-circle-outline"
+                : "play-circle-outline"
+            }
+            iconColor={
+              effectiveStatus === "expired" ? "#4CAF50"
+              : effectiveStatus === "active" ? "#FF9800"
+              : "#4CAF50"
+            }
             size={24}
-            onPress={() => onStatusChange(academy)}
+            onPress={() => onStatusChange({ ...academy, _effectiveStatus: effectiveStatus })}
           />
         </View>
 
@@ -414,7 +460,7 @@ export default function AcademyManagementScreen({ navigation }) {
 
   // Form state - Step 3: Contract
   const [startDate, setStartDate] = useState(getTodayString());
-  const [durationMonths, setDurationMonths] = useState(1);
+  const [selectedEndMonth, setSelectedEndMonth] = useState(() => getUpcomingMonths()[0].key);
 
   // Form state - Step 4: Payment
   const [totalAmount, setTotalAmount] = useState("");
@@ -445,9 +491,7 @@ export default function AcademyManagementScreen({ navigation }) {
   // Derived from daySchedules
   const selectedDays = useMemo(() => Object.keys(daySchedules), [daySchedules]);
 
-  const endDate = useMemo(() => {
-    return addMonthsToDate(startDate, durationMonths);
-  }, [startDate, durationMonths]);
+  const endDate = useMemo(() => getLastDayOfMonth(selectedEndMonth), [selectedEndMonth]);
 
   const sessionCount = useMemo(() => {
     if (selectedDays.length === 0) return 0;
@@ -531,16 +575,15 @@ export default function AcademyManagementScreen({ navigation }) {
     setTempStartTime(null);
     setTempEndTime(null);
     setStartDate(getTodayString());
-    setDurationMonths(1);
+    setSelectedEndMonth(getUpcomingMonths()[0].key);
     setTotalAmount("");
     setCashAmount("");
   }, []);
 
-  // Open create modal
+  // Open add academy screen
   const openCreateModal = useCallback(() => {
-    resetForm();
-    setModalVisible(true);
-  }, [resetForm]);
+    navigation.navigate("AddAcademy");
+  }, [navigation]);
 
   // Handle day toggle — add/remove from schedule, set active for time editing
   const handleDayPress = useCallback((dayKey) => {
@@ -697,7 +740,7 @@ export default function AcademyManagementScreen({ navigation }) {
         contract: {
           startDate,
           endDate,
-          durationMonths,
+          endMonth: selectedEndMonth,
         },
         payment: {
           totalAmount: total,
@@ -728,13 +771,33 @@ export default function AcademyManagementScreen({ navigation }) {
   }, [
     validateStep, totalAmount, cashAmount, name, sport, selectedTurfId,
     turfData, groundId, selectedGroundName, contactName, contactPhone,
-    daySchedules, startDate, endDate, durationMonths,
+    daySchedules, startDate, endDate, selectedEndMonth,
     sessionCount, user, resetForm,
   ]);
 
   // Toggle academy status
   const handleStatusChange = useCallback(async (academy) => {
-    const newStatus = academy.status === "active" ? "paused" : "active";
+    const effective = academy._effectiveStatus || getEffectiveStatus(academy);
+
+    // Expired — offer renewal
+    if (effective === "expired") {
+      setSelectedAcademy(academy);
+      Alert.alert(
+        "Academy Expired",
+        `"${academy.name}" contract ended on ${academy.contract?.endDate || "N/A"}. Would you like to renew it?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Renew", onPress: () => navigation.navigate("RenewAcademy", { academy }) },
+        ]
+      );
+      // Also persist the expired status so the UI stays consistent
+      if (academy.status !== "expired") {
+        updateDocument("academies", academy.id, { status: "expired" }).catch(() => {});
+      }
+      return;
+    }
+
+    const newStatus = effective === "active" ? "paused" : "active";
     const label = newStatus === "active" ? "resume" : "pause";
 
     Alert.alert(
@@ -756,10 +819,14 @@ export default function AcademyManagementScreen({ navigation }) {
     );
   }, []);
 
-  // View academy details
+  // View academy details — auto-persist expired status if contract has ended
   const handleViewDetails = useCallback((academy) => {
     setSelectedAcademy(academy);
     setDetailVisible(true);
+    const effective = getEffectiveStatus(academy);
+    if (effective === "expired" && academy.status !== "expired") {
+      updateDocument("academies", academy.id, { status: "expired" }).catch(() => {});
+    }
   }, []);
 
   // Trigger session generation by updating the academy doc.
@@ -805,22 +872,21 @@ export default function AcademyManagementScreen({ navigation }) {
   }, []);
 
   // View sessions for selected academy
-  const handleViewSessions = useCallback(async () => {
+  const handleViewSessions = useCallback(() => {
     if (!selectedAcademy) return;
-    await loadSessions(selectedAcademy.id);
     setDetailVisible(false);
-    setSessionsVisible(true);
-  }, [selectedAcademy, loadSessions]);
+    navigation.navigate("AcademySessions", {
+      academyId: selectedAcademy.id,
+      academyName: selectedAcademy.studentName || selectedAcademy.name || "Academy",
+    });
+  }, [selectedAcademy, navigation]);
 
-  // Open renewal modal
+  // Open renewal screen
   const handleOpenRenewal = useCallback(() => {
     if (!selectedAcademy) return;
-    setRenewalDuration(selectedAcademy.contract?.durationMonths || 1);
-    setRenewalAmount(String(selectedAcademy.payment?.totalAmount || ""));
-    setRenewalCashAmount(String(selectedAcademy.payment?.cashAmount || ""));
     setDetailVisible(false);
-    setRenewalVisible(true);
-  }, [selectedAcademy]);
+    navigation.navigate("RenewAcademy", { academy: selectedAcademy });
+  }, [selectedAcademy, navigation]);
 
   // Submit renewal
   const handleRenewalSubmit = useCallback(async () => {
@@ -1004,7 +1070,7 @@ export default function AcademyManagementScreen({ navigation }) {
   // Render: Step 2 - Schedule (Per-day times)
   // ============================
   const renderStep2 = () => (
-    <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.stepContent} contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
       <Text style={styles.stepTitle}>Schedule</Text>
 
       <Text style={styles.fieldLabel}>Days of the Week *</Text>
@@ -1140,13 +1206,13 @@ export default function AcademyManagementScreen({ navigation }) {
         />
       </View>
 
-      <Text style={styles.fieldLabel}>Duration</Text>
+      <Text style={styles.fieldLabel}>Month</Text>
       <View style={styles.chipGroup}>
-        {DURATION_OPTIONS.map((opt) => (
+        {getUpcomingMonths().map((opt) => (
           <Chip
-            key={opt.value}
-            selected={durationMonths === opt.value}
-            onPress={() => setDurationMonths(opt.value)}
+            key={opt.key}
+            selected={selectedEndMonth === opt.key}
+            onPress={() => setSelectedEndMonth(opt.key)}
             mode="outlined"
             style={styles.chip}
             selectedColor={MANAGER_BLUE}
@@ -1172,9 +1238,11 @@ export default function AcademyManagementScreen({ navigation }) {
           <Text style={styles.contractValue}>{formatDate(endDate)}</Text>
         </View>
         <View style={styles.contractRow}>
-          <MaterialCommunityIcons name="calendar-multiple" size={18} color="#666" />
-          <Text style={styles.contractLabel}>Duration:</Text>
-          <Text style={styles.contractValue}>{durationMonths} month(s)</Text>
+          <MaterialCommunityIcons name="calendar-month" size={18} color="#666" />
+          <Text style={styles.contractLabel}>Month:</Text>
+          <Text style={styles.contractValue}>
+            {getUpcomingMonths().find((o) => o.key === selectedEndMonth)?.label || ""}
+          </Text>
         </View>
         <View style={styles.contractRow}>
           <MaterialCommunityIcons name="counter" size={18} color="#666" />
@@ -1452,7 +1520,7 @@ export default function AcademyManagementScreen({ navigation }) {
               Generate Sessions
             </Button>
           )}
-          {selectedAcademy?.status === "expired" && (
+          {getEffectiveStatus(selectedAcademy) === "expired" && (
             <Button onPress={handleOpenRenewal} icon="refresh" textColor="#4CAF50">
               Renew
             </Button>
@@ -1901,10 +1969,7 @@ export default function AcademyManagementScreen({ navigation }) {
       />
 
       {/* Modals */}
-      {renderCreateModal()}
       {renderDetailDialog()}
-      {renderSessionsModal()}
-      {renderRenewalModal()}
     </SafeAreaView>
   );
 }

@@ -101,6 +101,51 @@ export async function uploadSubscriptionPaymentProof(transactionRef, imageUri, a
   }
 }
 
+export async function initiateOfflineSubscriptionPayment(
+  companyId,
+  selectedTurfIds,
+  totalGrounds,
+  months,
+  pricingDetails,
+  offlineInfo = {}
+) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("User not authenticated. Please log in again.");
+
+  const transactionRef = generateTransactionRef("OFF");
+
+  const paymentData = {
+    transactionRef,
+    companyId,
+    initiatedBy: currentUser.uid,
+    selectedTurfIds,
+    totalGrounds,
+    months,
+    pricingDetails: {
+      monthlyPrice: pricingDetails.monthlyPrice,
+      totalBeforeDiscount: pricingDetails.totalBeforeDiscount,
+      pricePerGround: pricingDetails.pricePerGround,
+      tierDiscount: pricingDetails.tierDiscount,
+      durationDiscount: pricingDetails.durationDiscount,
+      discountAmount: pricingDetails.discountAmount,
+      finalAmount: pricingDetails.finalAmount,
+    },
+    amount: pricingDetails.finalAmount,
+    status: "offline_pending",
+    paymentMode: "offline",
+    offlineInfo: {
+      collectedBy: offlineInfo.collectedBy || "",
+      notes: offlineInfo.notes || "",
+      collectedAt: offlineInfo.collectedAt || new Date().toISOString(),
+    },
+    createdAt: serverTimestamp(),
+  };
+
+  await setDoc(doc(db, "pending_subscription_payments", transactionRef), paymentData);
+
+  return { transactionRef, amount: pricingDetails.finalAmount, months, totalGrounds };
+}
+
 export async function checkSubscriptionPaymentStatus(transactionRef) {
   const snapshot = await getDoc(doc(db, "pending_subscription_payments", transactionRef));
   if (!snapshot.exists()) return { status: "not_found" };

@@ -192,7 +192,7 @@ export default function OwnerDashboardScreen({ navigation }) {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -233,21 +233,6 @@ export default function OwnerDashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* UPI Warning Banner */}
-        {!company?.paymentConfig?.upiEnabled && (
-          <TouchableOpacity
-            style={styles.warningBanner}
-            onPress={() => navigation.navigate("PaymentSettings")}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="alert-circle" size={20} color="#92400E" />
-            <View style={styles.warningContent}>
-              <Text style={styles.warningTitle}>Configure UPI to receive advance payments</Text>
-              <Text style={styles.warningSubtext}>Tap to set up payment settings</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#92400E" />
-          </TouchableOpacity>
-        )}
 
         {/* Company Card */}
         <Surface style={styles.companyCard} elevation={2}>
@@ -275,21 +260,22 @@ export default function OwnerDashboardScreen({ navigation }) {
         {/* KPI Grid */}
         <View style={styles.kpiGrid}>
           {kpiCards.map((kpi) => (
-            <TouchableOpacity
-              key={kpi.id}
-              style={styles.kpiCard}
-              onPress={kpi.onPress}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.kpiAccentBar, { backgroundColor: kpi.color }]} />
-              <View style={styles.kpiBody}>
-                <View style={[styles.kpiIconContainer, { backgroundColor: `${kpi.color}18` }]}>
-                  <MaterialCommunityIcons name={kpi.icon} size={18} color={kpi.color} />
+            <View key={kpi.id} style={styles.kpiCellWrapper}>
+              <TouchableOpacity
+                style={styles.kpiCard}
+                onPress={kpi.onPress}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.kpiAccentBar, { backgroundColor: kpi.color }]} />
+                <View style={styles.kpiBody}>
+                  <View style={[styles.kpiIconContainer, { backgroundColor: `${kpi.color}18` }]}>
+                    <MaterialCommunityIcons name={kpi.icon} size={18} color={kpi.color} />
+                  </View>
+                  <Text style={[styles.kpiValue, { color: kpi.color }]}>{kpi.value}</Text>
+                  <Text style={styles.kpiLabel}>{kpi.label}</Text>
                 </View>
-                <Text style={[styles.kpiValue, { color: kpi.color }]}>{kpi.value}</Text>
-                <Text style={styles.kpiLabel}>{kpi.label}</Text>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
           ))}
         </View>
 
@@ -563,14 +549,15 @@ const styles = StyleSheet.create({
   kpiGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginHorizontal: -5,
     marginBottom: 16,
   },
+  kpiCellWrapper: {
+    flexBasis: "50%",
+    padding: 5,
+  },
   kpiCard: {
-    width: "48%",
     backgroundColor: "#fff",
     borderRadius: 14,
-    margin: "1%",
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },

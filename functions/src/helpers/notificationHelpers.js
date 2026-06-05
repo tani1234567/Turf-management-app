@@ -181,7 +181,7 @@ async function sendNotification(userId, notification) {
 }
 
 /**
- * Send notification to all managers of a turf
+ * Send notification to all managers of a turf (caretakers are excluded)
  */
 async function notifyTurfManagers(turfId, notification) {
   const turfDoc = await admin.firestore().collection("turfs").doc(turfId).get();
@@ -190,6 +190,9 @@ async function notifyTurfManagers(turfId, notification) {
   if (!turf || !turf.managerIds) return;
 
   for (const managerId of turf.managerIds) {
+    const userDoc = await admin.firestore().collection("users").doc(managerId).get();
+    const userData = userDoc.data();
+    if (!userData || userData.role === "caretaker") continue;
     await sendNotification(managerId, notification);
   }
 }

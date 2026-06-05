@@ -1155,7 +1155,7 @@ export default function CalendarScreen({ navigation }) {
 
   if (!selectedTurfId) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.emptyContainer}>
           <Surface style={styles.emptyCard} elevation={1}>
             <MaterialCommunityIcons name="soccer-field" size={64} color="#ccc" />
@@ -1172,7 +1172,7 @@ export default function CalendarScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>

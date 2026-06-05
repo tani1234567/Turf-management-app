@@ -16,8 +16,6 @@ const MANAGER_BLUE     = "#3B82F6";
 const DANGER_RED       = "#EF4444";
 
 const MENU_ITEMS = [
-  { id: "earnings", icon: "cash", label: "My Earnings", color: SUCCESS_GREEN },
-  { id: "attendance", icon: "calendar-check", label: "Attendance", color: MANAGER_BLUE },
   { id: "notifications", icon: "bell", label: "Notifications", color: CARETAKER_ORANGE },
   { id: "help", icon: "help-circle", label: "Help & Support", color: "#607D8B" },
 ];
@@ -76,7 +74,7 @@ export default function CaretakerProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {/* Profile Card with Banner */}

@@ -849,7 +849,7 @@ const styles = StyleSheet.create({
   modalCard: {
     backgroundColor: "#fff",
     borderTopLeftRadius: 22, borderTopRightRadius: 22,
-    maxHeight: "93%", overflow: "hidden",
+    maxHeight: "93%", overflow: "hidden", minHeight:"80%"
   },
   modalHeader: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",

@@ -805,7 +805,7 @@ export default function BookingManagementScreen({ navigation }) {
 
   if (!selectedTurfId) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.emptyContainer}>
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
@@ -820,7 +820,7 @@ export default function BookingManagementScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <View>

@@ -11,6 +11,7 @@ import {
   RefreshControl,
   ScrollView,
   Share,
+  Modal as RNModal,
 } from "react-native";
 import {
   Text,
@@ -20,8 +21,6 @@ import {
   IconButton,
   ActivityIndicator,
   FAB,
-  Portal,
-  Modal,
   Menu,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -43,7 +42,7 @@ import {
   getCategoryIcon,
   formatSubcategory,
 } from "../../constants/expenseCategories";
-import { getDocument } from "../../services/firebase/firestore";
+import { getDocument, addDocument } from "../../services/firebase/firestore";
 
 const MANAGER_COLOR = "#2196F3";
 
@@ -316,17 +315,20 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
     }
   };
 
-  // Delete expense (only own expenses)
+  // Delete expense — manager can delete own or caretaker expenses, action is logged
   const handleDelete = (expense) => {
     const userId = user?.userId || user?.uid;
-    if (expense.addedBy !== userId) {
-      Alert.alert("Not Allowed", "You can only delete expenses you added.");
+    const isOwn = expense.addedBy === userId;
+    const isCaretaker = expense.addedByRole === "caretaker";
+
+    if (!isOwn && !isCaretaker) {
+      Alert.alert("Not Allowed", "You can only delete your own expenses or those added by a caretaker.");
       return;
     }
 
     Alert.alert(
       "Delete Expense",
-      `Are you sure you want to delete this expense of Rs.${expense.amount}?`,
+      `Delete this ₹${expense.amount} expense${isCaretaker && !isOwn ? ` added by ${expense.addedByName || "caretaker"}` : ""}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -335,6 +337,23 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
           onPress: async () => {
             try {
               await deleteExpense(expense.id);
+              // Audit log
+              await addDocument("expense_logs", {
+                action: "deleted",
+                expenseId: expense.id,
+                amount: expense.amount,
+                category: expense.category,
+                subcategory: expense.subcategory || null,
+                date: expense.date,
+                originalAddedBy: expense.addedBy,
+                originalAddedByName: expense.addedByName || "",
+                originalAddedByRole: expense.addedByRole || "",
+                deletedBy: userId,
+                deletedByName: user?.name || user?.displayName || "",
+                deletedByRole: "manager",
+                turfId: expense.turfId || selectedTurfId || null,
+                deletedAt: new Date(),
+              });
               await fetchExpenses();
               Alert.alert("Deleted", "Expense deleted successfully.");
             } catch (error) {
@@ -392,7 +411,8 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
 
   const isOwnExpense = (expense) => {
     const userId = user?.userId || user?.uid;
-    return expense.addedBy === userId;
+    // Manager can edit/delete own expenses OR expenses added by a caretaker
+    return expense.addedBy === userId || expense.addedByRole === "caretaker";
   };
 
   // Render summary card
@@ -619,12 +639,14 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
     const subcategories = getSubcategories();
 
     return (
-      <Portal>
-        <Modal
-          visible={modalVisible}
-          onDismiss={closeModal}
-          contentContainerStyle={styles.modalContainer}
-        >
+      <RNModal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
@@ -755,6 +777,8 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
                 style={styles.formInput}
                 outlineColor="#E0E0E0"
                 activeOutlineColor={MANAGER_COLOR}
+                autoCorrect={false}
+                spellCheck={false}
               />
 
               {/* Date */}
@@ -835,8 +859,9 @@ export default function ManagerExpenseTrackingScreen({ navigation }) {
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
-        </Modal>
-      </Portal>
+          </View>
+        </View>
+      </RNModal>
     );
   };
 
@@ -1242,9 +1267,14 @@ const styles = StyleSheet.create({
   },
 
   // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 16,
+  },
   modalContainer: {
     backgroundColor: "#fff",
-    margin: 16,
     borderRadius: 16,
     padding: 20,
     maxHeight: "90%",

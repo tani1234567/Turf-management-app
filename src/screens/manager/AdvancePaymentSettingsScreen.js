@@ -204,10 +204,10 @@ export default function AdvancePaymentSettingsScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
-          <Text variant="titleLarge" style={styles.headerTitle}>
-            Advance Payment Settings
-          </Text>
+          <IconButton icon="arrow-left" onPress={() => navigation.goBack()} style={styles.backButton} />
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle} numberOfLines={1}>Advance Payment Settings</Text>
+          </View>
           <View style={{ width: 48 }} />
         </View>
         <View style={styles.permissionDeniedContainer}>
@@ -227,14 +227,10 @@ export default function AdvancePaymentSettingsScreen({ navigation, route }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
+        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} style={styles.backButton} />
         <View style={styles.headerContent}>
-          <Text variant="titleLarge" style={styles.headerTitle}>
-            Advance Payment Settings
-          </Text>
-          <Text variant="bodySmall" style={styles.headerSubtitle} numberOfLines={1}>
-            {turf?.name || "Turf"}
-          </Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>Advance Payment Settings</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>{turf?.name || "Turf"}</Text>
         </View>
         <View style={{ width: 48 }} />
       </View>
@@ -530,23 +526,28 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingRight: 16,
+    paddingRight: 8,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
+  backButton: { margin: 0 },
   headerContent: {
     flex: 1,
     alignItems: "center",
   },
   headerTitle: {
-    fontWeight: "bold",
-    color: "#333",
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 16,
+    paddingTop: 8,
+    color: "#1a1a2e",
   },
   headerSubtitle: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
     color: "#666",
-    marginTop: 2,
+    marginTop: 4,
+    paddingBottom: 8,
   },
   content: {
     flex: 1,

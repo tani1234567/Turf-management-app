@@ -8,6 +8,7 @@ import {
   Alert,
   Image,
   ScrollView,
+  Modal,
 } from "react-native";
 import {
   Text,
@@ -16,8 +17,6 @@ import {
   ActivityIndicator,
   Chip,
   Button,
-  Dialog,
-  Portal,
   Divider,
   TextInput,
 } from "react-native-paper";
@@ -441,17 +440,23 @@ export default function PendingTurfRequestsScreen({ navigation }) {
     const isActioning = actionLoading === selectedRequest.id;
 
     return (
-      <Portal>
-        <Dialog
-          visible={detailVisible}
-          onDismiss={() => setDetailVisible(false)}
-          style={styles.detailDialog}
-        >
-          <Dialog.Title style={styles.dialogTitle}>
-            {selectedRequest.turfName || turfData.name}
-          </Dialog.Title>
-          <Dialog.ScrollArea style={styles.dialogScrollArea}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+      <Modal
+        visible={detailVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDetailVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                {selectedRequest.turfName || turfData.name}
+              </Text>
+              <IconButton icon="close" size={22} iconColor={OWNER_COLOR} onPress={() => setDetailVisible(false)} />
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScrollArea}>
               <View style={styles.dialogBody}>
                 {/* Requested by */}
                 <View style={styles.dialogInfoRow}>
@@ -566,7 +571,6 @@ export default function PendingTurfRequestsScreen({ navigation }) {
                       </View>
                     )}
 
-                    {/* Pricing summary */}
                     {ground.pricing?.weekday?.morning?.rate && (
                       <View style={styles.pricingSummary}>
                         <Text variant="bodySmall" style={styles.pricingLabel}>
@@ -616,77 +620,91 @@ export default function PendingTurfRequestsScreen({ navigation }) {
                     </View>
                   </>
                 )}
+
+                <View style={{ height: 16 }} />
               </View>
             </ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <Button onPress={() => setDetailVisible(false)}>Close</Button>
-            {isPending && (
-              <Button
-                textColor="#F44336"
-                onPress={() => {
-                  setDetailVisible(false);
-                  openRejectDialog(selectedRequest);
-                }}
-                disabled={isActioning}
-              >
-                Reject
-              </Button>
-            )}
-            {isPending && (
-              <Button
-                mode="contained"
-                buttonColor="#4CAF50"
-                onPress={() => handleApprove(selectedRequest)}
-                loading={isActioning}
-                disabled={isActioning}
-              >
-                Approve
-              </Button>
-            )}
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+
+            {/* Footer actions */}
+            <View style={styles.modalActions}>
+              <Button onPress={() => setDetailVisible(false)} style={{ flex: 1 }} textColor={OWNER_COLOR}>Close</Button>
+              {isPending && (
+                <Button
+                  textColor="#F44336"
+                  onPress={() => {
+                    setDetailVisible(false);
+                    openRejectDialog(selectedRequest);
+                  }}
+                  disabled={isActioning}
+                  style={{ flex: 1 }}
+                >
+                  Reject
+                </Button>
+              )}
+              {isPending && (
+                <Button
+                  mode="contained"
+                  buttonColor="#4CAF50"
+                  onPress={() => handleApprove(selectedRequest)}
+                  loading={isActioning}
+                  disabled={isActioning}
+                  style={{ flex: 1 }}
+                >
+                  Approve
+                </Button>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
   // --- Reject dialog ---
 
   const renderRejectDialog = () => (
-    <Portal>
-      <Dialog
-        visible={rejectDialogVisible}
-        onDismiss={() => setRejectDialogVisible(false)}
-      >
-        <Dialog.Title>Reject Request</Dialog.Title>
-        <Dialog.Content>
-          <Text variant="bodyMedium" style={{ marginBottom: 12 }}>
-            Provide a reason for rejecting "{rejectingRequest?.turfName || rejectingRequest?.turfData?.name}":
-          </Text>
-          <TextInput
-            mode="outlined"
-            label="Rejection Reason (optional)"
-            placeholder="e.g., Location too close to existing turf"
-            value={rejectionReason}
-            onChangeText={setRejectionReason}
-            multiline
-            numberOfLines={3}
-            style={styles.rejectInput}
-          />
-        </Dialog.Content>
-        <Dialog.Actions>
-          <Button onPress={() => setRejectDialogVisible(false)}>Cancel</Button>
-          <Button
-            mode="contained"
-            buttonColor="#F44336"
-            onPress={executeRejection}
-            loading={actionLoading === rejectingRequest?.id}
-          >
-            Reject
-          </Button>
-        </Dialog.Actions>
-      </Dialog>
-    </Portal>
+    <Modal
+      visible={rejectDialogVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setRejectDialogVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { maxHeight: "50%" }]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Reject Request</Text>
+            <IconButton icon="close" size={22} iconColor={OWNER_COLOR} onPress={() => setRejectDialogVisible(false)} />
+          </View>
+          <View style={styles.dialogBody}>
+            <Text variant="bodyMedium" style={{ marginBottom: 12, color: "#444" }}>
+              Provide a reason for rejecting "{rejectingRequest?.turfName || rejectingRequest?.turfData?.name}":
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="Rejection Reason (optional)"
+              placeholder="e.g., Location too close to existing turf"
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+              multiline
+              numberOfLines={3}
+              style={styles.rejectInput}
+            />
+          </View>
+          <View style={styles.modalActions}>
+            <Button onPress={() => setRejectDialogVisible(false)} style={{ flex: 1 }} textColor={OWNER_COLOR}>Cancel</Button>
+            <Button
+              mode="contained"
+              buttonColor="#F44336"
+              onPress={executeRejection}
+              loading={actionLoading === rejectingRequest?.id}
+              style={{ flex: 1 }}
+            >
+              Reject
+            </Button>
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 
   // --- Main render ---
@@ -826,30 +844,39 @@ const styles = StyleSheet.create({
   },
   pendingChip: {
     backgroundColor: "#FFF3E0",
-    height: 26,
+    alignSelf: "center",
+    paddingVertical: 5,
   },
   pendingChipText: {
     color: "#E65100",
     fontSize: 11,
     fontWeight: "600",
+    lineHeight: 16,
+    marginVertical: 0,
   },
   approvedChip: {
     backgroundColor: "#E8F5E9",
-    height: 26,
+    alignSelf: "center",
+    paddingVertical: 5,
   },
   approvedChipText: {
     color: "#2E7D32",
     fontSize: 11,
     fontWeight: "600",
+    lineHeight: 16,
+    marginVertical: 0,
   },
   rejectedChip: {
     backgroundColor: "#FFEBEE",
-    height: 26,
+    alignSelf: "center",
+    paddingVertical: 5,
   },
   rejectedChipText: {
     color: "#C62828",
     fontSize: 11,
     fontWeight: "600",
+    lineHeight: 16,
+    marginVertical: 0,
   },
   cardDivider: {
     marginVertical: 12,
@@ -912,15 +939,45 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-  // Detail dialog
-  detailDialog: {
-    maxHeight: "85%",
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
-  dialogTitle: {
-    fontWeight: "bold",
+  modalSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "90%",
   },
-  dialogScrollArea: {
-    paddingHorizontal: 0,
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingLeft: 20,
+    paddingRight: 4,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  modalTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 17,
+    color: "#111827",
+    flex: 1,
+  },
+  modalScrollArea: {
+    flexShrink: 1,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    gap: 8,
   },
   dialogBody: {
     paddingHorizontal: 24,
@@ -985,10 +1042,13 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   smallChip: {
-    height: 26,
+    alignSelf: "center",
+    paddingVertical: 3,
   },
   smallChipText: {
     fontSize: 11,
+    lineHeight: 16,
+    marginVertical: 0,
   },
   pricingSummary: {
     marginTop: 4,

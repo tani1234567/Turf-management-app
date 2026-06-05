@@ -245,7 +245,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
     }
   };
 
-  const renderFullBookingCard = (booking) => {
+  const renderFullBookingCard = (booking, showActions = true) => {
     const isAcademy = booking.bookingType === "academy";
     const statusColor = getStatusColor(booking);
 
@@ -325,42 +325,48 @@ export default function CaretakerCalendarScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Action Buttons - Only for non-academy bookings */}
+        {/* Action Buttons - non-academy bookings only */}
         {!isAcademy && booking.status !== "completed" && booking.status !== "no_show" && booking.status !== "cancelled" && (
           <View style={styles.actionsSection}>
-            <Button
-              mode="outlined"
-              icon="check-circle"
-              onPress={() => handleMarkAttendance(booking)}
-              style={styles.actionButton}
-              textColor={MANAGER_BLUE}
-              compact
-              labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
-            >
-              Attendance
-            </Button>
-            <Button
-              mode="outlined"
-              icon="cash"
-              onPress={() => handleCollectPayment(booking)}
-              style={[styles.actionButton, { borderColor: SUCCESS_GREEN }]}
-              textColor={SUCCESS_GREEN}
-              compact
-              labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
-            >
-              Payment
-            </Button>
-            <Button
-              mode="outlined"
-              icon="clock-plus-outline"
-              onPress={() => handleExtendTime(booking)}
-              style={[styles.actionButton, { borderColor: CARETAKER_ORANGE }]}
-              textColor={CARETAKER_ORANGE}
-              compact
-              labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
-            >
-              Extend
-            </Button>
+            {/* Attendance, Payment, Extend — today only */}
+            {showActions && (
+              <>
+                <Button
+                  mode="outlined"
+                  icon="check-circle"
+                  onPress={() => handleMarkAttendance(booking)}
+                  style={styles.actionButton}
+                  textColor={MANAGER_BLUE}
+                  compact
+                  labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+                >
+                  Attendance
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="cash"
+                  onPress={() => handleCollectPayment(booking)}
+                  style={[styles.actionButton, { borderColor: SUCCESS_GREEN }]}
+                  textColor={SUCCESS_GREEN}
+                  compact
+                  labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+                >
+                  Payment
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="clock-plus-outline"
+                  onPress={() => handleExtendTime(booking)}
+                  style={[styles.actionButton, { borderColor: CARETAKER_ORANGE }]}
+                  textColor={CARETAKER_ORANGE}
+                  compact
+                  labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12 }}
+                >
+                  Extend
+                </Button>
+              </>
+            )}
+            {/* Cancel — today and tomorrow */}
             {(booking.status === "confirmed" || booking.status === "pending") && (
               <Button
                 mode="outlined"
@@ -455,7 +461,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
   const showTodayBookings = isToday(selectedDate) || isTomorrow(selectedDate);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Schedule</Text>
@@ -468,7 +474,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
           <MaterialCommunityIcons name="chevron-left" size={24} color={CARETAKER_ORANGE} />
         </TouchableOpacity>
 
-        <Surface style={styles.weekCard} elevation={1}>
+        <View style={styles.weekCard}>
           <View style={styles.weekRow}>
             {weekDays.map((day, index) => (
               <TouchableOpacity
@@ -501,7 +507,7 @@ export default function CaretakerCalendarScreen({ navigation }) {
               </TouchableOpacity>
             ))}
           </View>
-        </Surface>
+        </View>
 
         <TouchableOpacity onPress={handleNextWeek} style={styles.navButton}>
           <MaterialCommunityIcons name="chevron-right" size={24} color={CARETAKER_ORANGE} />
@@ -543,11 +549,11 @@ export default function CaretakerCalendarScreen({ navigation }) {
             <Text style={styles.emptyText}>Loading bookings...</Text>
           </View>
         ) : bookings.length > 0 ? (
-          bookings.map((booking) =>
-            showTodayBookings
-              ? renderFullBookingCard(booking)
-              : renderLimitedBookingCard(booking)
-          )
+          bookings.map((booking) => {
+            if (isToday(selectedDate)) return renderFullBookingCard(booking, true);
+            if (isTomorrow(selectedDate)) return renderFullBookingCard(booking, false);
+            return renderLimitedBookingCard(booking);
+          })
         ) : (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
@@ -610,16 +616,22 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#fff",
     marginHorizontal: 8,
+    // cross-platform shadow (avoids react-native-paper Surface iOS height bug)
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   weekRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
   },
   dayItem: {
+    flex: 1,
     alignItems: "center",
-    padding: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
     borderRadius: 12,
-    minWidth: 40,
     position: "relative",
   },
   dayItemActive: {
@@ -762,12 +774,12 @@ const styles = StyleSheet.create({
   actionsSection: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
     marginTop: 4,
   },
   actionButton: {
-    flex: 1,
-    minWidth: 90,
+    flexBasis: "47%",
+    flexGrow: 1,
     borderRadius: 8,
   },
 

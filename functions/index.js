@@ -49,6 +49,7 @@ exports.onAcademyStatusChange = academyFunctions.onAcademyStatusChange;
 exports.sendAcademyRenewalReminders = academyFunctions.sendAcademyRenewalReminders;
 exports.expireAcademies = academyFunctions.expireAcademies;
 exports.manualGenerateSessions = academyFunctions.manualGenerateSessions;
+exports.cancelClashingSessionsOnBooking = academyFunctions.cancelClashingSessionsOnBooking;
 
 // User Cleanup Functions
 exports.processSuspendedUserDeletion = userCleanupFunctions.processSuspendedUserDeletion;

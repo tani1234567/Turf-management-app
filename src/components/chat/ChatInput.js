@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback } from "react";
+import React, { memo, useState, useCallback, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -6,6 +6,7 @@ import {
   Alert,
   TextInput as RNTextInput,
   TouchableOpacity,
+  Keyboard,
 } from "react-native";
 import { IconButton, Button, ActivityIndicator } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -27,7 +28,16 @@ const ChatInput = ({
 }) => {
   const [message, setMessage] = useState("");
   const [isPickingImage, setIsPickingImage] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   const handleSend = useCallback(() => {
     if (!message.trim() || isLoading) return;
@@ -70,7 +80,9 @@ const ChatInput = ({
   }, [onSendImage, isPickingImage]);
 
   const hasText = message.trim().length > 0;
-  const bottomPadding = Math.max(insets.bottom, 6);
+  const bottomPadding = (Platform.OS === "ios" && !keyboardVisible)
+    ? Math.max(insets.bottom, 6)
+    : 6;
 
   return (
     <View style={[styles.wrapper, { paddingBottom: bottomPadding }]}>

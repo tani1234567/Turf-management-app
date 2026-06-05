@@ -204,7 +204,7 @@ export default function CaretakerDashboardScreen({ navigation }) {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={

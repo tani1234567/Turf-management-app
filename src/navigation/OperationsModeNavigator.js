@@ -11,6 +11,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 
 // Tab screens
 import OperationsModeScreen from "../screens/owner/OperationsModeScreen";
@@ -59,7 +61,7 @@ function OperationsSettingsTab() {
       id: "advance",
       label: "Advance Payment Settings",
       icon: "cash-fast",
-      onPress: () => navigation.navigate("AdvancePaymentSettings"),
+      onPress: () => navigation.navigate("AdvancePaymentSettings", { turfId: selectedTurfId }),
     },
     {
       id: "editTurf",
@@ -95,7 +97,7 @@ function OperationsSettingsTab() {
   ];
 
   return (
-    <SafeAreaView style={settingsStyles.container}>
+    <SafeAreaView style={settingsStyles.container} edges={["top"]}>
       <ScrollView contentContainerStyle={settingsStyles.scrollContent}>
         {/* Header */}
         <View style={settingsStyles.header}>
@@ -279,6 +281,9 @@ const settingsStyles = StyleSheet.create({
  * Tab Navigator for Operations Mode — mirrors ManagerNavigator tabs
  */
 function OperationsModeTabs() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -289,9 +294,14 @@ function OperationsModeTabs() {
           backgroundColor: "#fff",
           borderTopWidth: 1,
           borderTopColor: "#eee",
-          height: 60,
-          paddingBottom: 8,
+          height: tabBarHeight,
+          paddingBottom: Platform.OS === "ios" ? insets.bottom + 6 : 8,
           paddingTop: 8,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 8,
         },
         tabBarLabelStyle: {
           fontSize: 11,

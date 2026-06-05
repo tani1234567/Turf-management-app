@@ -163,7 +163,7 @@ export default function ManagerChatListScreen() {
 
   if (isLoading && chats.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         {renderHeader()}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={MANAGER_BLUE} />
@@ -176,7 +176,7 @@ export default function ManagerChatListScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {renderHeader()}
 
       {filteredChats.length === 0 ? (

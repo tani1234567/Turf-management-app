@@ -5,6 +5,7 @@ import {
   Animated,
   Easing,
   Share,
+  ScrollView,
 } from "react-native";
 import {
   Text,
@@ -103,6 +104,11 @@ export default function BookingSuccessScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
       {/* Success Animation */}
       <View style={styles.successContainer}>
         <Animated.View
@@ -255,6 +261,7 @@ export default function BookingSuccessScreen({ navigation, route }) {
           A confirmation message will be sent to your registered email and phone number
         </Text>
       </Animated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -263,7 +270,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
 
   // Success Animation

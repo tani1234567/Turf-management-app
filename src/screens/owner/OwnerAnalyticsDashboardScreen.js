@@ -879,6 +879,37 @@ export default function OwnerAnalyticsDashboardScreen({ navigation }) {
           )}
         </Surface>
 
+        {/* Turf-wise Revenue Breakdown */}
+        {turfComparison.length > 0 && (
+          <Surface style={styles.chartCard} elevation={1}>
+            <Text style={styles.chartTitle}>Turf-wise Revenue Breakdown</Text>
+            <Text style={[styles.chartSubtitle, { marginBottom: 12 }]}>{dateRange.label}</Text>
+            {turfComparison.map((t, i) => {
+              const totalRev = turfComparison.reduce((s, x) => s + x.value, 0);
+              const pct = totalRev > 0 ? Math.round((t.value / totalRev) * 100) : 0;
+              return (
+                <View key={t.turfId} style={[styles.turfBreakdownRow, i > 0 && { marginTop: 14 }]}>
+                  <View style={styles.turfBreakdownHeader}>
+                    <View style={[styles.turfBreakdownDot, { backgroundColor: t.color }]} />
+                    <Text style={styles.turfBreakdownName}>{turfNames[t.turfId] || t.label}</Text>
+                    <Text style={styles.turfBreakdownRevenue}>{formatCurrency(t.value)}</Text>
+                  </View>
+                  <View style={styles.turfBreakdownBar}>
+                    <View style={[styles.turfBreakdownFill, { width: `${pct}%`, backgroundColor: t.color }]} />
+                  </View>
+                  <View style={styles.turfBreakdownMeta}>
+                    <Text style={styles.turfBreakdownMetaText}>{t.bookings} bookings</Text>
+                    <Text style={styles.turfBreakdownMetaText}>{pct}% of total</Text>
+                    <Text style={styles.turfBreakdownMetaText}>
+                      Avg ₹{t.bookings > 0 ? Math.round(t.value / t.bookings).toLocaleString() : 0}/booking
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </Surface>
+        )}
+
         {/* Manager Performance Table */}
         <Surface style={styles.chartCard} elevation={1}>
           <Text style={styles.chartTitle}>Manager Performance</Text>
@@ -1284,6 +1315,53 @@ const styles = StyleSheet.create({
   legendValue: {
     fontSize: 12,
     color: "#666",
+  },
+
+  // Turf breakdown
+  turfBreakdownRow: {
+    marginBottom: 4,
+  },
+  turfBreakdownHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  turfBreakdownDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  turfBreakdownName: {
+    flex: 1,
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#111827",
+  },
+  turfBreakdownRevenue: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: OWNER_PURPLE,
+  },
+  turfBreakdownBar: {
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    marginBottom: 6,
+    overflow: "hidden",
+  },
+  turfBreakdownFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  turfBreakdownMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  turfBreakdownMetaText: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 11,
+    color: "#6B7280",
   },
 
   // ROI

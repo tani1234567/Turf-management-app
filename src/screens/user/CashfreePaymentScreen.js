@@ -110,6 +110,7 @@ export default function CashfreePaymentScreen({ navigation, route }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const unsubscribeRef = useRef(null);
   const timerRef = useRef(null);
+  const verifyTimeoutRef = useRef(null);
   const phaseRef = useRef(initialPhase);
   const orderIdRef = useRef(null);
 
@@ -161,6 +162,7 @@ export default function CashfreePaymentScreen({ navigation, route }) {
   const cleanup = useCallback(() => {
     unsubscribeRef.current?.();
     clearInterval(timerRef.current);
+    clearTimeout(verifyTimeoutRef.current);
   }, []);
 
   // ── Firestore listener — activated after checkout ────────────────────────────
@@ -189,30 +191,47 @@ export default function CashfreePaymentScreen({ navigation, route }) {
       });
   }, [bookingId]);
 
+  // Statuses from Cashfree that definitively mean payment did not succeed
+  const FAILED_STATUSES = ["FAILED", "CANCELLED", "EXPIRED", "USER_DROPPED", "VOID"];
+
+  const handleReleaseAndFail = useCallback(async () => {
+    cleanup();
+    await releaseSlotLock(bookingId);
+    setPhase(PHASE.FAILED);
+  }, [bookingId, cleanup]);
+
   // ── Called when Cashfree redirects to RETURN_URL ─────────────────────────────
   const handleCheckoutReturn = useCallback(async () => {
     if (phaseRef.current === PHASE.VERIFYING || phaseRef.current === PHASE.SUCCESS) return;
 
     setPhase(PHASE.VERIFYING);
-    startBookingListener(); // listen for webhook-driven update
+    startBookingListener(); // listen for webhook-driven success/cancel update
 
-    // Also actively verify — don't wait for webhook alone
+    // 60s safety-net: if still verifying, release and show failure
+    verifyTimeoutRef.current = setTimeout(async () => {
+      if (phaseRef.current === PHASE.VERIFYING) {
+        await handleReleaseAndFail();
+      }
+    }, 60000);
+
+    // Actively verify — don't rely solely on webhook
     try {
       const orderId = orderIdRef.current;
       if (!orderId) return;
 
       const result = await verifyOrder({ orderId, bookingId });
 
-      // If Cashfree says PAID, Firestore listener will fire (we updated it in the CF).
-      // If not PAID yet, webhook will eventually arrive.
-      if (result && result.status !== "PAID") {
-        console.log("verifyCashfreeOrder: status =", result.status, "— waiting for webhook");
+      if (result && FAILED_STATUSES.includes(result.status)) {
+        // Payment definitively failed — release slot immediately
+        await handleReleaseAndFail();
       }
+      // PAID → Firestore listener handles navigation
+      // ACTIVE / unknown → wait for webhook + timeout safety-net above
     } catch (err) {
-      // Verification failed — webhook is still our fallback
       console.warn("verifyCashfreeOrder error:", err.message);
+      // On verify error, keep waiting — timeout will clean up if needed
     }
-  }, [bookingId, startBookingListener, verifyOrder]);
+  }, [bookingId, startBookingListener, verifyOrder, handleReleaseAndFail]);
 
   // ── Create Cashfree order (called explicitly, not on mount for coupon step) ──
   const createPaymentOrder = useCallback(async (payAmount) => {
@@ -538,6 +557,27 @@ export default function CashfreePaymentScreen({ navigation, route }) {
           <Text style={styles.overlaySubtext}>
             Confirming with Cashfree. This takes a few seconds.
           </Text>
+          <Button
+            mode="outlined"
+            textColor="#F44336"
+            style={styles.cancelVerifyBtn}
+            onPress={() =>
+              Alert.alert(
+                "Haven't Paid?",
+                "This will release your slot hold and cancel the booking.",
+                [
+                  { text: "Wait", style: "cancel" },
+                  {
+                    text: "Release Slot",
+                    style: "destructive",
+                    onPress: handleReleaseAndFail,
+                  },
+                ]
+              )
+            }
+          >
+            I haven't paid / Cancel
+          </Button>
         </View>
       )}
 
@@ -546,6 +586,15 @@ export default function CashfreePaymentScreen({ navigation, route }) {
           <MaterialCommunityIcons name="close-circle-outline" size={56} color="#F44336" />
           <Text style={[styles.overlayText, { color: "#F44336" }]}>Payment Failed</Text>
           <Text style={styles.overlaySubtext}>Your slot has been released.</Text>
+          <Button
+            mode="contained"
+            buttonColor={USER_COLOR}
+            style={styles.backHomeBtn}
+            icon="home"
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: "UserTabs" }] })}
+          >
+            Back to Home
+          </Button>
         </View>
       )}
     </SafeAreaView>
@@ -573,6 +622,8 @@ const styles = StyleSheet.create({
   },
   overlayText: { fontSize: 18, fontWeight: "600", color: "#333", textAlign: "center" },
   overlaySubtext: { fontSize: 14, color: "#666", textAlign: "center", lineHeight: 20 },
+  cancelVerifyBtn: { marginTop: 8, borderColor: "#F44336" },
+  backHomeBtn: { marginTop: 16, borderRadius: 10, minWidth: 180 },
 
   // Coupon step styles
   couponScroll: { flexGrow: 1, justifyContent: "center", padding: 20 },

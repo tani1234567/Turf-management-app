@@ -317,6 +317,19 @@ export default function AnalyticsDashboardScreen({ navigation }) {
     };
   }, [confirmedBookings]);
 
+  // Turf-wise revenue breakdown
+  const turfRevenue = useMemo(() => {
+    const byTurf = {};
+    confirmedBookings.forEach((b) => {
+      const id = b.turfId || "unknown";
+      const name = b.turfName || id;
+      if (!byTurf[id]) byTurf[id] = { name, revenue: 0, bookings: 0 };
+      byTurf[id].revenue += b.totalAmount || b.totalPrice || b.payment?.slotAmount || b.amount || 0;
+      byTurf[id].bookings += 1;
+    });
+    return Object.values(byTurf).sort((a, b) => b.revenue - a.revenue);
+  }, [confirmedBookings]);
+
   // ═══════════════════════════════════════════
   // TABLE DATA
   // ═══════════════════════════════════════════
@@ -794,6 +807,32 @@ export default function AnalyticsDashboardScreen({ navigation }) {
           </View>
         </Surface>
 
+        {/* Turf-wise Revenue Breakdown */}
+        {turfRevenue.length > 1 && (
+          <Surface style={styles.chartCard} elevation={1}>
+            <Text style={styles.chartTitle}>Turf-wise Revenue</Text>
+            {turfRevenue.map((turf, i) => {
+              const total = turfRevenue.reduce((s, t) => s + t.revenue, 0);
+              const pct = total > 0 ? Math.round((turf.revenue / total) * 100) : 0;
+              return (
+                <View key={turf.name} style={styles.turfRevenueRow}>
+                  <View style={styles.turfRevenueLeft}>
+                    <View style={[styles.turfRevenueDot, { backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }]} />
+                    <Text style={styles.turfRevenueName} numberOfLines={1}>{turf.name}</Text>
+                  </View>
+                  <View style={styles.turfRevenueRight}>
+                    <Text style={styles.turfRevenueAmt}>{formatCurrency(turf.revenue)}</Text>
+                    <Text style={styles.turfRevenueMeta}>{turf.bookings} bookings · {pct}%</Text>
+                  </View>
+                  <View style={styles.turfRevenueBarWrap}>
+                    <View style={[styles.turfRevenueBar, { width: `${pct}%`, backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }]} />
+                  </View>
+                </View>
+              );
+            })}
+          </Surface>
+        )}
+
         {/* Data Table */}
         <Surface style={styles.chartCard} elevation={1}>
           <View style={styles.tableHeader}>
@@ -1089,6 +1128,52 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "right",
     marginTop: 4,
+  },
+  turfRevenueRow: {
+    marginBottom: 14,
+  },
+  turfRevenueLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  turfRevenueDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  turfRevenueName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    flex: 1,
+  },
+  turfRevenueRight: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingLeft: 18,
+    marginBottom: 4,
+  },
+  turfRevenueAmt: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: MANAGER_BLUE,
+  },
+  turfRevenueMeta: {
+    fontSize: 11,
+    color: "#999",
+  },
+  turfRevenueBarWrap: {
+    height: 6,
+    backgroundColor: "#F0F0F0",
+    borderRadius: 3,
+    marginLeft: 18,
+    overflow: "hidden",
+  },
+  turfRevenueBar: {
+    height: 6,
+    borderRadius: 3,
   },
   verificationRow: {
     flexDirection: "row",

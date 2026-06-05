@@ -50,7 +50,6 @@ const SETTINGS_SECTIONS = [
     items: [
       { id: "company",    icon: "office-building",          label: "Company Details",       color: OWNER_PURPLE  },
       { id: "inviteCode", icon: "account-key",              label: "Invite Codes",          color: "#3B82F6"     },
-      { id: "payments",   icon: "credit-card-settings",     label: "Payment Settings",      color: "#10B981"     },
       { id: "ops",        icon: "shield-account",           label: "Operational Permissions", color: "#8B5CF6"   },
     ],
   },
@@ -250,7 +249,7 @@ export default function OwnerSettingsScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

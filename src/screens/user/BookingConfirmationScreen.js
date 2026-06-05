@@ -729,22 +729,6 @@ export default function BookingConfirmationScreen({ navigation, route }) {
                       </View>
                     )}
 
-                    {advancePayment.allowedMethods?.includes("cash_at_venue") && (
-                      <View style={styles.radioOption}>
-                        <RadioButton.Android value="cash_at_venue" color={USER_COLOR} />
-                        <View style={styles.radioContent}>
-                          <View style={styles.radioLabelRow}>
-                            <MaterialCommunityIcons name="cash" size={20} color="#666" />
-                            <Text variant="bodyMedium" style={styles.radioLabel}>
-                              Pay at Venue
-                            </Text>
-                          </View>
-                          <Text variant="bodySmall" style={styles.radioDescription}>
-                            Pay full amount ₹{priceBreakdown.total} when you arrive
-                          </Text>
-                        </View>
-                      </View>
-                    )}
                   </RadioButton.Group>
 
                 </View>

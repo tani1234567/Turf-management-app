@@ -9,7 +9,7 @@ import {
   Pressable,
   Animated,
 } from "react-native";
-import { Text, ActivityIndicator } from "react-native-paper";
+import { Text, ActivityIndicator, IconButton } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
@@ -166,6 +166,12 @@ export default function WishlistScreen({ navigation }) {
     <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        />
         <Text style={styles.headerTitle}>Wishlist</Text>
         {turfs.length > 0 && (
           <Text style={styles.headerCount}>{turfs.length} saved</Text>
@@ -202,18 +208,21 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    paddingRight: 16,
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingTop: 12,
+    paddingBottom: 12,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
   },
+  backButton: { margin: 0 },
   headerTitle: {
     fontFamily: "Ubuntu-Bold",
-    fontSize: 22,
-    color: "#0A0F1E",
+    fontSize: 20,
+    color: "#111827",
+    flex: 1,
   },
   headerCount: {
     fontFamily: "Ubuntu-Regular",

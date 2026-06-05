@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 
 // Tab screens
 import HomeScreen from "../screens/user/HomeScreen";
@@ -34,7 +35,7 @@ const USER_COLOR = "#10B981";
 
 function UserTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 60 + insets.bottom;
+  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -47,7 +48,7 @@ function UserTabs() {
           borderTopWidth: 1,
           borderTopColor: "#F0F0F0",
           height: tabBarHeight,
-          paddingBottom: insets.bottom + 6,
+          paddingBottom: Platform.OS === "ios" ? insets.bottom + 6 : 8,
           paddingTop: 8,
           shadowColor: "#10B981",
           shadowOffset: { width: 0, height: -3 },

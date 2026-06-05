@@ -526,7 +526,7 @@ export default function ManagerDashboardScreen({ navigation }) {
 
   if (loading && turfs.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={MANAGER_BLUE} />
           <Text variant="bodyMedium" style={styles.loadingText}>
@@ -538,7 +538,7 @@ export default function ManagerDashboardScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -571,7 +571,7 @@ export default function ManagerDashboardScreen({ navigation }) {
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={logout} style={styles.avatarBtn}>
+            <TouchableOpacity onPress={() => navigation.navigate("Settings")} style={styles.avatarBtn}>
               <MaterialCommunityIcons
                 name="account-tie"
                 size={22}

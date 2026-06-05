@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 
 // Import tab screens
 import ManagerDashboardScreen from "../screens/manager/ManagerDashboardScreen";
@@ -23,6 +24,9 @@ import AnalyticsDashboardScreen from "../screens/manager/AnalyticsDashboardScree
 import ExpenseTrackingScreen from "../screens/manager/ExpenseTrackingScreen";
 import ReviewManagementScreen from "../screens/manager/ReviewManagementScreen";
 import AcademyManagementScreen from "../screens/manager/AcademyManagementScreen";
+import AcademySessionsScreen from "../screens/manager/AcademySessionsScreen";
+import AddAcademyScreen from "../screens/manager/AddAcademyScreen";
+import RenewAcademyScreen from "../screens/manager/RenewAcademyScreen";
 import TurfRequestScreen from "../screens/manager/TurfRequestScreen";
 import TurfRequestsListScreen from "../screens/manager/TurfRequestsListScreen";
 import EditTurfScreen from "../screens/owner/EditTurfScreen";
@@ -36,7 +40,7 @@ const Stack = createStackNavigator();
 
 function ManagerTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 60 + insets.bottom;
+  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -49,7 +53,7 @@ function ManagerTabs() {
           borderTopWidth: 1,
           borderTopColor: "#eee",
           height: tabBarHeight,
-          paddingBottom: insets.bottom + 6,
+          paddingBottom: Platform.OS === "ios" ? insets.bottom + 6 : 8,
           paddingTop: 8,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: -2 },
@@ -201,6 +205,21 @@ export default function ManagerNavigator() {
         options={{
           presentation: "card",
         }}
+      />
+      <Stack.Screen
+        name="AcademySessions"
+        component={AcademySessionsScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="AddAcademy"
+        component={AddAcademyScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="RenewAcademy"
+        component={RenewAcademyScreen}
+        options={{ presentation: "card" }}
       />
       <Stack.Screen
         name="TurfRequest"

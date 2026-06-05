@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 import { selectIsCaretakerAssigned } from "../store/slices/authSlice";
 
 // Import screens
@@ -23,7 +24,7 @@ const Tab = createBottomTabNavigator();
 // Tab Navigator Component
 function CaretakerTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 60 + insets.bottom;
+  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -36,7 +37,7 @@ function CaretakerTabs() {
           borderTopWidth: 1,
           borderTopColor: "#F3F4F6",
           height: tabBarHeight,
-          paddingBottom: insets.bottom + 6,
+          paddingBottom: Platform.OS === "ios" ? insets.bottom + 6 : 8,
           paddingTop: 8,
           shadowColor: "#000",
           shadowOffset: { width: 0, height: -2 },

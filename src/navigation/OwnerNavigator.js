@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 
 // Tab screens
 import OwnerDashboardScreen from "../screens/owner/OwnerDashboardScreen";
@@ -16,6 +17,7 @@ import EditTurfScreen from "../screens/owner/EditTurfScreen";
 import InviteCodeScreen from "../screens/owner/InviteCodeScreen";
 import ManagerManagementScreen from "../screens/owner/ManagerManagementScreen";
 import CaretakerManagementScreen from "../screens/owner/CaretakerManagementScreen";
+import CaretakerAssignmentScreen from "../screens/manager/CaretakerAssignmentScreen";
 import OperationalSettingsScreen from "../screens/owner/OperationalSettingsScreen";
 import PaymentSettingsScreen from "../screens/owner/PaymentSettingsScreen";
 import SubscriptionPaymentScreen from "../screens/owner/SubscriptionPaymentScreen";
@@ -38,7 +40,7 @@ const OWNER_COLOR = "#9C27B0";
 
 function OwnerTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = 60 + insets.bottom;
+  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -50,7 +52,7 @@ function OwnerTabs() {
           backgroundColor: "#fff",
           borderTopWidth: 1,
           borderTopColor: "#eee",
-          paddingBottom: insets.bottom + 6,
+          paddingBottom: Platform.OS === "ios" ? insets.bottom + 6 : 8,
           paddingTop: 8,
           height: tabBarHeight,
           shadowColor: "#000",
@@ -160,6 +162,13 @@ export default function OwnerNavigator() {
       <Stack.Screen
         name="CaretakerManagement"
         component={CaretakerManagementScreen}
+        options={{
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="CaretakerAssignment"
+        component={CaretakerAssignmentScreen}
         options={{
           presentation: "card",
         }}

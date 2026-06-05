@@ -269,7 +269,7 @@ export default function TurfManagementScreen({ navigation, route }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Turf Management</Text>

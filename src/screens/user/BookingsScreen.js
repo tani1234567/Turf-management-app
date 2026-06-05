@@ -37,6 +37,7 @@ import {
   autoRejectExpiredPendingBookings,
 } from "../../services/firebase/firestore";
 import { formatPrice, formatDuration } from "../../utils/priceUtils";
+import { releaseSlotLock } from "../../services/firebase/payments";
 import { FONTS } from "../../constants/theme";
 import SkeletonBookingList from "../../components/user/SkeletonLoader";
 import CouponVoucherCard from "../../components/coupons/CouponVoucherCard";
@@ -183,7 +184,7 @@ const StatusBadge = ({ status }) => {
 // ──────────────────────────────────────────────
 // BookingCard
 // ──────────────────────────────────────────────
-const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPayment, onDispute }) => {
+const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPayment, onDispute, onCancelPayment }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const pressIn = () =>
     Animated.spring(scale, { toValue: 0.975, speed: 20, bounciness: 4, useNativeDriver: true }).start();
@@ -276,22 +277,36 @@ const BookingCard = ({ booking, onPress, onCancel, onReview, onContact, onPaymen
                     : "Max attempts reached."}
                 </Text>
               )}
-              {(booking.paymentAttempts?.length || 0) < 3 && (
-                <Button
-                  mode="contained"
-                  compact
-                  buttonColor={booking.status === "payment_rejected" ? "#FF5722" : USER_COLOR}
-                  style={styles.paymentActionBtn}
-                  onPress={() => onPayment(booking)}
-                  icon="cash"
-                >
-                  {booking.status === "payment_rejected"
-                    ? "Retry Payment"
-                    : booking.status === "pending_payment"
-                    ? "Continue Payment"
-                    : `Pay ₹${booking.payment?.advanceAmount || 0}`}
-                </Button>
-              )}
+              <View style={styles.paymentActionRow}>
+                {(booking.paymentAttempts?.length || 0) < 3 && (
+                  <Button
+                    mode="contained"
+                    compact
+                    buttonColor={booking.status === "payment_rejected" ? "#FF5722" : USER_COLOR}
+                    style={[styles.paymentActionBtn, { flex: 1 }]}
+                    onPress={() => onPayment(booking)}
+                    icon="cash"
+                  >
+                    {booking.status === "payment_rejected"
+                      ? "Retry Payment"
+                      : booking.status === "pending_payment"
+                      ? "Continue Payment"
+                      : `Pay ₹${booking.payment?.advanceAmount || 0}`}
+                  </Button>
+                )}
+                {booking.status === "pending_payment" && (
+                  <Button
+                    mode="outlined"
+                    compact
+                    textColor="#F44336"
+                    style={[styles.paymentActionBtn, { flex: 1, borderColor: "#F44336" }]}
+                    onPress={() => onCancelPayment(booking)}
+                    icon="close-circle-outline"
+                  >
+                    Cancel Booking
+                  </Button>
+                )}
+              </View>
             </View>
           </>
         )}
@@ -961,6 +976,28 @@ export default function BookingsScreen({ navigation }) {
     });
   };
 
+  const handleCancelPayment = useCallback((booking) => {
+    Alert.alert(
+      "Cancel Booking?",
+      "This will immediately release your slot hold and cancel the booking. No payment has been made.",
+      [
+        { text: "Keep", style: "cancel" },
+        {
+          text: "Cancel Booking",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await releaseSlotLock(booking.id);
+              Alert.alert("Booking Cancelled", "Your slot has been released.");
+            } catch (err) {
+              Alert.alert("Error", "Failed to cancel booking. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
   const handlePayment = (booking) => {
     const lockExpiry =
       booking.slotLock?.lockExpiry
@@ -1127,6 +1164,7 @@ export default function BookingsScreen({ navigation }) {
       onContact={handleContact}
       onPayment={handlePayment}
       onDispute={handleDispute}
+      onCancelPayment={handleCancelPayment}
     />
   );
 
@@ -1460,6 +1498,10 @@ const styles = StyleSheet.create({
   paymentErrorText: {
     color: "#F44336",
     marginBottom: 8,
+  },
+  paymentActionRow: {
+    flexDirection: "row",
+    gap: 8,
   },
   paymentActionBtn: {
     borderRadius: 8,

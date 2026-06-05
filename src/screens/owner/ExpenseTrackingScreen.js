@@ -11,6 +11,7 @@ import {
   ScrollView,
   Share,
   Image,
+  Modal as RNModal,
 } from "react-native";
 import {
   Text,
@@ -20,8 +21,6 @@ import {
   IconButton,
   ActivityIndicator,
   FAB,
-  Portal,
-  Modal,
   Menu,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -324,17 +323,22 @@ export default function OwnerExpenseTrackingScreen({ navigation }) {
     }
   };
 
-  // Delete (only own)
+  // Delete — owner can delete any expense; others only their own
   const handleDelete = (expense) => {
     const userId = user?.userId || user?.uid;
-    if (expense.addedBy !== userId) {
+    const isOwner = user?.role === "owner";
+    if (!isOwner && expense.addedBy !== userId) {
       Alert.alert("Not Allowed", "You can only delete expenses you added.");
       return;
     }
 
+    const deletedByOther = isOwner && expense.addedBy !== userId;
+
     Alert.alert(
       "Delete Expense",
-      `Delete this expense of Rs.${expense.amount}?`,
+      deletedByOther
+        ? `Delete this ₹${expense.amount} expense added by ${expense.addedByName || "a team member"}? This action will be logged.`
+        : `Delete this expense of ₹${expense.amount}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -343,6 +347,21 @@ export default function OwnerExpenseTrackingScreen({ navigation }) {
           onPress: async () => {
             try {
               await deleteExpense(expense.id);
+              if (deletedByOther) {
+                const { addDocument } = require("../../services/firebase/firestore");
+                await addDocument("expense_deletion_logs", {
+                  expenseId: expense.id,
+                  turfId: expense.turfId || null,
+                  companyId: expense.companyId || company?.id || company?.companyId,
+                  amount: expense.amount,
+                  category: expense.category,
+                  originalAddedBy: expense.addedBy,
+                  originalAddedByName: expense.addedByName || null,
+                  deletedBy: userId,
+                  deletedByName: user?.name || null,
+                  deletedAt: new Date().toISOString(),
+                });
+              }
               await fetchExpenses();
             } catch (error) {
               Alert.alert("Error", "Failed to delete expense.");
@@ -454,16 +473,25 @@ export default function OwnerExpenseTrackingScreen({ navigation }) {
             {slices.map((slice, i) => (
               <Path key={i} d={slice.pathData} fill={slice.color} />
             ))}
-            <SvgCircle cx={center} cy={center} r={30} fill="#fff" />
+            <SvgCircle cx={center} cy={center} r={40} fill="#fff" />
             <SvgText
               x={center}
-              y={center + 5}
+              y={center - 4}
               textAnchor="middle"
-              fontSize="14"
+              fontSize="10"
+              fill="#888"
+            >
+              Total
+            </SvgText>
+            <SvgText
+              x={center}
+              y={center + 10}
+              textAnchor="middle"
+              fontSize="13"
               fontWeight="bold"
               fill="#333"
             >
-              Rs.{total}
+              {total >= 100000 ? `₹${(total / 100000).toFixed(1)}L` : total >= 1000 ? `₹${(total / 1000).toFixed(1)}K` : `₹${total}`}
             </SvgText>
           </Svg>
           <View style={styles.pieLegend}>
@@ -762,12 +790,14 @@ export default function OwnerExpenseTrackingScreen({ navigation }) {
     const subcategories = getSubcategories();
 
     return (
-      <Portal>
-        <Modal
-          visible={modalVisible}
-          onDismiss={closeModal}
-          contentContainerStyle={styles.modalContainer}
-        >
+      <RNModal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
@@ -925,6 +955,8 @@ export default function OwnerExpenseTrackingScreen({ navigation }) {
                 style={styles.formInput}
                 outlineColor="#E0E0E0"
                 activeOutlineColor={OWNER_COLOR}
+                autoCorrect={false}
+                spellCheck={false}
               />
 
               {/* Date */}
@@ -998,8 +1030,9 @@ export default function OwnerExpenseTrackingScreen({ navigation }) {
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
-        </Modal>
-      </Portal>
+          </View>
+        </View>
+      </RNModal>
     );
   };
 
@@ -1356,9 +1389,14 @@ const styles = StyleSheet.create({
   },
 
   // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 16,
+  },
   modalContainer: {
     backgroundColor: "#fff",
-    margin: 16,
     borderRadius: 16,
     padding: 20,
     maxHeight: "90%",

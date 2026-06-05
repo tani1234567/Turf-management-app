@@ -61,13 +61,23 @@ function generateSessionDates(startDate, endDate, scheduledDays) {
 }
 
 /**
+ * Returns true if two time ranges overlap.
+ * Times are "HH:MM" strings compared lexicographically (valid for 24-hour format).
+ */
+function timesOverlap(s1, e1, s2, e2) {
+  if (!s1 || !e1 || !s2 || !e2) return false;
+  return s1 < e2 && e1 > s2;
+}
+
+/**
  * Shared helper: Generate sessions for an academy.
  * Handles both old format (schedule.days as array) and new format (object map with per-day times).
  * Creates academy_sessions docs in batches and marks the academy as sessionsGenerated: true.
+ * Auto-cancels any session that clashes with an existing upcoming booking.
  *
  * @param {string} academyId
  * @param {object} academyData - Full academy document data
- * @returns {{ success: boolean, sessionCount: number }}
+ * @returns {{ success: boolean, sessionCount: number, clashCancelled: number }}
  */
 async function generateSessionsForAcademy(academyId, academyData) {
   const {
@@ -83,7 +93,7 @@ async function generateSessionsForAcademy(academyId, academyData) {
 
   if (!schedule || !contract) {
     console.log(`Academy ${academyId}: Missing schedule or contract, skipping session generation`);
-    return { success: false, sessionCount: 0 };
+    return { success: false, sessionCount: 0, clashCancelled: 0 };
   }
 
   const isNewFormat = schedule.days && !Array.isArray(schedule.days);
@@ -94,25 +104,67 @@ async function generateSessionsForAcademy(academyId, academyData) {
 
   if (!scheduledDays || scheduledDays.length === 0 || !startDate || !endDate) {
     console.log(`Academy ${academyId}: Incomplete schedule/contract data, skipping`);
-    return { success: false, sessionCount: 0 };
+    return { success: false, sessionCount: 0, clashCancelled: 0 };
   }
 
-  const sessionDates = generateSessionDates(startDate, endDate, scheduledDays);
+  let sessionDates = generateSessionDates(startDate, endDate, scheduledDays);
   console.log(`Generating ${sessionDates.length} sessions for academy ${academyId} (format: ${isNewFormat ? "per-day" : "global"})`);
 
   const academyRef = db.collection("academies").doc(academyId);
 
+  // Dedupe: skip dates that already have a session doc for this academy
+  // (prevents duplicate sessions when regenerating on renewal).
+  const existingSnap = await db
+    .collection("academy_sessions")
+    .where("academyId", "==", academyId)
+    .get();
+  const existingDates = new Set(existingSnap.docs.map((d) => d.data().date));
+  if (existingDates.size > 0) {
+    const before = sessionDates.length;
+    sessionDates = sessionDates.filter((d) => !existingDates.has(d));
+    console.log(`Academy ${academyId}: skipped ${before - sessionDates.length} dates that already have sessions`);
+  }
+
   if (sessionDates.length === 0) {
     await academyRef.update({
-      sessionCount: 0,
+      sessionCount: existingDates.size,
       sessionsGenerated: true,
       generatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    return { success: true, sessionCount: 0 };
+    return { success: true, sessionCount: 0, clashCancelled: 0 };
   }
+
+  // ── Clash detection ──────────────────────────────────────────────────────────
+  // Fetch all existing upcoming bookings for this ground in the session date range
+  // upfront (one query), then check clashes in memory per session.
+  const clashableStatuses = [
+    "confirmed", "pending", "pending_payment",
+    "awaiting_payment", "payment_submitted",
+  ];
+
+  const bookingSnap = await db
+    .collection("bookings")
+    .where("turfId", "==", turfId)
+    .where("groundId", "==", groundId)
+    .where("date", ">=", startDate)
+    .where("date", "<=", endDate)
+    .get();
+
+  // Build clash map: date → [{ startTime, endTime }]
+  const clashMap = {};
+  for (const doc of bookingSnap.docs) {
+    const b = doc.data();
+    if (!clashableStatuses.includes(b.status)) continue;
+    if (!b.startTime || !b.endTime) continue;
+    if (!clashMap[b.date]) clashMap[b.date] = [];
+    clashMap[b.date].push({ startTime: b.startTime, endTime: b.endTime });
+  }
+  console.log(`Academy ${academyId}: found bookings on ${Object.keys(clashMap).length} dates in range`);
+  // ────────────────────────────────────────────────────────────────────────────
 
   const BATCH_SIZE = 450;
   let totalCreated = 0;
+  let clashCancelled = 0;
 
   for (let i = 0; i < sessionDates.length; i += BATCH_SIZE) {
     const chunk = sessionDates.slice(i, i + BATCH_SIZE);
@@ -127,6 +179,14 @@ async function generateSessionsForAcademy(academyId, academyData) {
       const sessionStartTime = dayConfig ? dayConfig.startTime : globalStartTime;
       const sessionEndTime = dayConfig ? dayConfig.endTime : globalEndTime;
 
+      // Check if any existing booking overlaps with this session slot
+      const dayBookings = clashMap[date] || [];
+      const clashingBooking = dayBookings.find((b) =>
+        timesOverlap(sessionStartTime, sessionEndTime, b.startTime, b.endTime)
+      );
+      const hasClash = !!clashingBooking;
+      if (hasClash) clashCancelled++;
+
       batch.set(sessionRef, {
         academyId,
         academyName: name,
@@ -139,9 +199,11 @@ async function generateSessionsForAcademy(academyId, academyData) {
         date,
         startTime: sessionStartTime,
         endTime: sessionEndTime,
-        status: "scheduled",
+        // Auto-cancel clashing sessions so the slot stays bookable
+        status: hasClash ? "cancelled" : "scheduled",
+        availableForBooking: hasClash,
+        ...(hasClash && { cancelReason: "booking_clash" }),
         type: "academy",
-        availableForBooking: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -152,14 +214,15 @@ async function generateSessionsForAcademy(academyId, academyData) {
     console.log(`Batch committed: ${totalCreated}/${sessionDates.length}`);
   }
 
+  const finalCount = existingDates.size + totalCreated;
   await academyRef.update({
-    sessionCount: totalCreated,
+    sessionCount: finalCount,
     sessionsGenerated: true,
     generatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  console.log(`Academy ${academyId}: ${totalCreated} sessions generated`);
-  return { success: true, sessionCount: totalCreated };
+  console.log(`Academy ${academyId}: ${totalCreated} new sessions generated (total ${finalCount}), ${clashCancelled} auto-cancelled (booking clash)`);
+  return { success: true, sessionCount: totalCreated, clashCancelled };
 }
 
 /**
@@ -406,6 +469,20 @@ exports.onAcademyStatusChange = onDocumentUpdated(
     const beforeData = event.data.before.data();
     const afterData = event.data.after.data();
 
+    // Renewal detection: renewedAt changed AND sessions need regenerating.
+    // This is more reliable than relying on a status transition, because the
+    // client may renew an academy whose stored status was already "active".
+    const beforeRenewedAt = beforeData.renewedAt?.toMillis?.() ?? beforeData.renewedAt ?? null;
+    const afterRenewedAt = afterData.renewedAt?.toMillis?.() ?? afterData.renewedAt ?? null;
+    const wasRenewed =
+      afterRenewedAt && afterRenewedAt !== beforeRenewedAt &&
+      afterData.sessionsGenerated === false;
+
+    if (wasRenewed) {
+      console.log(`Academy ${academyId}: renewal detected (renewedAt changed), generating new sessions`);
+      return generateSessionsForAcademy(academyId, afterData);
+    }
+
     // Self-healing: if sessions were never generated (onCreate failed), generate them now
     if (afterData.sessionsGenerated === false && afterData.status === "active") {
       console.log(`Academy ${academyId}: self-healing — sessions not yet generated, generating now`);
@@ -503,3 +580,66 @@ exports.manualGenerateSessions = onCall(
     const result = await generateSessionsForAcademy(academyId, academyData);
     return result;
   });
+
+/**
+ * Cloud Function: When a new booking is created, cancel any academy session
+ * that clashes with it (same ground, same date, overlapping time).
+ *
+ * This handles the reverse direction of clash detection: a customer booking a
+ * slot that an academy session already occupies. The session is auto-cancelled
+ * so the booking is honoured and the slot is not double-held.
+ *
+ * Trigger: Firestore onCreate on bookings/{bookingId}
+ */
+exports.cancelClashingSessionsOnBooking = onDocumentCreated(
+  {
+    document: "bookings/{bookingId}",
+    timeoutSeconds: 120,
+  },
+  async (event) => {
+    const booking = event.data.data();
+    const bookingId = event.params.bookingId;
+
+    // Only consider live bookings that hold a slot
+    const liveStatuses = [
+      "confirmed", "pending", "pending_payment",
+      "awaiting_payment", "payment_submitted",
+    ];
+    if (!liveStatuses.includes(booking.status)) return null;
+    if (!booking.turfId || !booking.groundId || !booking.date) return null;
+    if (!booking.startTime || !booking.endTime) return null;
+
+    // Find scheduled academy sessions on the same ground + date
+    const snapshot = await db
+      .collection("academy_sessions")
+      .where("turfId", "==", booking.turfId)
+      .where("groundId", "==", booking.groundId)
+      .where("date", "==", booking.date)
+      .where("status", "==", "scheduled")
+      .get();
+
+    if (snapshot.empty) return null;
+
+    const clashing = snapshot.docs.filter((doc) => {
+      const s = doc.data();
+      return timesOverlap(s.startTime, s.endTime, booking.startTime, booking.endTime);
+    });
+
+    if (clashing.length === 0) return null;
+
+    const batch = db.batch();
+    for (const doc of clashing) {
+      batch.update(doc.ref, {
+        status: "cancelled",
+        availableForBooking: true,
+        cancelReason: "booking_clash",
+        clashingBookingId: bookingId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+
+    console.log(`Booking ${bookingId}: auto-cancelled ${clashing.length} clashing academy session(s)`);
+    return { cancelled: clashing.length };
+  }
+);

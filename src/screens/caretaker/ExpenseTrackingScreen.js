@@ -10,6 +10,7 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  Modal as RNModal,
 } from "react-native";
 import {
   Text,
@@ -19,8 +20,6 @@ import {
   IconButton,
   ActivityIndicator,
   FAB,
-  Portal,
-  Modal,
   Menu,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -452,12 +451,14 @@ export default function ExpenseTrackingScreen({ navigation }) {
     const subcategories = getSubcategories();
 
     return (
-      <Portal>
-        <Modal
-          visible={modalVisible}
-          onDismiss={closeModal}
-          contentContainerStyle={styles.modalContainer}
-        >
+      <RNModal
+        visible={modalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
@@ -593,6 +594,8 @@ export default function ExpenseTrackingScreen({ navigation }) {
                 style={styles.formInput}
                 outlineColor="#E0E0E0"
                 activeOutlineColor={CARETAKER_COLOR}
+                autoCorrect={false}
+                spellCheck={false}
               />
 
               {/* Date Input */}
@@ -673,8 +676,9 @@ export default function ExpenseTrackingScreen({ navigation }) {
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
-        </Modal>
-      </Portal>
+          </View>
+        </View>
+      </RNModal>
     );
   };
 
@@ -907,9 +911,14 @@ const styles = StyleSheet.create({
   },
 
   // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    padding: 16,
+  },
   modalContainer: {
     backgroundColor: "#fff",
-    margin: 16,
     borderRadius: 16,
     padding: 20,
     maxHeight: "90%",

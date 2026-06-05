@@ -91,6 +91,10 @@ export default function OperationsModeScreen({ navigation }) {
   const [currentBooking, setCurrentBooking] = useState(null);
   const [nextBooking, setNextBooking] = useState(null);
 
+  // Caretakers
+  const [assignedCaretakers, setAssignedCaretakers] = useState([]);
+  const [unassignedCaretakers, setUnassignedCaretakers] = useState([]);
+
   // Realtime listener ref
   const unsubscribeRef = useRef(null);
 
@@ -102,6 +106,7 @@ export default function OperationsModeScreen({ navigation }) {
     }
 
     fetchOperationsData();
+    fetchCaretakers();
     setupRealtimeListeners();
 
     return () => {
@@ -131,6 +136,25 @@ export default function OperationsModeScreen({ navigation }) {
 
     unsubscribeRef.current = unsubscribe;
   };
+
+  const fetchCaretakers = useCallback(async () => {
+    if (!selectedTurfId) return;
+    try {
+      const companyCaretakers = await queryDocuments("users", [
+        { field: "role", operator: "==", value: "caretaker" },
+      ]);
+      const assigned = companyCaretakers.filter(
+        (u) => u.assignedTurfId === selectedTurfId || u.assignedTurf === selectedTurfId
+      );
+      const unassigned = companyCaretakers.filter(
+        (u) => !u.assignedTurfId && !u.assignedTurf && !u.isAssigned
+      );
+      setAssignedCaretakers(assigned);
+      setUnassignedCaretakers(unassigned);
+    } catch (e) {
+      console.error("[OpsMode] Error fetching caretakers:", e);
+    }
+  }, [selectedTurfId]);
 
   const fetchOperationsData = async () => {
     try {
@@ -179,7 +203,7 @@ export default function OperationsModeScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchOperationsData();
+    await Promise.all([fetchOperationsData(), fetchCaretakers()]);
     setRefreshing(false);
   }, [selectedTurfId]);
 
@@ -299,7 +323,7 @@ export default function OperationsModeScreen({ navigation }) {
 
   if (loading && turfs.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={OPS_COLOR} />
           <Text variant="bodyMedium" style={styles.loadingText}>
@@ -311,7 +335,7 @@ export default function OperationsModeScreen({ navigation }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -667,6 +691,51 @@ export default function OperationsModeScreen({ navigation }) {
               </Surface>
             )}
 
+            {/* Caretakers Section */}
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              Caretakers
+            </Text>
+            {assignedCaretakers.length === 0 && unassignedCaretakers.length === 0 ? (
+              <Surface style={styles.emptySmallCard} elevation={1}>
+                <MaterialCommunityIcons name="account-hard-hat" size={32} color="#ccc" />
+                <Text variant="bodyMedium" style={styles.emptySmallText}>No caretakers found</Text>
+              </Surface>
+            ) : (
+              <Surface style={styles.caretakerCard} elevation={1}>
+                {assignedCaretakers.length > 0 && (
+                  <>
+                    <View style={styles.caretakerGroupHeader}>
+                      <View style={[styles.caretakerDot, { backgroundColor: "#22C55E" }]} />
+                      <Text style={styles.caretakerGroupLabel}>Assigned to this turf</Text>
+                    </View>
+                    {assignedCaretakers.map((c, i) => (
+                      <View key={c.id || c.userId} style={[styles.caretakerRow, i > 0 && { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
+                        <MaterialCommunityIcons name="account-hard-hat" size={18} color="#22C55E" />
+                        <Text style={styles.caretakerName}>{c.name || "Caretaker"}</Text>
+                        <Text style={styles.caretakerPhone}>{c.phone || ""}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+                {unassignedCaretakers.length > 0 && (
+                  <>
+                    {assignedCaretakers.length > 0 && <Divider style={{ marginVertical: 10 }} />}
+                    <View style={styles.caretakerGroupHeader}>
+                      <View style={[styles.caretakerDot, { backgroundColor: "#F59E0B" }]} />
+                      <Text style={styles.caretakerGroupLabel}>Unassigned</Text>
+                    </View>
+                    {unassignedCaretakers.map((c, i) => (
+                      <View key={c.id || c.userId} style={[styles.caretakerRow, i > 0 && { borderTopWidth: 1, borderTopColor: "#F3F4F6" }]}>
+                        <MaterialCommunityIcons name="account-hard-hat" size={18} color="#F59E0B" />
+                        <Text style={styles.caretakerName}>{c.name || "Caretaker"}</Text>
+                        <Text style={styles.caretakerPhone}>{c.phone || ""}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </Surface>
+            )}
+
             <View style={{ height: 24 }} />
           </>
         )}
@@ -974,5 +1043,48 @@ const styles = StyleSheet.create({
   emptySmallText: {
     color: "#999",
     marginTop: 8,
+  },
+
+  // Caretakers
+  caretakerCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  caretakerGroupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+    gap: 8,
+  },
+  caretakerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  caretakerGroupLabel: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 12,
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  caretakerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+  },
+  caretakerName: {
+    fontFamily: "Ubuntu-Medium",
+    fontSize: 14,
+    color: "#111827",
+    flex: 1,
+  },
+  caretakerPhone: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
   },
 });
