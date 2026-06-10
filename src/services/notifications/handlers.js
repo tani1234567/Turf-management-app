@@ -11,6 +11,11 @@ try {
 
 // Navigation reference for deep linking from notifications
 let navigationRef = null;
+let storeRef = null;
+
+export function setStoreRef(store) {
+  storeRef = store;
+}
 
 /**
  * Set the navigation reference for notification deep linking
@@ -89,14 +94,20 @@ function getNavigationTarget(type, data) {
     case "subscription_reactivated":
       return { screen: "OwnerSettings", params: { companyId: data?.companyId } };
 
-    // Support tickets
-    case "ticket_created":
-      return { screen: "Support", params: {} };
+    // Support tickets — route to the correct screen based on user role
+    case "ticket_created": {
+      const roleOnCreate = storeRef?.getState()?.auth?.user?.role;
+      if (roleOnCreate === "user") return { screen: "Support", params: {} };
+      return { screen: "BusinessSupport", params: {} };
+    }
     case "ticket_reply":
-    case "ticket_status_changed":
-      return { screen: "TicketDetail", params: { ticketId: data?.ticketId } };
+    case "ticket_status_changed": {
+      const role = storeRef?.getState()?.auth?.user?.role;
+      if (role === "user") return { screen: "TicketDetail", params: { ticketId: data?.ticketId } };
+      return { screen: "BusinessTicketDetail", params: { ticketId: data?.ticketId } };
+    }
 
-    // Disputes & refunds
+    // Disputes & refunds (user-only flows)
     case "dispute_resolved":
       return { screen: "DisputeDetail", params: { disputeId: data?.disputeId } };
     case "dispute_created":

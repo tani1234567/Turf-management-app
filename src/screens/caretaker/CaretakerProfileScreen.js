@@ -4,6 +4,7 @@ import { Text, Surface, Divider } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../hooks";
 import { selectAssignedTurfId } from "../../store/slices/authSlice";
 import { getDocument, queryDocuments } from "../../services/firebase/firestore";
@@ -23,6 +24,7 @@ const MENU_ITEMS = [
 export default function CaretakerProfileScreen() {
   const { user, logout } = useAuth();
   const assignedTurfId = useSelector(selectAssignedTurfId);
+  const navigation = useNavigation();
 
   const [turfName, setTurfName] = useState(null);
   const [totalDays, setTotalDays] = useState(0);
@@ -63,8 +65,13 @@ export default function CaretakerProfileScreen() {
     loadProfileData();
   }, [assignedTurfId]);
 
+  const handleMenuPress = (id) => {
+    if (id === "help") navigation.navigate("BusinessSupport");
+    else if (id === "notifications") navigation.navigate("Notifications");
+  };
+
   const MenuItem = ({ item }) => (
-    <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+    <TouchableOpacity style={styles.menuItem} activeOpacity={0.7} onPress={() => handleMenuPress(item.id)}>
       <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}18` }]}>
         <MaterialCommunityIcons name={item.icon} size={20} color={item.color} />
       </View>

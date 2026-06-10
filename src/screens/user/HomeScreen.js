@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Dimensions,
   RefreshControl,
-  Image,
   ScrollView,
   Alert,
   Animated,
@@ -68,6 +67,28 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Fade-in image: shows a placeholder colour instantly, fades the image in once loaded.
+// Keeps resizeMode="cover" behaviour without any native module dependency.
+const FadeImage = ({ uri, style, placeholderColor = "#e8e8e8" }) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  return (
+    <View style={[style, { backgroundColor: placeholderColor, overflow: "hidden" }]}>
+      <Animated.Image
+        source={{ uri }}
+        style={[StyleSheet.absoluteFill, { opacity }]}
+        resizeMode="cover"
+        onLoad={() =>
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 220,
+            useNativeDriver: true,
+          }).start()
+        }
+      />
+    </View>
+  );
+};
 const USER_COLOR = "#10B981";
 const EMERALD_PALE = "#D1FAE5";
 const EMERALD_DARK = "#059669";
@@ -149,7 +170,7 @@ const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation, hasOf
           {/* ── Image ─────────────────────────────── */}
           <View style={[styles.cardImageContainer, isGrid && styles.gridImageContainer]}>
             {item.imageUrl ? (
-              <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
+              <FadeImage uri={item.imageUrl} style={styles.cardImage} />
             ) : (
               <View style={[styles.cardImage, styles.placeholderImage]}>
                 <MaterialCommunityIcons
@@ -238,6 +259,7 @@ const TurfCard = ({ item, viewMode, favorites, toggleFavorite, navigation, hasOf
 const formatLocationText = (location) => {
   if (!location) return "";
   if (typeof location === "string") return location;
+  if (location.area) return location.area;
   const parts = [location.city, location.state].filter(Boolean);
   if (parts.length > 0) return parts.join(", ");
   return location.address || location.googleMapsLink || "";
@@ -1597,7 +1619,6 @@ const styles = StyleSheet.create({
   cardImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   placeholderImage: {
     backgroundColor: "#ececec",

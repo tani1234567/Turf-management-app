@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import {
   View,
   StyleSheet,
@@ -44,7 +44,7 @@ const OPS_COLOR = "#00796B";
 const OWNER_COLOR = "#9C27B0";
 
 /**
- * 5th tab — "More" settings tab for Operations Mode.
+ * 5th tab â€” "More" settings tab for Operations Mode.
  * Provides a way to exit back to owner dashboard and quick links.
  */
 function OperationsSettingsTab() {
@@ -52,7 +52,7 @@ function OperationsSettingsTab() {
   const { turfData, selectedTurfId } = useSelectedTurf();
 
   const handleBackToOwner = () => {
-    // OperationsMode is a stack screen in OwnerNavigator — pop back
+    // OperationsMode is a stack screen in OwnerNavigator â€” pop back
     navigation.getParent()?.goBack();
   };
 
@@ -278,11 +278,11 @@ const settingsStyles = StyleSheet.create({
 });
 
 /**
- * Tab Navigator for Operations Mode — mirrors ManagerNavigator tabs
+ * Tab Navigator for Operations Mode â€” mirrors ManagerNavigator tabs
  */
 function OperationsModeTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
+  const tabBarHeight = Platform.OS === "ios" ? 60 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -459,3 +459,4 @@ export default function OperationsModeNavigator() {
     </Stack.Navigator>
   );
 }
+

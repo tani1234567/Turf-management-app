@@ -9,6 +9,8 @@ import {
 import { Text, Surface, ActivityIndicator, IconButton } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSelector } from "react-redux";
+import { selectUserRole } from "../../store/slices/authSlice";
 import { useNotifications } from "../../hooks";
 
 // Map notification type to icon and color
@@ -184,7 +186,14 @@ function EmptyState() {
   );
 }
 
+// Screens that have business-role equivalents
+const BUSINESS_SCREEN_MAP = {
+  TicketDetail: "BusinessTicketDetail",
+  Support: "BusinessSupport",
+};
+
 export default function NotificationsScreen({ navigation }) {
+  const role = useSelector(selectUserRole);
   const {
     notifications,
     unreadCount,
@@ -206,20 +215,26 @@ export default function NotificationsScreen({ navigation }) {
       const action = notification.action;
       if (action?.screen) {
         try {
+          // Remap user-only screens to their business equivalents for non-user roles
+          let screen = action.screen;
+          if (role && role !== "user" && BUSINESS_SCREEN_MAP[screen]) {
+            screen = BUSINESS_SCREEN_MAP[screen];
+          }
+
           // Handle nested tab screens that can't be navigated to directly
           const NESTED_TAB_SCREENS = {
             Bookings: { parent: "UserTabs", tab: "Bookings" },
             ManagerBookings: { parent: "ManagerTabs", tab: "ManagerBookings" },
           };
 
-          const nested = NESTED_TAB_SCREENS[action.screen];
+          const nested = NESTED_TAB_SCREENS[screen];
           if (nested) {
             navigation.navigate(nested.parent, {
               screen: nested.tab,
               params: action.params || {},
             });
           } else {
-            navigation.navigate(action.screen, action.params || {});
+            navigation.navigate(screen, action.params || {});
           }
         } catch (error) {
           // Screen might not exist in current navigator, just mark as read

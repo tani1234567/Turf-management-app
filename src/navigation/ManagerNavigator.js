@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -34,13 +34,17 @@ import NotificationsScreen from "../screens/common/NotificationsScreen";
 import CustomerPhonebookScreen from "../screens/shared/CustomerPhonebookScreen";
 import HolidayScheduleScreen from "../screens/manager/HolidayScheduleScreen";
 import CompanyCouponToggleScreen from "../screens/owner/CompanyCouponToggleScreen";
+import BusinessSupportScreen from "../screens/shared/BusinessSupportScreen";
+import BusinessNewTicketScreen from "../screens/shared/BusinessNewTicketScreen";
+import BusinessTicketDetailScreen from "../screens/shared/BusinessTicketDetailScreen";
+import MaintenanceReportsScreen from "../screens/shared/MaintenanceReportsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 function ManagerTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
+  const tabBarHeight = Platform.OS === "ios" ? 60 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -262,6 +266,27 @@ export default function ManagerNavigator() {
         component={CompanyCouponToggleScreen}
         options={{ presentation: "card" }}
       />
+      <Stack.Screen
+        name="BusinessSupport"
+        component={BusinessSupportScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="BusinessNewTicket"
+        component={BusinessNewTicketScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="BusinessTicketDetail"
+        component={BusinessTicketDetailScreen}
+        options={{ presentation: "card" }}
+      />
+      <Stack.Screen
+        name="MaintenanceReports"
+        component={MaintenanceReportsScreen}
+        options={{ presentation: "card" }}
+      />
     </Stack.Navigator>
   );
 }
+

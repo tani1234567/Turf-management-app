@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Image,
   FlatList,
   Linking,
   Share,
@@ -37,6 +36,26 @@ import TurfOfferCard from "../../components/coupons/TurfOfferCard";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const USER_COLOR = "#10B981";
+
+const FadeImage = ({ uri, style, placeholderColor = "#1a1a2e" }) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  return (
+    <View style={[style, { backgroundColor: placeholderColor, overflow: "hidden" }]}>
+      <Animated.Image
+        source={{ uri }}
+        style={[StyleSheet.absoluteFill, { opacity }]}
+        resizeMode="cover"
+        onLoad={() =>
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 280,
+            useNativeDriver: true,
+          }).start()
+        }
+      />
+    </View>
+  );
+};
 const EMERALD_PALE = "#D1FAE5";
 const EMERALD_DARK = "#059669";
 const PAGE_BG = "#F8FAF9";
@@ -232,11 +251,11 @@ export default function TurfDetailScreen({ navigation, route }) {
     fetchTurfDetails();
   }, [fetchTurfDetails]);
 
-  // Format location
+  // Format location — area first, then address/city for context
   const formatLocation = (location) => {
     if (!location) return "Location not specified";
     if (typeof location === "string") return location;
-    const parts = [location.address, location.city, location.state].filter(Boolean);
+    const parts = [location.area, location.address, location.city, location.state].filter(Boolean);
     return parts.join(", ") || "Location not specified";
   };
 
@@ -356,7 +375,7 @@ export default function TurfDetailScreen({ navigation, route }) {
               setCurrentImageIndex(index);
             }}
             renderItem={({ item }) => (
-              <Image source={{ uri: item }} style={styles.galleryImage} />
+              <FadeImage uri={item} style={styles.galleryImage} />
             )}
             keyExtractor={(item, index) => index.toString()}
           />
@@ -404,8 +423,8 @@ export default function TurfDetailScreen({ navigation, route }) {
           </Text>
           <View style={styles.locationRow}>
             <MaterialCommunityIcons name="map-marker" size={16} color="#666" />
-            <Text variant="bodyMedium" style={styles.locationText}>
-              {formatLocation(turf?.location)}
+            <Text variant="bodyMedium" style={styles.locationText} numberOfLines={1}>
+              {turf?.location?.area || formatLocation(turf?.location)}
             </Text>
           </View>
         </View>
@@ -891,7 +910,6 @@ const styles = StyleSheet.create({
   galleryImage: {
     width: SCREEN_WIDTH,
     height: IMAGE_HEIGHT,
-    resizeMode: "cover",
   },
   placeholderImage: {
     backgroundColor: "#f5f5f5",

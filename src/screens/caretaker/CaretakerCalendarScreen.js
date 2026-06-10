@@ -4,11 +4,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
   Linking,
   Alert,
+  Modal,
   RefreshControl,
+  TextInput as RNTextInput,
 } from "react-native";
-import { Text, Surface, Button, Banner } from "react-native-paper";
+import { Text, Surface, Button, Banner, RadioButton } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
@@ -42,6 +46,15 @@ export default function CaretakerCalendarScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [extensionModalVisible, setExtensionModalVisible] = useState(false);
   const [selectedBookingForExtension, setSelectedBookingForExtension] = useState(null);
+
+  // Complete dialog state
+  const [completeDialogVisible, setCompleteDialogVisible] = useState(false);
+  const [completionTarget, setCompletionTarget] = useState(null);
+  const [completionPaymentMethod, setCompletionPaymentMethod] = useState("cash");
+  const [splitCashAmount, setSplitCashAmount] = useState("");
+  const [splitOnlineAmount, setSplitOnlineAmount] = useState("");
+  const [completeLoading, setCompleteLoading] = useState(false);
+
   const today = new Date();
 
   const formatDate = (date) => {
@@ -217,6 +230,79 @@ export default function CaretakerCalendarScreen({ navigation }) {
     );
   };
 
+  // Compute remaining amount due for a booking
+  const getRemainingDue = (booking) => {
+    const advancePaid = booking.payment?.advance?.status === "verified"
+      ? (parseFloat(booking.payment?.advanceAmount) || 0)
+      : 0;
+    const total = parseFloat(booking.totalAmount || booking.payment?.slotAmount || 0);
+    const remainingAmount = booking.payment?.remainingAmount;
+    const remainingPaid = booking.payment?.remainingPaid;
+
+    if (remainingPaid) return 0;
+    if (remainingAmount != null) return Math.max(parseFloat(remainingAmount) || 0, 0);
+    return Math.max(total - advancePaid, 0);
+  };
+
+  const openCompleteDialog = (booking) => {
+    setCompletionTarget(booking);
+    setCompletionPaymentMethod("cash");
+    setSplitCashAmount("");
+    setSplitOnlineAmount("");
+    setCompleteDialogVisible(true);
+  };
+
+  const handleCompleteConfirmed = async () => {
+    if (!completionTarget) return;
+
+    const due = getRemainingDue(completionTarget);
+
+    if (due > 0 && completionPaymentMethod === "split") {
+      const cash = parseFloat(splitCashAmount) || 0;
+      const online = parseFloat(splitOnlineAmount) || 0;
+      if (cash <= 0 || online <= 0) {
+        Alert.alert("Enter split amounts", "Both cash and online amounts must be greater than 0.");
+        return;
+      }
+      if (Math.abs(cash + online - due) > 1) {
+        Alert.alert("Amount mismatch", `Cash + Online must equal ₹${due}. You entered ₹${cash + online}.`);
+        return;
+      }
+    }
+
+    setCompleteLoading(true);
+    try {
+      const updates = {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        completedBy: user?.userId,
+        completedByRole: "caretaker",
+      };
+
+      if (due > 0) {
+        updates["payment.remainingPaymentMethod"] = completionPaymentMethod;
+        updates["payment.remainingPaid"] = true;
+        updates["payment.remainingAmount"] = 0;
+        updates["payment.remainingCollectedBy"] = user?.userId;
+        updates["payment.remainingCollectedAt"] = new Date().toISOString();
+        if (completionPaymentMethod === "split") {
+          updates["payment.splitCashAmount"] = parseFloat(splitCashAmount) || 0;
+          updates["payment.splitOnlineAmount"] = parseFloat(splitOnlineAmount) || 0;
+        }
+      }
+
+      await updateDocument("bookings", completionTarget.id, updates);
+      setCompleteDialogVisible(false);
+      fetchBookings(selectedDate);
+    } catch (error) {
+      console.error("Error completing booking:", error);
+      Alert.alert("Error", "Failed to mark booking as completed. Please try again.");
+    } finally {
+      setCompleteLoading(false);
+      setCompletionTarget(null);
+    }
+  };
+
   const handleExtendTime = (booking) => {
     setSelectedBookingForExtension(booking);
     setExtensionModalVisible(true);
@@ -365,6 +451,19 @@ export default function CaretakerCalendarScreen({ navigation }) {
                   Extend
                 </Button>
               </>
+            )}
+            {/* Mark Complete — today only */}
+            {showActions && (
+              <Button
+                mode="contained"
+                icon="check-all"
+                onPress={() => openCompleteDialog(booking)}
+                style={[styles.actionButton, { backgroundColor: SUCCESS_GREEN }]}
+                compact
+                labelStyle={{ fontFamily: "Ubuntu-Medium", fontSize: 12, color: "#fff" }}
+              >
+                Complete
+              </Button>
             )}
             {/* Cancel — today and tomorrow */}
             {(booking.status === "confirmed" || booking.status === "pending") && (
@@ -569,6 +668,140 @@ export default function CaretakerCalendarScreen({ navigation }) {
         )}
         <View style={{ height: 16 }} />
       </ScrollView>
+
+      {/* Mark as Completed — native Modal so KeyboardAvoidingView works */}
+      <Modal
+        visible={completeDialogVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => !completeLoading && setCompleteDialogVisible(false)}
+      >
+        <View style={styles.cmOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => !completeLoading && setCompleteDialogVisible(false)}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.cmKAV}
+          >
+            <View style={styles.cmCard}>
+              <Text style={styles.cmTitle}>Mark Booking as Completed</Text>
+
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.cmBody}
+              >
+                {/* Booking summary */}
+                {completionTarget && (
+                  <View style={styles.completeSummary}>
+                    <Text style={styles.completeSummaryName} numberOfLines={1}>
+                      {completionTarget.userName || "Guest"}
+                    </Text>
+                    <Text style={styles.completeSummaryMeta}>
+                      {completionTarget.startTime} – {completionTarget.endTime}
+                    </Text>
+                    <Text style={styles.completeSummaryAmount}>
+                      ₹{completionTarget.totalAmount || completionTarget.payment?.slotAmount || 0} total
+                    </Text>
+                  </View>
+                )}
+
+                {/* Payment method */}
+                {completionTarget && getRemainingDue(completionTarget) > 0 ? (
+                  <>
+                    <View style={styles.remainingDueBanner}>
+                      <MaterialCommunityIcons name="cash-clock" size={16} color="#D97706" />
+                      <Text style={styles.remainingDueText}>
+                        Remaining ₹{getRemainingDue(completionTarget)} — how was this collected?
+                      </Text>
+                    </View>
+                    <RadioButton.Group
+                      onValueChange={setCompletionPaymentMethod}
+                      value={completionPaymentMethod}
+                    >
+                      <TouchableOpacity style={styles.radioRow} onPress={() => setCompletionPaymentMethod("cash")}>
+                        <RadioButton value="cash" color={CARETAKER_ORANGE} />
+                        <MaterialCommunityIcons name="cash" size={18} color="#374151" style={{ marginRight: 6 }} />
+                        <Text style={styles.radioLabel}>Cash</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.radioRow} onPress={() => setCompletionPaymentMethod("online")}>
+                        <RadioButton value="online" color={CARETAKER_ORANGE} />
+                        <MaterialCommunityIcons name="cellphone" size={18} color="#374151" style={{ marginRight: 6 }} />
+                        <Text style={styles.radioLabel}>Online (UPI / GPay / PhonePe)</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.radioRow} onPress={() => setCompletionPaymentMethod("split")}>
+                        <RadioButton value="split" color={CARETAKER_ORANGE} />
+                        <MaterialCommunityIcons name="swap-horizontal" size={18} color="#374151" style={{ marginRight: 6 }} />
+                        <Text style={styles.radioLabel}>Split (Cash + Online)</Text>
+                      </TouchableOpacity>
+                    </RadioButton.Group>
+
+                    {/* Split amount inputs */}
+                    {completionPaymentMethod === "split" && (
+                      <View style={styles.splitInputRow}>
+                        <View style={styles.splitInputWrap}>
+                          <Text style={styles.splitInputLabel}>Cash (₹)</Text>
+                          <RNTextInput
+                            style={styles.splitInput}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            value={splitCashAmount}
+                            onChangeText={setSplitCashAmount}
+                            returnKeyType="next"
+                          />
+                        </View>
+                        <MaterialCommunityIcons name="plus" size={18} color="#9CA3AF" style={{ marginTop: 22 }} />
+                        <View style={styles.splitInputWrap}>
+                          <Text style={styles.splitInputLabel}>Online (₹)</Text>
+                          <RNTextInput
+                            style={styles.splitInput}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            value={splitOnlineAmount}
+                            onChangeText={setSplitOnlineAmount}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  </>
+                ) : completionTarget ? (
+                  <View style={styles.alreadyPaidBanner}>
+                    <MaterialCommunityIcons name="check-circle-outline" size={16} color="#16A34A" />
+                    <Text style={styles.alreadyPaidText}>Full payment already collected.</Text>
+                  </View>
+                ) : null}
+
+                {/* Warning */}
+                <View style={styles.completeWarning}>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={15} color="#6B7280" />
+                  <Text style={styles.completeWarningText}>
+                    This action cannot be undone. The booking will be permanently marked as completed.
+                  </Text>
+                </View>
+              </ScrollView>
+
+              {/* Actions — always visible above keyboard */}
+              <View style={styles.cmActions}>
+                <Button onPress={() => setCompleteDialogVisible(false)} disabled={completeLoading}>
+                  Cancel
+                </Button>
+                <Button
+                  onPress={handleCompleteConfirmed}
+                  textColor={CARETAKER_ORANGE}
+                  loading={completeLoading}
+                  disabled={completeLoading}
+                >
+                  Confirm Complete
+                </Button>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
 
       {/* Extension Modal */}
       <ExtensionModal
@@ -810,5 +1043,152 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#9CA3AF",
     textAlign: "center",
+  },
+
+  // Complete dialog
+  completeSummary: {
+    backgroundColor: PALE_ORANGE,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    gap: 2,
+  },
+  completeSummaryName: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 14,
+    color: NAVY_ORANGE,
+  },
+  completeSummaryMeta: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  completeSummaryAmount: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 13,
+    color: CARETAKER_ORANGE,
+    marginTop: 2,
+  },
+  remainingDueBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  remainingDueText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Ubuntu-Medium",
+    color: "#92400E",
+  },
+  alreadyPaidBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F0FDF4",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  alreadyPaidText: {
+    fontSize: 13,
+    fontFamily: "Ubuntu-Medium",
+    color: "#166534",
+  },
+  radioRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  radioLabel: {
+    fontFamily: "Ubuntu-Regular",
+    fontSize: 14,
+    color: "#374151",
+  },
+  completeWarning: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 12,
+  },
+  completeWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Ubuntu-Regular",
+    color: "#9CA3AF",
+    lineHeight: 17,
+  },
+  splitInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  splitInputWrap: { flex: 1 },
+  splitInputLabel: {
+    fontSize: 11,
+    fontFamily: "Ubuntu-Medium",
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  splitInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    fontFamily: "Ubuntu-Regular",
+    color: "#111827",
+    backgroundColor: "#F9FAFB",
+  },
+
+  // Complete modal (native Modal replaces Portal/Dialog for keyboard support)
+  cmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  cmKAV: {
+    width: "100%",
+  },
+  cmCard: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "85%",
+  },
+  cmTitle: {
+    fontFamily: "Ubuntu-Bold",
+    fontSize: 17,
+    color: NAVY_ORANGE,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 4,
+  },
+  cmBody: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  cmActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    gap: 4,
   },
 });

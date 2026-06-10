@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
-  Linking,
   Image,
 } from "react-native";
 import {
@@ -36,7 +35,8 @@ const SETTINGS_SECTIONS = [
       { id: "advancePayment", icon: "cash-clock", label: "Advance Payment", color: "#FF5722" },
       { id: "holidaySchedule", icon: "calendar-star", label: "Holiday Schedule", color: "#10B981" },
       { id: "caretakers", icon: "account-group", label: "Caretakers", color: "#9C27B0" },
-      { id: "coupons", icon: "tag-multiple-outline", label: "Offers & Coupons", color: "#10B981" },
+      { id: "coupons",              icon: "tag-multiple-outline", label: "Offers & Coupons",      color: "#10B981"  },
+      { id: "maintenanceReports",  icon: "wrench-clock",         label: "Maintenance Reports",   color: "#F97316"  },
     ],
   },
   {
@@ -188,84 +188,6 @@ const AboutModal = ({ visible, onDismiss }) => (
 );
 
 // ──────────────────────────────────────────────
-// Help & Support Modal
-// ──────────────────────────────────────────────
-const HelpSupportModal = ({ visible, onDismiss }) => {
-  const helpItems = [
-    { icon: "email-outline", label: "Email Support", value: "support@playgrid.com", action: () => Linking.openURL("mailto:support@playgrid.com") },
-    { icon: "frequently-asked-questions", label: "FAQs", value: "View common questions", action: null },
-  ];
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
-      <View style={styles.modalOverlay}>
-        <Surface style={styles.helpDialog} elevation={8}>
-          <View style={styles.editHeader}>
-            <Text variant="titleLarge" style={styles.editTitle}>
-              Help & Support
-            </Text>
-            <IconButton icon="close" size={24} onPress={onDismiss} />
-          </View>
-
-          <View style={styles.helpSection}>
-            <Text variant="titleSmall" style={styles.helpSectionTitle}>
-              Contact Us
-            </Text>
-            {helpItems.map((item) => (
-              <TouchableOpacity
-                key={item.label}
-                style={styles.helpItem}
-                onPress={item.action}
-                disabled={!item.action}
-              >
-                <MaterialCommunityIcons name={item.icon} size={22} color={MANAGER_ACCENT} />
-                <View style={styles.helpItemContent}>
-                  <Text variant="bodyMedium" style={styles.helpItemLabel}>
-                    {item.label}
-                  </Text>
-                  <Text variant="bodySmall" style={styles.helpItemValue}>
-                    {item.value}
-                  </Text>
-                </View>
-                {item.action && (
-                  <MaterialCommunityIcons name="chevron-right" size={20} color="#ccc" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Divider style={{ marginVertical: 12 }} />
-
-          <View style={styles.helpSection}>
-            <Text variant="titleSmall" style={styles.helpSectionTitle}>
-              Common Topics
-            </Text>
-            {[
-              "How do I manage bookings?",
-              "How do I assign caretakers?",
-              "How do I update pricing?",
-              "How do I contact support?",
-            ].map((q) => (
-              <View key={q} style={styles.faqItem}>
-                <MaterialCommunityIcons name="chevron-right" size={16} color="#999" />
-                <Text variant="bodyMedium" style={styles.faqText}>
-                  {q}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={{ height: 16 }} />
-          <Button mode="contained" buttonColor={MANAGER_ACCENT} onPress={onDismiss} style={{ borderRadius: 8 }}>
-            Close
-          </Button>
-        </Surface>
-      </View>
-    </Modal>
-  );
-};
-
-// ──────────────────────────────────────────────
 // Main Screen
 // ──────────────────────────────────────────────
 export default function SettingsScreen() {
@@ -277,7 +199,6 @@ export default function SettingsScreen() {
 
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
 
   const userId = user?.id || user?.userId || user?.uid;
 
@@ -310,8 +231,11 @@ export default function SettingsScreen() {
       case "notifications":
         navigation.navigate("Notifications");
         break;
+      case "maintenanceReports":
+        navigation.navigate("MaintenanceReports");
+        break;
       case "help":
-        setShowHelp(true);
+        navigation.navigate("BusinessSupport");
         break;
       case "about":
         setShowAbout(true);
@@ -427,10 +351,6 @@ export default function SettingsScreen() {
       <AboutModal
         visible={showAbout}
         onDismiss={() => setShowAbout(false)}
-      />
-      <HelpSupportModal
-        visible={showHelp}
-        onDismiss={() => setShowHelp(false)}
       />
     </SafeAreaView>
   );
@@ -695,46 +615,4 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  // ─── Help Modal ───
-  helpDialog: {
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    padding: 20,
-    maxHeight: "80%",
-  },
-  helpSection: {
-    marginBottom: 4,
-  },
-  helpSectionTitle: {
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  helpItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 12,
-  },
-  helpItemContent: {
-    flex: 1,
-  },
-  helpItemLabel: {
-    color: "#333",
-    fontWeight: "500",
-  },
-  helpItemValue: {
-    color: "#999",
-    marginTop: 2,
-  },
-  faqItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    gap: 8,
-  },
-  faqText: {
-    color: "#555",
-    flex: 1,
-  },
 });

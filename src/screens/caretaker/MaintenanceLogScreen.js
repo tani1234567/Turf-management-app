@@ -9,20 +9,19 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  TextInput as RNTextInput,
 } from "react-native";
 import {
   Text,
   Surface,
   TextInput,
   Button,
-  Chip,
-  Divider,
-  SegmentedButtons,
   Menu,
   ActivityIndicator,
   IconButton,
-  Card,
-  Badge,
+  Portal,
+  Dialog,
+  RadioButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -34,195 +33,165 @@ import {
 } from "../../store/slices/authSlice";
 import {
   addDocument,
-  queryDocuments,
   getDocument,
   subscribeToCollection,
+  updateDocument,
 } from "../../services/firebase/firestore";
 
-const CARETAKER_COLOR = "#FF9800";
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CARETAKER_ORANGE = "#F97316";
+const PALE_ORANGE      = "#FFF7ED";
+const NAVY_ORANGE      = "#7C2D12";
+const SUCCESS_GREEN    = "#22C55E";
+const DANGER_RED       = "#EF4444";
 
 const ISSUE_TYPES = [
-  { id: "lighting", label: "Lighting", icon: "lightbulb-outline", color: "#FFC107" },
-  { id: "ground_condition", label: "Ground Condition", icon: "grass", color: "#4CAF50" },
-  { id: "equipment", label: "Equipment", icon: "tools", color: "#2196F3" },
-  { id: "safety", label: "Safety", icon: "shield-alert-outline", color: "#F44336" },
-  { id: "other", label: "Other", icon: "help-circle-outline", color: "#9E9E9E" },
+  { id: "lighting",         label: "Lighting",         icon: "lightbulb-outline",    color: "#F59E0B" },
+  { id: "ground_condition", label: "Ground Condition",  icon: "grass",                color: "#4CAF50" },
+  { id: "equipment",        label: "Equipment",         icon: "tools",                color: "#2196F3" },
+  { id: "safety",           label: "Safety",            icon: "shield-alert-outline", color: "#F44336" },
+  { id: "other",            label: "Other",             icon: "help-circle-outline",  color: "#9E9E9E" },
 ];
 
 const PRIORITY_LEVELS = [
-  { value: "low", label: "Low", color: "#4CAF50", icon: "arrow-down" },
-  { value: "medium", label: "Medium", color: "#FF9800", icon: "minus" },
-  { value: "high", label: "High", color: "#F44336", icon: "arrow-up" },
+  { value: "low",    label: "Low",    color: "#4CAF50", icon: "arrow-down"    },
+  { value: "medium", label: "Medium", color: "#FF9800", icon: "minus"         },
+  { value: "high",   label: "High",   color: "#F44336", icon: "arrow-up-bold" },
 ];
 
 const STATUS_CONFIG = {
-  pending: { label: "Pending", color: "#FF9800", icon: "clock-outline" },
-  in_progress: { label: "In Progress", color: "#2196F3", icon: "progress-wrench" },
-  resolved: { label: "Resolved", color: "#4CAF50", icon: "check-circle" },
-  rejected: { label: "Rejected", color: "#F44336", icon: "close-circle" },
+  pending:     { label: "Pending",     color: "#F59E0B", bg: "#FFFBEB", icon: "clock-outline"   },
+  in_progress: { label: "In Progress", color: "#2196F3", bg: "#EFF6FF", icon: "progress-wrench" },
+  resolved:    { label: "Resolved",    color: "#4CAF50", bg: "#F0FDF4", icon: "check-circle"    },
+  rejected:    { label: "Rejected",    color: "#F44336", bg: "#FEF2F2", icon: "close-circle"    },
 };
 
+// Status updates the caretaker can initiate
+const CARETAKER_STATUS_OPTIONS = [
+  { value: "in_progress", label: "Mark as In Progress", icon: "progress-wrench", color: "#2196F3", desc: "I've started working on this issue" },
+  { value: "resolved",    label: "Mark as Resolved",    icon: "check-circle",    color: "#4CAF50", desc: "I've fixed this issue myself"     },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const formatDate = (ts) => {
+  if (!ts) return "N/A";
+  const d = ts?.toDate?.() || new Date(ts);
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+};
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function MaintenanceLogScreen({ navigation }) {
-  const user = useSelector(selectUser);
+  const user           = useSelector(selectUser);
   const assignedTurfId = useSelector(selectAssignedTurfId);
 
-  // View state
-  const [activeTab, setActiveTab] = useState("report"); // 'report' or 'my_reports'
+  const [activeTab, setActiveTab] = useState("report");
 
-  // Form state
-  const [selectedGround, setSelectedGround] = useState(null);
-  const [issueType, setIssueType] = useState(null);
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("medium");
-  const [photos, setPhotos] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
+  // ── Form state ──────────────────────────────────────────────────────────
+  const [selectedGround,   setSelectedGround]   = useState(null);
+  const [issueType,        setIssueType]        = useState(null);
+  const [description,      setDescription]      = useState("");
+  const [priority,         setPriority]         = useState("medium");
+  const [photos,           setPhotos]           = useState([]);
+  const [submitting,       setSubmitting]       = useState(false);
 
-  // Ground selection
-  const [grounds, setGrounds] = useState([]);
-  const [groundMenuVisible, setGroundMenuVisible] = useState(false);
-  const [loadingGrounds, setLoadingGrounds] = useState(true);
+  const [grounds,          setGrounds]          = useState([]);
+  const [groundMenuVisible,setGroundMenuVisible]= useState(false);
+  const [loadingGrounds,   setLoadingGrounds]   = useState(true);
 
-  // My reports state
-  const [myReports, setMyReports] = useState([]);
-  const [loadingReports, setLoadingReports] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  // ── My Reports state ────────────────────────────────────────────────────
+  const [myReports,        setMyReports]        = useState([]);
+  const [loadingReports,   setLoadingReports]   = useState(true);
+  const [refreshing,       setRefreshing]       = useState(false);
 
-  // Turf info
-  const [turfName, setTurfName] = useState("");
-  const [managerId, setManagerId] = useState(null);
+  // ── Status update dialog ────────────────────────────────────────────────
+  const [updateDialog,     setUpdateDialog]     = useState(null); // report object
+  const [updateStatus,     setUpdateStatus]     = useState("in_progress");
+  const [updateNotes,      setUpdateNotes]      = useState("");
+  const [updateLoading,    setUpdateLoading]    = useState(false);
 
-  // Fetch turf data and grounds
-  useEffect(() => {
-    const fetchTurfData = async () => {
-      const turfId = assignedTurfId || user?.assignedTurfId;
-      if (!turfId) {
-        setLoadingGrounds(false);
-        return;
-      }
+  // ── Detail expand ───────────────────────────────────────────────────────
+  const [expandedId,       setExpandedId]       = useState(null);
 
-      try {
-        const turf = await getDocument("turfs", turfId);
-        if (turf) {
-          setTurfName(turf.name || "Unknown Turf");
-          setGrounds(turf.grounds || []);
-          // Get manager ID for notification
-          if (turf.managerIds && turf.managerIds.length > 0) {
-            setManagerId(turf.managerIds[0]);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching turf data:", error);
-      } finally {
-        setLoadingGrounds(false);
-      }
-    };
+  // ── Turf info ───────────────────────────────────────────────────────────
+  const [turfName,         setTurfName]         = useState("");
+  const [managerId,        setManagerId]        = useState(null);
 
-    fetchTurfData();
-  }, [assignedTurfId, user?.assignedTurfId]);
-
-  // Subscribe to my reports
+  // ── Fetch turf data ─────────────────────────────────────────────────────
   useEffect(() => {
     const turfId = assignedTurfId || user?.assignedTurfId;
+    if (!turfId) { setLoadingGrounds(false); return; }
+
+    getDocument("turfs", turfId)
+      .then((turf) => {
+        if (turf) {
+          setTurfName(turf.name || "");
+          setGrounds(turf.grounds || []);
+          if (turf.managerIds?.length > 0) setManagerId(turf.managerIds[0]);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoadingGrounds(false));
+  }, [assignedTurfId, user?.assignedTurfId]);
+
+  // ── Subscribe to my reports ─────────────────────────────────────────────
+  useEffect(() => {
+    const turfId      = assignedTurfId || user?.assignedTurfId;
     const caretakerId = user?.userId || user?.uid;
+    if (!turfId || !caretakerId) { setLoadingReports(false); return; }
 
-    if (!turfId || !caretakerId) {
-      setLoadingReports(false);
-      return;
-    }
-
-    const unsubscribe = subscribeToCollection(
+    const unsub = subscribeToCollection(
       "maintenance_logs",
       (logs) => {
-        // Sort by createdAt descending
-        const sortedLogs = logs.sort((a, b) => {
-          const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
-          const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
-          return dateB - dateA;
+        const sorted = [...logs].sort((a, b) => {
+          const da = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+          const db = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+          return db - da;
         });
-        setMyReports(sortedLogs);
+        setMyReports(sorted);
         setLoadingReports(false);
         setRefreshing(false);
       },
       [
-        { field: "turfId", operator: "==", value: turfId },
-        { field: "reportedBy", operator: "==", value: caretakerId },
+        { field: "turfId",      operator: "==", value: turfId      },
+        { field: "reportedBy",  operator: "==", value: caretakerId },
       ]
     );
 
-    return () => unsubscribe && unsubscribe();
+    return () => unsub?.();
   }, [assignedTurfId, user?.assignedTurfId, user?.userId, user?.uid]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    // The subscription will automatically update the data
-  }, []);
+  const onRefresh = useCallback(() => setRefreshing(true), []);
 
+  // ── Photo pickers ───────────────────────────────────────────────────────
   const pickImage = async () => {
-    if (photos.length >= 5) {
-      Alert.alert("Limit Reached", "You can only upload up to 5 photos.");
-      return;
-    }
-
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission Required", "Please allow access to your photo library.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      setPhotos([...photos, result.assets[0].uri]);
-    }
+    if (photos.length >= 5) { Alert.alert("Limit Reached", "You can only upload up to 5 photos."); return; }
+    const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!p.granted) { Alert.alert("Permission Required", "Please allow access to your photo library."); return; }
+    const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [4, 3], quality: 0.7 });
+    if (!r.canceled) setPhotos([...photos, r.assets[0].uri]);
   };
 
   const takePhoto = async () => {
-    if (photos.length >= 5) {
-      Alert.alert("Limit Reached", "You can only upload up to 5 photos.");
-      return;
-    }
-
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert("Permission Required", "Please allow access to your camera.");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      setPhotos([...photos, result.assets[0].uri]);
-    }
+    if (photos.length >= 5) { Alert.alert("Limit Reached", "You can only upload up to 5 photos."); return; }
+    const p = await ImagePicker.requestCameraPermissionsAsync();
+    if (!p.granted) { Alert.alert("Permission Required", "Please allow access to your camera."); return; }
+    const r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [4, 3], quality: 0.7 });
+    if (!r.canceled) setPhotos([...photos, r.assets[0].uri]);
   };
 
-  const removePhoto = (index) => {
-    setPhotos(photos.filter((_, i) => i !== index));
-  };
+  const removePhoto = (i) => setPhotos(photos.filter((_, idx) => idx !== i));
 
+  // ── Form validation & submit ────────────────────────────────────────────
   const validateForm = () => {
-    if (!selectedGround) {
-      Alert.alert("Required", "Please select a ground.");
-      return false;
-    }
-    if (!issueType) {
-      Alert.alert("Required", "Please select an issue type.");
-      return false;
-    }
-    if (!description.trim()) {
-      Alert.alert("Required", "Please provide a description of the issue.");
-      return false;
-    }
-    if (description.trim().length < 10) {
-      Alert.alert("Required", "Please provide a more detailed description (at least 10 characters).");
+    if (!selectedGround) { Alert.alert("Required", "Please select a ground."); return false; }
+    if (!issueType)      { Alert.alert("Required", "Please select an issue type."); return false; }
+    if (!description.trim() || description.trim().length < 10) {
+      Alert.alert("Required", "Please provide a description of at least 10 characters.");
       return false;
     }
     return true;
@@ -230,175 +199,164 @@ export default function MaintenanceLogScreen({ navigation }) {
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
-
     const turfId = assignedTurfId || user?.assignedTurfId;
-    if (!turfId) {
-      Alert.alert("Error", "No turf assigned. Please contact your manager.");
-      return;
-    }
+    if (!turfId) { Alert.alert("Error", "No turf assigned. Please contact your manager."); return; }
 
-    Alert.alert(
-      "Submit Report",
-      "Are you sure you want to submit this maintenance report?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Submit",
-          onPress: async () => {
-            setSubmitting(true);
+    Alert.alert("Submit Report", "Are you sure you want to submit this maintenance report?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Submit",
+        onPress: async () => {
+          setSubmitting(true);
+          try {
+            const issueInfo    = ISSUE_TYPES.find((t) => t.id === issueType);
+            const priorityInfo = PRIORITY_LEVELS.find((p) => p.value === priority);
 
-            try {
-              const issueTypeInfo = ISSUE_TYPES.find((t) => t.id === issueType);
-              const priorityInfo = PRIORITY_LEVELS.find((p) => p.value === priority);
+            const logId = await addDocument("maintenance_logs", {
+              turfId,
+              turfName,
+              groundId:       selectedGround.groundId || selectedGround.id,
+              groundName:     selectedGround.name,
+              issueType,
+              issueTypeLabel: issueInfo?.label || issueType,
+              description:    description.trim(),
+              priority,
+              priorityLabel:  priorityInfo?.label || priority,
+              photos,
+              status:         "pending",
+              reportedBy:     user?.userId || user?.uid,
+              reportedByName: user?.name || "Caretaker",
+              reportedByPhone:user?.phone || null,
+              resolvedBy:     null,
+              resolvedByName: null,
+              resolvedAt:     null,
+              resolutionNotes:null,
+            });
 
-              // Create maintenance log document
-              const maintenanceLogData = {
+            if (managerId) {
+              await addDocument("notifications", {
+                userId:      managerId,
+                type:        "maintenance_report",
+                title:       "New Maintenance Report",
+                body:        `${user?.name || "Caretaker"} reported a ${priorityInfo?.label || priority} priority ${issueInfo?.label || issueType} issue at ${selectedGround.name}.`,
+                relatedId:   logId,
+                relatedType: "maintenance_log",
                 turfId,
                 turfName,
-                groundId: selectedGround.groundId || selectedGround.id,
-                groundName: selectedGround.name,
-                issueType,
-                issueTypeLabel: issueTypeInfo?.label || issueType,
-                description: description.trim(),
-                priority,
-                priorityLabel: priorityInfo?.label || priority,
-                photos: photos, // In production, these would be uploaded to storage first
-                status: "pending",
-                reportedBy: user?.userId || user?.uid,
-                reportedByName: user?.name || "Caretaker",
-                reportedByPhone: user?.phone || null,
-                resolvedBy: null,
-                resolvedByName: null,
-                resolvedAt: null,
-                resolutionNotes: null,
-              };
-
-              const logId = await addDocument("maintenance_logs", maintenanceLogData);
-
-              // Create notification for manager
-              if (managerId) {
-                await addDocument("notifications", {
-                  userId: managerId,
-                  type: "maintenance_report",
-                  title: "New Maintenance Report",
-                  body: `${user?.name || "Caretaker"} reported a ${priorityInfo?.label || priority} priority ${issueTypeInfo?.label || issueType} issue at ${selectedGround.name}.`,
-                  relatedId: logId,
-                  relatedType: "maintenance_log",
-                  turfId,
-                  turfName,
-                  isRead: false,
-                });
-              }
-
-              // Reset form
-              setSelectedGround(null);
-              setIssueType(null);
-              setDescription("");
-              setPriority("medium");
-              setPhotos([]);
-
-              Alert.alert(
-                "Report Submitted",
-                "Your maintenance report has been submitted successfully. The manager will be notified.",
-                [
-                  {
-                    text: "View My Reports",
-                    onPress: () => setActiveTab("my_reports"),
-                  },
-                  { text: "OK" },
-                ]
-              );
-            } catch (error) {
-              console.error("Error submitting maintenance report:", error);
-              Alert.alert("Error", "Failed to submit report. Please try again.");
-            } finally {
-              setSubmitting(false);
+                isRead:      false,
+              });
             }
-          },
+
+            setSelectedGround(null);
+            setIssueType(null);
+            setDescription("");
+            setPriority("medium");
+            setPhotos([]);
+
+            Alert.alert(
+              "Report Submitted",
+              "Your maintenance report has been submitted. The manager will be notified.",
+              [
+                { text: "View My Reports", onPress: () => setActiveTab("my_reports") },
+                { text: "OK" },
+              ]
+            );
+          } catch (err) {
+            console.error("[MaintenanceLog] submit error:", err);
+            Alert.alert("Error", "Failed to submit report. Please try again.");
+          } finally {
+            setSubmitting(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return "N/A";
-    const date = timestamp?.toDate?.() || new Date(timestamp);
-    return date.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  // ── Status update ───────────────────────────────────────────────────────
+  const openUpdateDialog = (report) => {
+    const defaultStatus = report.status === "pending" ? "in_progress" : "resolved";
+    setUpdateStatus(defaultStatus);
+    setUpdateNotes("");
+    setUpdateDialog(report);
   };
 
+  const handleStatusUpdate = async () => {
+    if (!updateDialog) return;
+    setUpdateLoading(true);
+    try {
+      const userId = user?.userId || user?.uid;
+      const updates = { status: updateStatus };
+
+      if (updateStatus === "resolved") {
+        updates.resolvedBy     = userId;
+        updates.resolvedByName = user?.name || "Caretaker";
+        updates.resolvedAt     = new Date().toISOString();
+        updates.resolutionNotes = updateNotes.trim() || null;
+        updates.selfResolved   = true;
+      }
+      if (updateNotes.trim() && updateStatus === "in_progress") {
+        updates.caretakerNotes = updateNotes.trim();
+      }
+
+      await updateDocument("maintenance_logs", updateDialog.id, updates);
+      setUpdateDialog(null);
+    } catch (err) {
+      console.error("[MaintenanceLog] status update error:", err);
+      Alert.alert("Error", "Failed to update status. Please try again.");
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
+  // ── Render: Report Form ─────────────────────────────────────────────────
   const renderReportForm = () => (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Turf Info */}
-      <Surface style={styles.turfCard} elevation={1}>
-        <View style={styles.turfCardContent}>
-          <MaterialCommunityIcons name="soccer-field" size={28} color="#4CAF50" />
-          <View style={styles.turfInfo}>
-            <Text variant="bodySmall" style={styles.turfLabel}>
-              Reporting for
-            </Text>
-            <Text variant="titleMedium" style={styles.turfNameText}>
-              {turfName || "Loading..."}
-            </Text>
-          </View>
+      {/* Turf banner */}
+      <Surface style={styles.turfBanner} elevation={1}>
+        <View style={styles.turfBannerIcon}>
+          <MaterialCommunityIcons name="soccer-field" size={22} color={SUCCESS_GREEN} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.turfBannerLabel}>Reporting for</Text>
+          <Text style={styles.turfBannerName}>{turfName || "Loading…"}</Text>
         </View>
       </Surface>
 
-      {/* Ground Selection */}
+      {/* Ground */}
       <Surface style={styles.section} elevation={1}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Select Ground *
-        </Text>
+        <Text style={styles.sectionTitle}>Select Ground *</Text>
         <Menu
           visible={groundMenuVisible}
           onDismiss={() => setGroundMenuVisible(false)}
           anchor={
             <TouchableOpacity
-              style={styles.dropdownButton}
+              style={styles.dropdownBtn}
               onPress={() => setGroundMenuVisible(true)}
             >
               <View style={styles.dropdownContent}>
-                <MaterialCommunityIcons
-                  name="soccer-field"
-                  size={20}
-                  color={selectedGround ? CARETAKER_COLOR : "#666"}
-                />
-                <Text
-                  variant="bodyLarge"
-                  style={[
-                    styles.dropdownText,
-                    !selectedGround && styles.dropdownPlaceholder,
-                  ]}
-                >
+                <MaterialCommunityIcons name="soccer-field" size={18} color={selectedGround ? CARETAKER_ORANGE : "#9CA3AF"} />
+                <Text style={[styles.dropdownText, !selectedGround && styles.dropdownPlaceholder]}>
                   {selectedGround?.name || "Select a ground"}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-down" size={24} color="#666" />
+              <MaterialCommunityIcons name="chevron-down" size={20} color="#9CA3AF" />
             </TouchableOpacity>
           }
         >
           {loadingGrounds ? (
-            <Menu.Item title="Loading..." disabled />
+            <Menu.Item title="Loading…" disabled />
           ) : grounds.length === 0 ? (
             <Menu.Item title="No grounds available" disabled />
           ) : (
-            grounds.map((ground) => (
+            grounds.map((g) => (
               <Menu.Item
-                key={ground.groundId || ground.id}
-                onPress={() => {
-                  setSelectedGround(ground);
-                  setGroundMenuVisible(false);
-                }}
-                title={ground.name}
+                key={g.groundId || g.id}
+                onPress={() => { setSelectedGround(g); setGroundMenuVisible(false); }}
+                title={g.name}
                 leadingIcon="soccer-field"
               />
             ))
@@ -406,41 +364,27 @@ export default function MaintenanceLogScreen({ navigation }) {
         </Menu>
       </Surface>
 
-      {/* Issue Type Selection */}
+      {/* Issue Type */}
       <Surface style={styles.section} elevation={1}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Issue Type *
-        </Text>
-        <View style={styles.issueTypesGrid}>
+        <Text style={styles.sectionTitle}>Issue Type *</Text>
+        <View style={styles.issueGrid}>
           {ISSUE_TYPES.map((type) => (
             <TouchableOpacity
               key={type.id}
               style={[
-                styles.issueTypeCard,
-                issueType === type.id && styles.issueTypeCardSelected,
-                issueType === type.id && { borderColor: type.color },
+                styles.issueCard,
+                issueType === type.id && { borderColor: type.color, backgroundColor: type.color + "10" },
               ]}
               onPress={() => setIssueType(type.id)}
             >
-              <View
-                style={[
-                  styles.issueTypeIconContainer,
-                  issueType === type.id && { backgroundColor: type.color + "20" },
-                ]}
-              >
+              <View style={[styles.issueIconWrap, { backgroundColor: (issueType === type.id ? type.color : "#9CA3AF") + "20" }]}>
                 <MaterialCommunityIcons
                   name={type.icon}
-                  size={24}
-                  color={issueType === type.id ? type.color : "#666"}
+                  size={22}
+                  color={issueType === type.id ? type.color : "#9CA3AF"}
                 />
               </View>
-              <Text
-                variant="bodySmall"
-                style={[
-                  styles.issueTypeLabel,
-                  issueType === type.id && { color: type.color, fontWeight: "600" },
-                ]}
-              >
+              <Text style={[styles.issueLabel, issueType === type.id && { color: type.color, fontFamily: "Ubuntu-Bold" }]}>
                 {type.label}
               </Text>
             </TouchableOpacity>
@@ -450,626 +394,602 @@ export default function MaintenanceLogScreen({ navigation }) {
 
       {/* Description */}
       <Surface style={styles.section} elevation={1}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Description *
-        </Text>
+        <Text style={styles.sectionTitle}>Description *</Text>
         <TextInput
           mode="outlined"
-          placeholder="Describe the issue in detail..."
+          placeholder="Describe the issue in detail…"
           value={description}
           onChangeText={setDescription}
           multiline
           numberOfLines={4}
-          style={styles.descriptionInput}
-          outlineColor="#E0E0E0"
-          activeOutlineColor={CARETAKER_COLOR}
+          style={styles.textArea}
+          outlineColor="#E5E7EB"
+          activeOutlineColor={CARETAKER_ORANGE}
         />
-        <Text variant="bodySmall" style={styles.charCount}>
-          {description.length} characters
-        </Text>
+        <Text style={styles.charHint}>{description.length} characters (min 10)</Text>
       </Surface>
 
-      {/* Priority Selection */}
+      {/* Priority */}
       <Surface style={styles.section} elevation={1}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Priority Level
-        </Text>
-        <View style={styles.priorityContainer}>
-          {PRIORITY_LEVELS.map((level) => (
+        <Text style={styles.sectionTitle}>Priority Level</Text>
+        <View style={styles.priorityRow}>
+          {PRIORITY_LEVELS.map((lv) => (
             <TouchableOpacity
-              key={level.value}
+              key={lv.value}
               style={[
-                styles.priorityButton,
-                priority === level.value && styles.priorityButtonSelected,
-                priority === level.value && { borderColor: level.color, backgroundColor: level.color + "15" },
+                styles.priorityBtn,
+                priority === lv.value && { borderColor: lv.color, backgroundColor: lv.color + "14" },
               ]}
-              onPress={() => setPriority(level.value)}
+              onPress={() => setPriority(lv.value)}
             >
-              <MaterialCommunityIcons
-                name={level.icon}
-                size={20}
-                color={priority === level.value ? level.color : "#666"}
-              />
-              <Text
-                variant="bodyMedium"
-                style={[
-                  styles.priorityLabel,
-                  priority === level.value && { color: level.color, fontWeight: "600" },
-                ]}
-              >
-                {level.label}
+              <MaterialCommunityIcons name={lv.icon} size={18} color={priority === lv.value ? lv.color : "#9CA3AF"} />
+              <Text style={[styles.priorityLabel, priority === lv.value && { color: lv.color, fontFamily: "Ubuntu-Bold" }]}>
+                {lv.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
       </Surface>
 
-      {/* Photo Upload */}
+      {/* Photos */}
       <Surface style={styles.section} elevation={1}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>
-          Photos ({photos.length}/5)
-        </Text>
-        <Text variant="bodySmall" style={styles.photoHint}>
-          Add photos to help illustrate the issue
-        </Text>
-
+        <Text style={styles.sectionTitle}>Photos ({photos.length}/5)</Text>
+        <Text style={styles.photoHint}>Add photos to illustrate the issue</Text>
         <View style={styles.photoGrid}>
-          {photos.map((uri, index) => (
-            <View key={index} style={styles.photoContainer}>
+          {photos.map((uri, i) => (
+            <View key={i} style={styles.photoWrap}>
               <Image source={{ uri }} style={styles.photoPreview} />
               <IconButton
                 icon="close-circle"
-                size={20}
-                style={styles.removePhotoButton}
-                iconColor="#F44336"
+                size={18}
+                style={styles.photoRemoveBtn}
+                iconColor={DANGER_RED}
                 containerColor="#fff"
-                onPress={() => removePhoto(index)}
+                onPress={() => removePhoto(i)}
               />
             </View>
           ))}
-
           {photos.length < 5 && (
-            <View style={styles.addPhotoButtons}>
-              <TouchableOpacity style={styles.addPhotoButton} onPress={pickImage}>
-                <MaterialCommunityIcons name="image-plus" size={28} color="#666" />
-                <Text variant="bodySmall" style={styles.addPhotoText}>
-                  Gallery
-                </Text>
+            <View style={styles.photoAddRow}>
+              <TouchableOpacity style={styles.photoAddBtn} onPress={pickImage}>
+                <MaterialCommunityIcons name="image-plus" size={26} color="#9CA3AF" />
+                <Text style={styles.photoAddText}>Gallery</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.addPhotoButton} onPress={takePhoto}>
-                <MaterialCommunityIcons name="camera-plus" size={28} color="#666" />
-                <Text variant="bodySmall" style={styles.addPhotoText}>
-                  Camera
-                </Text>
+              <TouchableOpacity style={styles.photoAddBtn} onPress={takePhoto}>
+                <MaterialCommunityIcons name="camera-plus" size={26} color="#9CA3AF" />
+                <Text style={styles.photoAddText}>Camera</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
       </Surface>
 
-      {/* Submit Button */}
-      <Button
-        mode="contained"
+      <TouchableOpacity
+        style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
         onPress={handleSubmit}
-        loading={submitting}
         disabled={submitting}
-        style={styles.submitButton}
-        buttonColor={CARETAKER_COLOR}
-        icon="send"
+        activeOpacity={0.85}
       >
-        Submit Report
-      </Button>
+        {submitting ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <MaterialCommunityIcons name="send" size={18} color="#fff" />
+            <Text style={styles.submitBtnText}>Submit Report</Text>
+          </>
+        )}
+      </TouchableOpacity>
     </ScrollView>
   );
 
+  // ── Render: My Reports ──────────────────────────────────────────────────
   const renderMyReports = () => (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={[CARETAKER_COLOR]}
-        />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[CARETAKER_ORANGE]} />
       }
     >
       {loadingReports ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={CARETAKER_COLOR} />
-          <Text variant="bodyMedium" style={styles.loadingText}>
-            Loading reports...
-          </Text>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={CARETAKER_ORANGE} />
+          <Text style={styles.loadingText}>Loading reports…</Text>
         </View>
       ) : myReports.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="clipboard-text-outline" size={64} color="#ccc" />
-          <Text variant="titleMedium" style={styles.emptyTitle}>
-            No Reports Yet
-          </Text>
-          <Text variant="bodyMedium" style={styles.emptyText}>
-            You haven't submitted any maintenance reports.
-          </Text>
-          <Button
-            mode="contained"
-            onPress={() => setActiveTab("report")}
-            style={styles.emptyButton}
-            buttonColor={CARETAKER_COLOR}
-          >
-            Report an Issue
-          </Button>
+        <View style={styles.center}>
+          <View style={styles.emptyCircle}>
+            <MaterialCommunityIcons name="clipboard-text-outline" size={36} color={CARETAKER_ORANGE} />
+          </View>
+          <Text style={styles.emptyTitle}>No Reports Yet</Text>
+          <Text style={styles.emptySub}>You haven't submitted any maintenance reports.</Text>
+          <TouchableOpacity style={styles.emptyBtn} onPress={() => setActiveTab("report")}>
+            <MaterialCommunityIcons name="plus" size={16} color="#fff" />
+            <Text style={styles.emptyBtnText}>Report an Issue</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         myReports.map((report) => {
-          const statusInfo = STATUS_CONFIG[report.status] || STATUS_CONFIG.pending;
-          const issueInfo = ISSUE_TYPES.find((t) => t.id === report.issueType);
+          const statusInfo   = STATUS_CONFIG[report.status] || STATUS_CONFIG.pending;
+          const issueInfo    = ISSUE_TYPES.find((t) => t.id === report.issueType);
           const priorityInfo = PRIORITY_LEVELS.find((p) => p.value === report.priority);
+          const isTerminal   = report.status === "resolved" || report.status === "rejected";
+          const isExpanded   = expandedId === report.id;
+          const canUpdate    = !isTerminal;
 
           return (
-            <Card key={report.id} style={styles.reportCard}>
-              <Card.Content>
-                {/* Header */}
-                <View style={styles.reportHeader}>
-                  <View style={styles.reportIssueType}>
-                    <View
-                      style={[
-                        styles.reportIssueIcon,
-                        { backgroundColor: (issueInfo?.color || "#666") + "20" },
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={issueInfo?.icon || "help-circle-outline"}
-                        size={20}
-                        color={issueInfo?.color || "#666"}
-                      />
-                    </View>
-                    <Text variant="titleSmall" style={styles.reportIssueLabel}>
-                      {report.issueTypeLabel || report.issueType}
-                    </Text>
-                  </View>
-                  <Chip
-                    icon={() => (
-                      <MaterialCommunityIcons
-                        name={statusInfo.icon}
-                        size={16}
-                        color={statusInfo.color}
-                      />
-                    )}
-                    style={[styles.statusChip, { backgroundColor: statusInfo.color + "15" }]}
-                    textStyle={{ color: statusInfo.color, fontSize: 12 }}
-                  >
-                    {statusInfo.label}
-                  </Chip>
-                </View>
+            <View key={report.id} style={styles.reportCard}>
+              {/* Status stripe */}
+              <View style={[styles.reportStripe, { backgroundColor: statusInfo.color }]} />
 
-                {/* Ground */}
-                <View style={styles.reportDetailRow}>
-                  <MaterialCommunityIcons name="soccer-field" size={16} color="#666" />
-                  <Text variant="bodyMedium" style={styles.reportDetailText}>
-                    {report.groundName}
-                  </Text>
-                </View>
-
-                {/* Description */}
-                <Text variant="bodyMedium" style={styles.reportDescription}>
-                  {report.description}
-                </Text>
-
-                {/* Photos */}
-                {report.photos && report.photos.length > 0 && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View style={styles.reportPhotosRow}>
-                      {report.photos.map((uri, index) => (
-                        <Image
-                          key={index}
-                          source={{ uri }}
-                          style={styles.reportPhoto}
-                        />
-                      ))}
-                    </View>
-                  </ScrollView>
-                )}
-
-                <Divider style={styles.reportDivider} />
-
-                {/* Footer */}
-                <View style={styles.reportFooter}>
-                  <View style={styles.reportFooterItem}>
+              <View style={styles.reportBody}>
+                {/* Top row */}
+                <TouchableOpacity
+                  style={styles.reportTop}
+                  onPress={() => setExpandedId(isExpanded ? null : report.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.reportIssueIcon, { backgroundColor: (issueInfo?.color || "#9E9E9E") + "18" }]}>
                     <MaterialCommunityIcons
-                      name={priorityInfo?.icon || "minus"}
-                      size={16}
-                      color={priorityInfo?.color || "#666"}
+                      name={issueInfo?.icon || "help-circle-outline"}
+                      size={20}
+                      color={issueInfo?.color || "#9E9E9E"}
                     />
-                    <Text
-                      variant="bodySmall"
-                      style={[styles.reportFooterText, { color: priorityInfo?.color || "#666" }]}
-                    >
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reportIssueName}>
+                      {report.issueTypeLabel || issueInfo?.label || report.issueType}
+                    </Text>
+                    <Text style={styles.reportGroundName}>{report.groundName}</Text>
+                  </View>
+                  <View style={{ alignItems: "flex-end", gap: 4 }}>
+                    <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
+                      <MaterialCommunityIcons name={statusInfo.icon} size={12} color={statusInfo.color} />
+                      <Text style={[styles.statusLabel, { color: statusInfo.color }]}>{statusInfo.label}</Text>
+                    </View>
+                    <MaterialCommunityIcons
+                      name={isExpanded ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color="#9CA3AF"
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Priority + Date row */}
+                <View style={styles.reportMeta}>
+                  <View style={[styles.priorityChip, { backgroundColor: (priorityInfo?.color || "#FF9800") + "15" }]}>
+                    <MaterialCommunityIcons name={priorityInfo?.icon || "minus"} size={12} color={priorityInfo?.color || "#FF9800"} />
+                    <Text style={[styles.priorityChipText, { color: priorityInfo?.color || "#FF9800" }]}>
                       {report.priorityLabel || report.priority} Priority
                     </Text>
                   </View>
-                  <View style={styles.reportFooterItem}>
-                    <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
-                    <Text variant="bodySmall" style={styles.reportFooterText}>
-                      {formatDate(report.createdAt)}
-                    </Text>
-                  </View>
+                  <Text style={styles.reportDate}>{formatDate(report.createdAt)}</Text>
                 </View>
 
-                {/* Resolution notes if resolved */}
-                {report.status === "resolved" && report.resolutionNotes && (
-                  <Surface style={styles.resolutionCard} elevation={0}>
-                    <Text variant="bodySmall" style={styles.resolutionLabel}>
-                      Resolution Notes:
-                    </Text>
-                    <Text variant="bodyMedium" style={styles.resolutionText}>
-                      {report.resolutionNotes}
-                    </Text>
-                    {report.resolvedByName && (
-                      <Text variant="bodySmall" style={styles.resolvedBy}>
-                        Resolved by {report.resolvedByName}
-                      </Text>
+                {/* Expanded content */}
+                {isExpanded && (
+                  <View style={styles.expandedContent}>
+                    {/* Description */}
+                    <Text style={styles.expandedDesc}>{report.description}</Text>
+
+                    {/* Photos */}
+                    {report.photos?.length > 0 && (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          {report.photos.map((uri, i) => (
+                            <Image key={i} source={{ uri }} style={styles.reportPhoto} />
+                          ))}
+                        </View>
+                      </ScrollView>
                     )}
-                  </Surface>
+
+                    {/* Resolution / rejection feedback from manager */}
+                    {report.status === "resolved" && (report.resolutionNotes || report.resolvedByName) && (
+                      <View style={styles.feedbackBox}>
+                        <View style={styles.feedbackHeader}>
+                          <MaterialCommunityIcons name="check-circle-outline" size={14} color="#059669" />
+                          <Text style={styles.feedbackHeaderText}>
+                            {report.selfResolved ? "Resolved by you" : `Resolved by ${report.resolvedByName}`}
+                          </Text>
+                        </View>
+                        {report.resolutionNotes ? (
+                          <Text style={styles.feedbackNote}>{report.resolutionNotes}</Text>
+                        ) : null}
+                      </View>
+                    )}
+
+                    {report.status === "rejected" && report.rejectionReason && (
+                      <View style={[styles.feedbackBox, { backgroundColor: "#FEF2F2" }]}>
+                        <View style={styles.feedbackHeader}>
+                          <MaterialCommunityIcons name="close-circle-outline" size={14} color="#DC2626" />
+                          <Text style={[styles.feedbackHeaderText, { color: "#DC2626" }]}>
+                            Rejected by {report.rejectedByName || "Manager"}
+                          </Text>
+                        </View>
+                        <Text style={styles.feedbackNote}>{report.rejectionReason}</Text>
+                      </View>
+                    )}
+
+                    {/* Caretaker notes */}
+                    {report.caretakerNotes && (
+                      <View style={[styles.feedbackBox, { backgroundColor: PALE_ORANGE }]}>
+                        <View style={styles.feedbackHeader}>
+                          <MaterialCommunityIcons name="note-outline" size={14} color={CARETAKER_ORANGE} />
+                          <Text style={[styles.feedbackHeaderText, { color: CARETAKER_ORANGE }]}>Your notes</Text>
+                        </View>
+                        <Text style={styles.feedbackNote}>{report.caretakerNotes}</Text>
+                      </View>
+                    )}
+                  </View>
                 )}
-              </Card.Content>
-            </Card>
+
+                {/* Update status button */}
+                {canUpdate && (
+                  <TouchableOpacity
+                    style={styles.updateBtn}
+                    onPress={() => openUpdateDialog(report)}
+                  >
+                    <MaterialCommunityIcons name="update" size={14} color={CARETAKER_ORANGE} />
+                    <Text style={styles.updateBtnText}>Update Status</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           );
         })
       )}
     </ScrollView>
   );
 
+  // ── Main render ──────────────────────────────────────────────────────────
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <IconButton icon="arrow-left" onPress={() => navigation.goBack()} />
-        <Text variant="titleLarge" style={styles.headerTitle}>
-          Maintenance Log
-        </Text>
-        <View style={{ width: 48 }} />
+        <IconButton
+          icon="arrow-left"
+          size={22}
+          onPress={() => navigation.goBack()}
+          style={styles.headerBack}
+          iconColor="#374151"
+        />
+        <Text style={styles.headerTitle}>Maintenance Log</Text>
+        <View style={{ width: 44 }} />
       </View>
 
-      {/* Tab Selector */}
-      <View style={styles.tabContainer}>
-        <SegmentedButtons
-          value={activeTab}
-          onValueChange={setActiveTab}
-          buttons={[
-            {
-              value: "report",
-              label: "Report Issue",
-              icon: "plus-circle-outline",
-            },
-            {
-              value: "my_reports",
-              label: "My Reports",
-              icon: "clipboard-list-outline",
-            },
-          ]}
-          style={styles.segmentedButtons}
-        />
+      {/* Tab bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "report" && styles.tabActive]}
+          onPress={() => setActiveTab("report")}
+        >
+          <MaterialCommunityIcons
+            name="plus-circle-outline"
+            size={16}
+            color={activeTab === "report" ? CARETAKER_ORANGE : "#9CA3AF"}
+          />
+          <Text style={[styles.tabLabel, activeTab === "report" && styles.tabLabelActive]}>Report Issue</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === "my_reports" && styles.tabActive]}
+          onPress={() => setActiveTab("my_reports")}
+        >
+          <MaterialCommunityIcons
+            name="clipboard-list-outline"
+            size={16}
+            color={activeTab === "my_reports" ? CARETAKER_ORANGE : "#9CA3AF"}
+          />
+          <Text style={[styles.tabLabel, activeTab === "my_reports" && styles.tabLabelActive]}>My Reports</Text>
+          {myReports.filter((r) => r.status === "pending").length > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>
+                {myReports.filter((r) => r.status === "pending").length}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.content}
+        style={{ flex: 1 }}
       >
         {activeTab === "report" ? renderReportForm() : renderMyReports()}
       </KeyboardAvoidingView>
+
+      {/* Status Update Dialog */}
+      <Portal>
+        <Dialog
+          visible={!!updateDialog}
+          onDismiss={() => !updateLoading && setUpdateDialog(null)}
+          style={{ borderRadius: 16 }}
+        >
+          <Dialog.Title style={{ fontFamily: "Ubuntu-Bold", color: NAVY_ORANGE }}>
+            Update Report Status
+          </Dialog.Title>
+          <Dialog.Content>
+            {updateDialog && (
+              <View style={styles.updateDialogChip}>
+                <MaterialCommunityIcons
+                  name={ISSUE_TYPES.find((t) => t.id === updateDialog.issueType)?.icon || "tools"}
+                  size={14}
+                  color={CARETAKER_ORANGE}
+                />
+                <Text style={styles.updateDialogChipText} numberOfLines={1}>
+                  {updateDialog.issueTypeLabel || updateDialog.issueType} — {updateDialog.groundName}
+                </Text>
+              </View>
+            )}
+
+            <Text style={styles.updateDialogFieldLabel}>New Status</Text>
+            <RadioButton.Group onValueChange={setUpdateStatus} value={updateStatus}>
+              {CARETAKER_STATUS_OPTIONS
+                .filter((opt) => {
+                  if (updateDialog?.status === "in_progress") return opt.value === "resolved";
+                  return true;
+                })
+                .map((opt) => (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={styles.updateRadioRow}
+                    onPress={() => setUpdateStatus(opt.value)}
+                  >
+                    <RadioButton value={opt.value} color={opt.color} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.updateRadioLabel, { color: opt.color }]}>{opt.label}</Text>
+                      <Text style={styles.updateRadioDesc}>{opt.desc}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              }
+            </RadioButton.Group>
+
+            <Text style={[styles.updateDialogFieldLabel, { marginTop: 14 }]}>
+              {updateStatus === "resolved" ? "Resolution notes (optional)" : "Notes (optional)"}
+            </Text>
+            <RNTextInput
+              style={styles.updateNotesInput}
+              placeholder={
+                updateStatus === "resolved"
+                  ? "Describe how you fixed the issue…"
+                  : "Add any notes for the manager…"
+              }
+              value={updateNotes}
+              onChangeText={setUpdateNotes}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+              placeholderTextColor="#9CA3AF"
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setUpdateDialog(null)} disabled={updateLoading}>Cancel</Button>
+            <Button
+              onPress={handleStatusUpdate}
+              loading={updateLoading}
+              disabled={updateLoading}
+              textColor={CARETAKER_ORANGE}
+            >
+              Update
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </SafeAreaView>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFBEB",
-  },
+  container: { flex: 1, backgroundColor: "#FFFBEB" },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingRight: 16,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "#F0F0F0",
+    paddingRight: 8,
   },
-  headerTitle: {
-    fontWeight: "bold",
-    color: "#333",
-  },
-  tabContainer: {
-    padding: 16,
-    backgroundColor: "#fff",
-  },
-  segmentedButtons: {
-    backgroundColor: "#FFFBEB",
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
-  turfCard: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    marginBottom: 16,
-  },
-  turfCardContent: {
+  headerBack:  { margin: 0 },
+  headerTitle: { fontFamily: "Ubuntu-Bold", fontSize: 17, color: "#111827" },
+
+  tabBar: {
     flexDirection: "row",
-    alignItems: "center",
-  },
-  turfInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  turfLabel: {
-    color: "#666",
-  },
-  turfNameText: {
-    fontWeight: "600",
-    color: "#333",
-  },
-  section: {
-    padding: 16,
-    borderRadius: 12,
     backgroundColor: "#fff",
-    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+    paddingHorizontal: 16,
   },
-  sectionTitle: {
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  dropdownButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
-    backgroundColor: "#FAFAFA",
-  },
-  dropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  dropdownText: {
-    marginLeft: 12,
-    color: "#333",
-  },
-  dropdownPlaceholder: {
-    color: "#999",
-  },
-  issueTypesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  issueTypeCard: {
-    width: "30%",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
-    alignItems: "center",
-    backgroundColor: "#FAFAFA",
-  },
-  issueTypeCardSelected: {
-    backgroundColor: "#fff",
-    borderWidth: 2,
-  },
-  issueTypeIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FFFBEB",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  issueTypeLabel: {
-    textAlign: "center",
-    color: "#666",
-    fontSize: 11,
-  },
-  descriptionInput: {
-    backgroundColor: "#fff",
-    minHeight: 100,
-  },
-  charCount: {
-    color: "#999",
-    textAlign: "right",
-    marginTop: 4,
-  },
-  priorityContainer: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  priorityButton: {
+  tab: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
-    backgroundColor: "#FAFAFA",
     gap: 6,
+    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
   },
-  priorityButtonSelected: {
-    borderWidth: 2,
+  tabActive:      { borderBottomColor: CARETAKER_ORANGE },
+  tabLabel:       { fontFamily: "Ubuntu-Medium", fontSize: 13, color: "#9CA3AF" },
+  tabLabelActive: { fontFamily: "Ubuntu-Bold", color: CARETAKER_ORANGE },
+  tabBadge: {
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: CARETAKER_ORANGE,
+    justifyContent: "center", alignItems: "center", paddingHorizontal: 4,
   },
-  priorityLabel: {
-    color: "#666",
+  tabBadgeText: { fontFamily: "Ubuntu-Bold", fontSize: 10, color: "#fff" },
+
+  scrollContent: { padding: 16, paddingBottom: 36, gap: 14 },
+
+  // Turf banner
+  turfBanner: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#fff", borderRadius: 14, padding: 14,
   },
-  photoHint: {
-    color: "#666",
-    marginBottom: 12,
+  turfBannerIcon: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: "#D1FAE5",
+    justifyContent: "center", alignItems: "center",
   },
-  photoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+  turfBannerLabel: { fontFamily: "Ubuntu-Regular", fontSize: 11, color: "#9CA3AF" },
+  turfBannerName:  { fontFamily: "Ubuntu-Bold",    fontSize: 15, color: "#111827" },
+
+  // Sections
+  section:      { backgroundColor: "#fff", borderRadius: 14, padding: 14 },
+  sectionTitle: { fontFamily: "Ubuntu-Bold", fontSize: 14, color: "#374151", marginBottom: 12 },
+
+  // Dropdown
+  dropdownBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    padding: 12, borderWidth: 1, borderColor: "#E5E7EB", borderRadius: 10, backgroundColor: "#F9FAFB",
   },
-  photoContainer: {
-    position: "relative",
+  dropdownContent:     { flexDirection: "row", alignItems: "center", gap: 10 },
+  dropdownText:        { fontFamily: "Ubuntu-Regular", fontSize: 14, color: "#111827" },
+  dropdownPlaceholder: { color: "#9CA3AF" },
+
+  // Issue grid
+  issueGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  issueCard: {
+    width: "30%", alignItems: "center", padding: 12,
+    borderRadius: 12, borderWidth: 2, borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
   },
-  photoPreview: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
+  issueIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    justifyContent: "center", alignItems: "center", marginBottom: 6,
   },
-  removePhotoButton: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-    margin: 0,
+  issueLabel: { fontFamily: "Ubuntu-Medium", fontSize: 11, color: "#9CA3AF", textAlign: "center" },
+
+  // Text area
+  textArea: { backgroundColor: "#fff", minHeight: 100 },
+  charHint: { fontFamily: "Ubuntu-Regular", fontSize: 11, color: "#9CA3AF", marginTop: 4, textAlign: "right" },
+
+  // Priority
+  priorityRow: { flexDirection: "row", gap: 10 },
+  priorityBtn: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, padding: 12, borderRadius: 10, borderWidth: 2, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB",
   },
-  addPhotoButtons: {
-    flexDirection: "row",
-    gap: 10,
+  priorityLabel: { fontFamily: "Ubuntu-Medium", fontSize: 13, color: "#9CA3AF" },
+
+  // Photos
+  photoHint:    { fontFamily: "Ubuntu-Regular", fontSize: 12, color: "#9CA3AF", marginBottom: 10 },
+  photoGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  photoWrap:    { position: "relative" },
+  photoPreview: { width: 78, height: 78, borderRadius: 10 },
+  photoRemoveBtn: { position: "absolute", top: -8, right: -8, margin: 0 },
+  photoAddRow: { flexDirection: "row", gap: 10 },
+  photoAddBtn: {
+    width: 78, height: 78, borderRadius: 10,
+    borderWidth: 2, borderColor: "#E5E7EB", borderStyle: "dashed",
+    justifyContent: "center", alignItems: "center", backgroundColor: "#F9FAFB",
   },
-  addPhotoButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
-    borderStyle: "dashed",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#FAFAFA",
+  photoAddText: { fontFamily: "Ubuntu-Regular", fontSize: 11, color: "#9CA3AF", marginTop: 4 },
+
+  // Submit
+  submitBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    backgroundColor: CARETAKER_ORANGE, borderRadius: 14,
+    paddingVertical: 15, gap: 8,
+    shadowColor: CARETAKER_ORANGE, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
   },
-  addPhotoText: {
-    color: "#666",
-    marginTop: 4,
+  submitBtnText: { fontFamily: "Ubuntu-Bold", fontSize: 15, color: "#fff" },
+
+  // States
+  center:      { flex: 1, justifyContent: "center", alignItems: "center", gap: 10, paddingTop: 60 },
+  loadingText: { fontFamily: "Ubuntu-Regular", fontSize: 14, color: "#9CA3AF" },
+  emptyCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: PALE_ORANGE, justifyContent: "center", alignItems: "center", marginBottom: 4,
   },
-  submitButton: {
-    marginTop: 8,
-    borderRadius: 8,
+  emptyTitle: { fontFamily: "Ubuntu-Bold", fontSize: 15, color: "#374151" },
+  emptySub:   { fontFamily: "Ubuntu-Regular", fontSize: 13, color: "#9CA3AF", textAlign: "center" },
+  emptyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginTop: 16, backgroundColor: CARETAKER_ORANGE,
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10,
   },
-  // My Reports styles
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 60,
-  },
-  loadingText: {
-    color: "#666",
-    marginTop: 12,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 60,
-  },
-  emptyTitle: {
-    fontWeight: "600",
-    color: "#333",
-    marginTop: 16,
-  },
-  emptyText: {
-    color: "#666",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  emptyButton: {
-    marginTop: 24,
-    borderRadius: 8,
-  },
+  emptyBtnText: { fontFamily: "Ubuntu-Bold", fontSize: 13, color: "#fff" },
+
+  // Report cards
   reportCard: {
-    marginBottom: 12,
-    borderRadius: 12,
-  },
-  reportHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  reportIssueType: {
-    flexDirection: "row",
-    alignItems: "center",
+  reportStripe: { width: 4 },
+  reportBody:   { flex: 1, padding: 12 },
+
+  reportTop: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 8 },
+  reportIssueIcon: { width: 38, height: 38, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  reportIssueName: { fontFamily: "Ubuntu-Bold", fontSize: 14, color: "#111827" },
+  reportGroundName:{ fontFamily: "Ubuntu-Regular", fontSize: 12, color: "#6B7280", marginTop: 2 },
+
+  statusBadge: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
   },
-  reportIssueIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
+  statusLabel: { fontFamily: "Ubuntu-Bold", fontSize: 11 },
+
+  reportMeta: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4,
   },
-  reportIssueLabel: {
-    marginLeft: 10,
-    fontWeight: "600",
-    color: "#333",
+  priorityChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
   },
-  statusChip: {
-    height: 28,
+  priorityChipText: { fontFamily: "Ubuntu-Medium", fontSize: 11 },
+  reportDate:       { fontFamily: "Ubuntu-Regular", fontSize: 11, color: "#9CA3AF" },
+
+  expandedContent: { marginTop: 8, borderTopWidth: 1, borderTopColor: "#F3F4F6", paddingTop: 10, gap: 8 },
+  expandedDesc:    { fontFamily: "Ubuntu-Regular", fontSize: 13, color: "#374151", lineHeight: 19 },
+  reportPhoto:     { width: 80, height: 80, borderRadius: 8 },
+
+  feedbackBox: {
+    backgroundColor: "#F0FDF4", borderRadius: 8, padding: 10, gap: 4,
   },
-  reportDetailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
+  feedbackHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  feedbackHeaderText: { fontFamily: "Ubuntu-Bold", fontSize: 12, color: "#059669" },
+  feedbackNote:       { fontFamily: "Ubuntu-Regular", fontSize: 12, color: "#374151", lineHeight: 18 },
+
+  updateBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginTop: 10, paddingHorizontal: 12, paddingVertical: 8,
+    backgroundColor: PALE_ORANGE, borderRadius: 8,
+    borderWidth: 1, borderColor: "#FED7AA",
+    alignSelf: "flex-start",
   },
-  reportDetailText: {
-    marginLeft: 8,
-    color: "#666",
+  updateBtnText: { fontFamily: "Ubuntu-Medium", fontSize: 12, color: CARETAKER_ORANGE },
+
+  // Update dialog
+  updateDialogChip: {
+    flexDirection: "row", alignItems: "center", gap: 7,
+    backgroundColor: PALE_ORANGE, borderRadius: 8,
+    padding: 10, marginBottom: 14,
   },
-  reportDescription: {
-    color: "#333",
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  reportPhotosRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  reportPhoto: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-  },
-  reportDivider: {
-    marginVertical: 12,
-  },
-  reportFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  reportFooterItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  reportFooterText: {
-    color: "#666",
-  },
-  resolutionCard: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: "#E8F5E9",
-    borderRadius: 8,
-  },
-  resolutionLabel: {
-    color: "#2E7D32",
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  resolutionText: {
-    color: "#333",
-  },
-  resolvedBy: {
-    color: "#666",
-    marginTop: 8,
-    fontStyle: "italic",
+  updateDialogChipText:  { fontFamily: "Ubuntu-Medium", fontSize: 13, color: NAVY_ORANGE, flex: 1 },
+  updateDialogFieldLabel:{ fontFamily: "Ubuntu-Medium", fontSize: 13, color: "#374151", marginBottom: 8 },
+  updateRadioRow: { flexDirection: "row", alignItems: "flex-start", paddingVertical: 6 },
+  updateRadioLabel: { fontFamily: "Ubuntu-Bold", fontSize: 13 },
+  updateRadioDesc:  { fontFamily: "Ubuntu-Regular", fontSize: 12, color: "#9CA3AF", marginTop: 1 },
+  updateNotesInput: {
+    borderWidth: 1, borderColor: "#D1D5DB", borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 14, fontFamily: "Ubuntu-Regular", color: "#111827",
+    backgroundColor: "#F9FAFB", minHeight: 80,
   },
 });

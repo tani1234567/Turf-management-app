@@ -39,9 +39,9 @@ exports.onBookingStatusChange = onDocumentUpdated("bookings/{bookingId}", async 
       userName,
     } = afterData;
 
-    // Booking approved → awaiting payment
+    // Booking approved → awaiting payment (handles both pending and pending_payment start states)
     if (
-      (beforeStatus === "pending" || beforeStatus === "approved") &&
+      ["pending", "pending_payment", "approved"].includes(beforeStatus) &&
       afterStatus === "awaiting_payment"
     ) {
       await sendNotification(userId, {
@@ -51,6 +51,20 @@ exports.onBookingStatusChange = onDocumentUpdated("bookings/{bookingId}", async 
         data: { bookingId },
       });
       console.log(`Sent booking_awaiting_payment notification to user ${userId}`);
+    }
+
+    // Direct confirmation by manager (cash/no-advance bookings: pending/pending_payment → confirmed)
+    if (
+      ["pending", "pending_payment", "approved"].includes(beforeStatus) &&
+      afterStatus === "confirmed"
+    ) {
+      await sendNotification(userId, {
+        type: "booking_confirmed",
+        title: "Booking Confirmed!",
+        body: `Your booking for ${turfName} has been confirmed.`,
+        data: { bookingId },
+      });
+      console.log(`Sent booking_confirmed notification to user ${userId}`);
     }
 
     // Payment verified (payment_submitted → confirmed)
@@ -157,8 +171,8 @@ exports.onBookingCreated = onDocumentCreated("bookings/{bookingId}", async (even
   const bookingId = event.params.bookingId;
   const bookingData = event.data.data();
 
-    // Only notify for pending bookings (direct bookings, not from negotiations)
-    if (bookingData.status !== "pending") {
+    // Notify for both "pending" and "pending_payment" (UPI advance before approval flow)
+    if (!["pending", "pending_payment"].includes(bookingData.status)) {
       return null;
     }
 

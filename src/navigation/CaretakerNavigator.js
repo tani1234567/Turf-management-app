@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -17,6 +17,9 @@ import CaretakerCreateBookingScreen from "../screens/caretaker/CaretakerCreateBo
 import MaintenanceLogScreen from "../screens/caretaker/MaintenanceLogScreen";
 import ExpenseTrackingScreen from "../screens/caretaker/ExpenseTrackingScreen";
 import NotificationsScreen from "../screens/common/NotificationsScreen";
+import BusinessSupportScreen from "../screens/shared/BusinessSupportScreen";
+import BusinessNewTicketScreen from "../screens/shared/BusinessNewTicketScreen";
+import BusinessTicketDetailScreen from "../screens/shared/BusinessTicketDetailScreen";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -24,7 +27,7 @@ const Tab = createBottomTabNavigator();
 // Tab Navigator Component
 function CaretakerTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
+  const tabBarHeight = Platform.OS === "ios" ? 60 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -137,6 +140,22 @@ export default function CaretakerNavigator() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="BusinessSupport"
+        component={BusinessSupportScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BusinessNewTicket"
+        component={BusinessNewTicketScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BusinessTicketDetail"
+        component={BusinessTicketDetailScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }
+

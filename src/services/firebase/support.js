@@ -146,7 +146,7 @@ export const subscribeToTicketMessages = (ticketId, callback) => {
  * The onTicketMessageCreated Cloud Function handles push notifications and
  * updates the parent ticket's updatedAt automatically.
  */
-export const sendTicketReply = async (ticketId, { userId, userName, text }) => {
+export const sendTicketReply = async (ticketId, { userId, userName, text, senderRole = null }) => {
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Message cannot be empty");
 
@@ -155,6 +155,7 @@ export const sendTicketReply = async (ticketId, { userId, userName, text }) => {
     senderType: "user",
     senderName: userName,
     senderEmail: null,
+    senderRole,
     text: trimmed,
     createdAt: serverTimestamp(),
   };
@@ -291,4 +292,73 @@ export const subscribeToDispute = (disputeId, callback) => {
     if (snap.exists()) callback({ id: snap.id, ...snap.data() });
     else callback(null);
   });
+};
+
+// ─── Business Support Tickets (manager / owner / caretaker) ─────────────────
+
+const BUSINESS_PRIORITY = { owner: "high", manager: "medium", caretaker: "low" };
+
+/**
+ * Create a support ticket from a business user (manager, owner, caretaker).
+ * Same collection as user tickets; discriminated by source: "business_mobile".
+ * The Cloud Functions (onTicketCreated, onTicketMessageCreated, onTicketStatusChanged)
+ * work without any changes — they are role-agnostic.
+ */
+export const createBusinessTicket = async ({
+  subject,
+  category,
+  description,
+  userId,
+  userName,
+  userPhone,
+  userEmail = null,
+  senderRole,
+  companyId = null,
+  companyName = null,
+}) => {
+  const priority = BUSINESS_PRIORITY[senderRole] || "medium";
+  const now = serverTimestamp();
+
+  const ticketData = {
+    subject: subject.trim(),
+    category,
+    priority,
+    status: "open",
+    userId,
+    userName,
+    userPhone,
+    userEmail,
+    relatedBookingId: null,
+    relatedCompanyId: companyId,
+    description: description.trim(),
+    source: "business_mobile",
+    senderRole,
+    companyId,
+    companyName,
+    ticketNumber: null,
+    assignedTo: null,
+    assignedToEmail: null,
+    resolvedAt: null,
+    resolvedBy: null,
+    closedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const ref = await addDoc(collection(db, "support_tickets"), ticketData);
+  return ref.id;
+};
+
+/**
+ * Fetch all business-side tickets for a given user (newest first).
+ */
+export const getMyBusinessTickets = async (userId) => {
+  const q = query(
+    collection(db, "support_tickets"),
+    where("userId", "==", userId),
+    where("source", "==", "business_mobile"),
+    orderBy("createdAt", "desc")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 };

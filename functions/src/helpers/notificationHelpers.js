@@ -3,7 +3,8 @@ const admin = require("firebase-admin");
 /**
  * Map notification type to the screen and related type for navigation
  */
-function getNotificationMeta(type, data) {
+function getNotificationMeta(type, data, userRole) {
+  const isBusinessUser = userRole && userRole !== "user" && userRole !== "admin";
   switch (type) {
     // Payment-related
     case "booking_awaiting_payment":
@@ -67,12 +68,12 @@ function getNotificationMeta(type, data) {
     case "subscription_reactivated":
       return { screen: "OwnerSettings", relatedType: "subscription" };
 
-    // Support tickets
+    // Support tickets — route to role-appropriate screen stored in the notification doc
     case "ticket_created":
-      return { screen: "Support", relatedType: "support_ticket" };
+      return { screen: isBusinessUser ? "BusinessSupport" : "Support", relatedType: "support_ticket" };
     case "ticket_reply":
     case "ticket_status_changed":
-      return { screen: "TicketDetail", relatedType: "support_ticket" };
+      return { screen: isBusinessUser ? "BusinessTicketDetail" : "TicketDetail", relatedType: "support_ticket" };
 
     // Disputes
     case "dispute_created":
@@ -104,7 +105,7 @@ async function sendNotification(userId, notification) {
 
   if (!userData) return;
 
-  const meta = getNotificationMeta(notification.type, notification.data);
+  const meta = getNotificationMeta(notification.type, notification.data, userData.role);
   const relatedId =
     notification.data?.ticketId ||
     notification.data?.disputeId ||
@@ -211,4 +212,18 @@ async function notifyCompanyOwners(companyId, notification) {
   }
 }
 
-module.exports = { sendNotification, notifyTurfManagers, notifyCompanyOwners };
+/**
+ * Send notification to all managers of a company (excluding caretakers and owners)
+ */
+async function notifyCompanyManagers(companyId, notification) {
+  const usersSnap = await admin.firestore().collection("users")
+    .where("companyId", "==", companyId)
+    .where("role", "==", "manager")
+    .get();
+
+  for (const userDoc of usersSnap.docs) {
+    await sendNotification(userDoc.id, notification);
+  }
+}
+
+module.exports = { sendNotification, notifyTurfManagers, notifyCompanyOwners, notifyCompanyManagers };

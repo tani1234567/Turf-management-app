@@ -18,7 +18,7 @@ const db = admin.firestore();
 const slotLockFunctions = require("./src/slotLockFunctions");
 const paymentFunctions = require("./src/paymentFunctions");
 const bookingNotificationFunctions = require("./src/bookingNotificationFunctions");
-const { sendNotification } = require("./src/helpers/notificationHelpers");
+const { sendNotification, notifyCompanyManagers } = require("./src/helpers/notificationHelpers");
 const academyFunctions = require("./src/academyFunctions");
 const subscriptionFunctions = require("./src/subscriptionFunctions");
 const userCleanupFunctions = require("./src/userCleanupFunctions");
@@ -38,6 +38,7 @@ exports.sendPaymentDeadlineReminders = paymentFunctions.sendPaymentDeadlineRemin
 
 // Booking & Turf Request Notification Functions
 exports.onBookingStatusChange = bookingNotificationFunctions.onBookingStatusChange;
+exports.onTurfRequestCreated = bookingNotificationFunctions.onTurfRequestCreated;
 exports.onTurfRequestChange = bookingNotificationFunctions.onTurfRequestChange;
 exports.onBookingCreated = bookingNotificationFunctions.onBookingCreated;
 exports.sendBookingReminders = bookingNotificationFunctions.sendBookingReminders;
@@ -391,15 +392,17 @@ exports.onMaintenanceLogStatusChange = onDocumentUpdated("maintenance_logs/{logI
         return null;
     }
 
-    // Notify the caretaker who reported the issue
-    await sendNotification(reportedBy, {
-      type: `maintenance_${afterStatus}`,
-      title: notificationTitle,
-      body: notificationBody,
-      data: { logId },
-    });
-
-    console.log(`Notification sent to caretaker ${reportedBy}`);
+    try {
+      await sendNotification(reportedBy, {
+        type: `maintenance_${afterStatus}`,
+        title: notificationTitle,
+        body: notificationBody,
+        data: { logId },
+      });
+      console.log(`Notification sent to caretaker ${reportedBy}`);
+    } catch (error) {
+      console.error(`[Maintenance] Error sending notification to ${reportedBy}:`, error.message);
+    }
     return { notified: reportedBy };
   });
 
@@ -457,13 +460,17 @@ exports.onNegotiationStatusChange = onDocumentUpdated("chats/{chatId}/messages/{
 
     if (!notifyUserId) return null;
 
-    await sendNotification(notifyUserId, {
-      type: `negotiation_${afterStatus}`,
-      title: notificationTitle,
-      body: notificationBody,
-      data: { chatId },
-    });
-
+    try {
+      await sendNotification(notifyUserId, {
+        type: `negotiation_${afterStatus}`,
+        title: notificationTitle,
+        body: notificationBody,
+        data: { chatId },
+      });
+      console.log(`[Negotiation] Sent ${afterStatus} notification to ${notifyUserId}`);
+    } catch (error) {
+      console.error(`[Negotiation] Error sending notification:`, error.message);
+    }
     return { notified: notifyUserId };
   });
 
@@ -480,6 +487,7 @@ exports.onNewChatMessage = onDocumentCreated("chats/{chatId}/messages/{messageId
     }
 
     const senderId = messageData.senderId;
+    const senderType = messageData.senderType; // "user" | "manager" | "caretaker" | "owner"
     if (!senderId) return null;
 
     // Get the chat doc to find the other participant
@@ -487,14 +495,12 @@ exports.onNewChatMessage = onDocumentCreated("chats/{chatId}/messages/{messageId
     if (!chatDoc.exists) return null;
 
     const chatData = chatDoc.data();
-    const participants = chatData.participants || [];
 
-    // Find the recipient (the other participant)
-    const recipientId = participants.find((id) => id !== senderId);
-    if (!recipientId) return null;
+    // participants is an object: { user: { userId }, company: { companyId } }
+    const userParticipantId = chatData.participants?.user?.userId;
+    const companyId = chatData.participants?.company?.companyId;
 
-    // Don't notify if sender == recipient
-    if (senderId === recipientId) return null;
+    if (!userParticipantId || !companyId) return null;
 
     const senderName = messageData.senderName || "Someone";
     const messageText = messageData.text || "Sent you a message";
@@ -502,12 +508,26 @@ exports.onNewChatMessage = onDocumentCreated("chats/{chatId}/messages/{messageId
       ? messageText.substring(0, 80) + "..."
       : messageText;
 
-    await sendNotification(recipientId, {
+    const notification = {
       type: "chat_message",
       title: `Message from ${senderName}`,
       body: truncatedText,
       data: { chatId },
-    });
+    };
+
+    try {
+      if (senderType === "user" || senderId === userParticipantId) {
+        // User sent message → notify all managers of the company
+        await notifyCompanyManagers(companyId, notification);
+        console.log(`[Chat] User message in ${chatId}, notified managers of company ${companyId}`);
+      } else {
+        // Manager/staff sent message → notify the user
+        await sendNotification(userParticipantId, notification);
+        console.log(`[Chat] Staff message in ${chatId}, notified user ${userParticipantId}`);
+      }
+    } catch (error) {
+      console.error(`[Chat] Error sending notification for message ${messageId}:`, error.message);
+    }
 
     return null;
   });

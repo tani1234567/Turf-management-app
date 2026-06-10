@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { Text, Surface, TextInput, IconButton, ActivityIndicator } from "react-native-paper";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { selectUser } from "../../store/slices/authSlice";
@@ -30,6 +30,7 @@ const CATEGORIES = [
 export default function NewTicketScreen({ navigation, route }) {
   const { relatedBookingId = null } = route.params || {};
   const user = useSelector(selectUser);
+  const insets = useSafeAreaInsets();
 
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("booking");
@@ -76,7 +77,8 @@ export default function NewTicketScreen({ navigation, route }) {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -87,7 +89,7 @@ export default function NewTicketScreen({ navigation, route }) {
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={true}>
           {relatedBookingId && (
             <View style={styles.bookingChip}>
               <MaterialCommunityIcons name="link-variant" size={14} color={USER_COLOR} />
@@ -180,7 +182,7 @@ export default function NewTicketScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 40 + insets.bottom }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -194,7 +196,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 16,
-    paddingBottom: 10,
+    paddingVertical: 10,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#F0F0F0",
@@ -249,7 +251,7 @@ const styles = StyleSheet.create({
   chipLabelActive: { color: "#fff" },
 
   input: { backgroundColor: "#fff" },
-  textarea: { minHeight: 120 },
+  textarea: { minHeight: 120, paddingTop: 8 },
   charHint: { fontSize: 11, fontFamily: "Ubuntu-Regular", color: "#9CA3AF", marginTop: 6 },
 
   submitButton: {

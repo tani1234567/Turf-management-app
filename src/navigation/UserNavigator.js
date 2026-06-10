@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -35,7 +35,7 @@ const USER_COLOR = "#10B981";
 
 function UserTabs() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = Platform.OS === "ios" ? 45 + insets.bottom : 72;
+  const tabBarHeight = Platform.OS === "ios" ? 60 + insets.bottom : 72;
 
   return (
     <Tab.Navigator
@@ -217,3 +217,4 @@ export default function UserNavigator() {
     </Stack.Navigator>
   );
 }
+
