@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { auth } from "../services/firebase/config";
 
-const BASE_URL = "https://us-central1-sowin-power.cloudfunctions.net";
+const BASE_URL = "https://us-central1-sportsphere-1701.cloudfunctions.net";
 
 async function callFunction(name, data) {
   const currentUser = auth.currentUser;

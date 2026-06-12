@@ -8,9 +8,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 
-admin.initializeApp({
-  projectId: "sowin-power",
-});
+admin.initializeApp();
 
 const db = admin.firestore();
 

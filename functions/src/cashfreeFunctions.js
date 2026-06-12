@@ -21,7 +21,7 @@ const CASHFREE_SECRET = IS_PROD
 const CF_HOSTNAME = IS_PROD ? "api.cashfree.com" : "sandbox.cashfree.com";
 const CF_API_VERSION = "2023-08-01";
 
-const FIREBASE_PROJECT = "sowin-power";
+const FIREBASE_PROJECT = "sportsphere-1701";
 const WEBHOOK_URL = `https://us-central1-${FIREBASE_PROJECT}.cloudfunctions.net/cashfreeWebhook`;
 
 // ── Cashfree REST helper (no axios needed) ───────────────────────────────────
