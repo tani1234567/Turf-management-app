@@ -38,6 +38,14 @@ yarn-error.*
 firebase-debug.log
 .firebase/
 
+# Secrets & credentials (never commit these)
+serviceAccount.json
+google-services.json
+GoogleService-Info.plist
+importUsers.js
+users.json
+*.json.enc
+
 # typescript
 *.tsbuildinfo
 
